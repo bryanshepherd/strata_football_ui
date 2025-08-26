@@ -26,7 +26,7 @@ describe('Validation utilities', () => {
       expect(validateYardLine('H5')).toBe(false); // Not padded
       expect(validateYardLine('V')).toBe(false);  // No number
       expect(validateYardLine('51')).toBe(false); // Invalid number
-      expect(validateYardLine('H51')).toBe(true); // Valid format H51
+      expect(validateYardLine('H51')).toBe(false);  // Out of range (01–50 only; 50 is midfield)
       expect(validateYardLine('')).toBe(false);    // Empty
       expect(validateYardLine(null)).toBe(false);  // Null
     });
@@ -48,7 +48,7 @@ describe('Validation utilities', () => {
     });
 
     it('should return original for invalid input', () => {
-      expect(normalizeYardLine('invalid')).toBe('invalid');
+      expect(normalizeYardLine('invalid')).toBe('INVALID');
       expect(normalizeYardLine('H51')).toBe('H51'); // Out of range preserved
       expect(normalizeYardLine('')).toBe('');
     });

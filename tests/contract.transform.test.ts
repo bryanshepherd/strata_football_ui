@@ -204,4 +204,50 @@ describe('DataTransformer', () => {
       expect(result.is_first_down).toBe(true);
     });
   });
+
+  describe('Mixed field handling with backend precedence', () => {
+    it('handles mixed FE/BE fields with BE precedence', () => {
+      const mixed = {
+        // FE fields
+        quarter: 2,
+        clock: '12:34',
+        yardsGained: 8,
+        isFirstDown: true,
+        possession: 'home',
+        primaryPlayerID: 123,
+        // BE fields present (should take precedence where overlapping)
+        period: 3,
+        time_remaining: 754, // 12:34
+        yards: 9,
+        is_first_down: false
+      };
+
+      const be = DataTransformer.frontendToBackend(mixed);
+      // precedence checks
+      expect(be.period).toBe(3);
+      expect(be.time_remaining).toBe(754);
+      expect(be.yards).toBe(9);
+      expect(be.is_first_down).toBe(false);
+      // non-overlapping FE fields still mapped
+      expect(be.possession).toBe('H');
+      expect(be.primary_player_id).toBe(123);
+    });
+
+    it('maps back to FE with proper shapes', () => {
+      const fe = DataTransformer.backendToFrontend({ 
+        period: 4, 
+        time_remaining: 90, 
+        yards: 5, 
+        is_first_down: true, 
+        possession: 'V', 
+        primary_player_id: 7 
+      });
+      expect(fe.quarter).toBe(4);
+      expect(fe.clock).toBe('1:30');
+      expect(fe.yardsGained).toBe(5);
+      expect(fe.isFirstDown).toBe(true);
+      expect(fe.possession).toBe('visitor');
+      expect(fe.primaryPlayerID).toBe(7);
+    });
+  });
 });

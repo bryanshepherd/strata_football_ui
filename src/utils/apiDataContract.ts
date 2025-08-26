@@ -246,31 +246,31 @@ export class DataTransformer {
    */
   static frontendToBackend(frontendData: any): any {
     const transformed: any = {
-      // Core game state mappings
-      period: frontendData.quarter || frontendData.period,
-      time_remaining: this.clockToSeconds(frontendData.clock || frontendData.timeRemaining),
+      // Core game state mappings - backend fields take precedence
+      period: frontendData.period || frontendData.quarter,
+      time_remaining: frontendData.time_remaining || this.clockToSeconds(frontendData.clock || frontendData.timeRemaining),
       possession: this.possessionToBackend(frontendData.possession),
       down: frontendData.down,
-      distance: frontendData.yardsToGo || frontendData.distance,
+      distance: frontendData.distance || frontendData.yardsToGo,
       yard_line: frontendData.yardLinePosition || frontendData.spot,
       
-      // Play data mappings
+      // Play data mappings - backend fields take precedence
       play_type: frontendData.playType,
-      primary_player_id: frontendData.primaryPlayerID,
-      secondary_player_id: frontendData.secondaryPlayerID,
-      yards: frontendData.yardsGained,
+      primary_player_id: frontendData.primary_player_id || frontendData.primaryPlayerID,
+      secondary_player_id: frontendData.secondary_player_id || frontendData.secondaryPlayerID,
+      yards: frontendData.yards || frontendData.yardsGained,
       net_yards: frontendData.yardsGained,
       post_down: frontendData.postDown,
       post_distance: frontendData.postDistance,
       post_yard_line: frontendData.postYardLine || frontendData.endYardLine,
       
-      // Backend flags
-      is_touchdown: frontendData.isTouchdown || false,
-      is_first_down: frontendData.isFirstDown || false,  
-      is_turnover: frontendData.isTurnover || false,
-      has_fumble: frontendData.hasFumble || false,
-      is_safety: frontendData.isSafety || false,
-      is_kickoff: frontendData.isKickoff || false
+      // Backend flags - backend fields take precedence
+      is_touchdown: frontendData.hasOwnProperty('is_touchdown') ? frontendData.is_touchdown : (frontendData.isTouchdown || false),
+      is_first_down: frontendData.hasOwnProperty('is_first_down') ? frontendData.is_first_down : (frontendData.isFirstDown || false),
+      is_turnover: frontendData.hasOwnProperty('is_turnover') ? frontendData.is_turnover : (frontendData.isTurnover || false),
+      has_fumble: frontendData.hasOwnProperty('has_fumble') ? frontendData.has_fumble : (frontendData.hasFumble || false),
+      is_safety: frontendData.hasOwnProperty('is_safety') ? frontendData.is_safety : (frontendData.isSafety || false),
+      is_kickoff: frontendData.hasOwnProperty('is_kickoff') ? frontendData.is_kickoff : (frontendData.isKickoff || false)
     };
     
     // Remove undefined values

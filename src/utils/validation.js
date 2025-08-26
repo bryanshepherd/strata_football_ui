@@ -11,10 +11,17 @@
  * @param {string} value - Yard line value to validate
  * @returns {boolean} - True if valid format
  */
-export const validateYardLine = (value) => {
+export const validateYardLine = (value, { allowEndZones = false } = {}) => {
   if (!value) return false;
-  const normalized = String(value).toUpperCase().trim();
-  return /^(H|V)\d{2}$|^50$/.test(normalized);
+  const s = String(value ?? '').trim().toUpperCase();
+  if (s === '50') return true;
+  const m = /^([HV])(\d{2})$/.exec(s);
+  if (!m) return false;
+  const n = parseInt(m[2], 10);
+  if (allowEndZones) {
+    return n >= 1 && n <= 50; // default even with flag
+  }
+  return n >= 1 && n <= 50;
 };
 
 /**
@@ -24,21 +31,11 @@ export const validateYardLine = (value) => {
  * @returns {string} - Normalized yard line (H05, V07, 50)
  */
 export const normalizeYardLine = (value) => {
-  if (!value) return '';
-  
-  const trimmed = String(value).trim();
-  if (trimmed === '50') return '50';
-  
-  const team = trimmed[0]?.toUpperCase();
-  const numPart = trimmed.slice(1);
-  const num = parseInt(numPart, 10);
-  
-  if ((team === 'H' || team === 'V') && !isNaN(num) && num >= 0 && num <= 50) {
-    return `${team}${String(num).padStart(2, '0')}`;
-  }
-  
-  // Return original if can't normalize
-  return trimmed;
+  if (value == null) return '';
+  const s = String(value).trim().toUpperCase();
+  if (s === '50') return '50';
+  const m = /^([HV])(\d{1,2})$/.exec(s);
+  return m ? `${m[1]}${String(parseInt(m[2], 10)).padStart(2, '0')}` : s;
 };
 
 /**
