@@ -20,6 +20,8 @@ describe('Validation utilities', () => {
       expect(validateYardLine('50')).toBe(true);
       expect(validateYardLine('H01')).toBe(true);
       expect(validateYardLine('V50')).toBe(true);
+      expect(validateYardLine('H00')).toBe(true); // End zone
+      expect(validateYardLine('V00')).toBe(true); // End zone
     });
 
     it('should reject invalid yard line formats', () => {
@@ -45,6 +47,7 @@ describe('Validation utilities', () => {
       expect(normalizeYardLine('h0')).toBe('H00');
       expect(normalizeYardLine('V50')).toBe('V50');
       expect(normalizeYardLine(' H25 ')).toBe('H25'); // Trimmed
+      expect(normalizeYardLine('v0')).toBe('V00'); // End zone normalization
     });
 
     it('should return original for invalid input', () => {

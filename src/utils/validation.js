@@ -18,10 +18,7 @@ export const validateYardLine = (value, { allowEndZones = false } = {}) => {
   const m = /^([HV])(\d{2})$/.exec(s);
   if (!m) return false;
   const n = parseInt(m[2], 10);
-  if (allowEndZones) {
-    return n >= 1 && n <= 50; // default even with flag
-  }
-  return n >= 1 && n <= 50;
+  return n >= 0 && n <= 50; // Accept 00 (end zones) through 50
 };
 
 /**
@@ -35,7 +32,14 @@ export const normalizeYardLine = (value) => {
   const s = String(value).trim().toUpperCase();
   if (s === '50') return '50';
   const m = /^([HV])(\d{1,2})$/.exec(s);
-  return m ? `${m[1]}${String(parseInt(m[2], 10)).padStart(2, '0')}` : s;
+  if (m) {
+    const num = parseInt(m[2], 10);
+    // Accept 0-50 range for yard lines
+    if (num >= 0 && num <= 50) {
+      return `${m[1]}${String(num).padStart(2, '0')}`;
+    }
+  }
+  return s;
 };
 
 /**
