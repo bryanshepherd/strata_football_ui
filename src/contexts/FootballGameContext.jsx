@@ -371,9 +371,10 @@ export function FootballGameProvider({ children }) {
           enhancedEventData.drive_result = driveAnalysis.driveResult;
         }
 
-        // If drive ends, prompt for game time (required by user specification)
-        if (enhancedEventData.drive_ends || postPlayState.driveEnds) {
-          const driveResult = enhancedEventData.drive_result || postPlayState.driveResult;
+        // If drive ends, prompt once (prefer explicit override if present)
+        const driveEnded = (enhancedEventData.drive_ends ?? postPlayState.driveEnds) === true;
+        if (driveEnded) {
+          const driveResult = enhancedEventData.drive_result ?? postPlayState.driveResult;
           const gameTime = await promptForGameTime(`${driveResult} - drive end`);
           enhancedEventData.game_time = gameTime;
         }
@@ -464,13 +465,21 @@ export function FootballGameProvider({ children }) {
 
       debug.log("🔄 [DATA CONTRACT] Original play data:", enrichedEvent);
       
-      // Use standardized client
+      // Ensure FE→BE transform is applied on submit
+      const bePayload = DataTransformer.frontendToBackend(enrichedEvent);
       const result = await StandardizedAPIClient.submitPlay(
         state.gameData?.game_info?.game_id || 1000, 
-        enrichedEvent
+        bePayload
       );
       
       debug.log("✅ [DATA CONTRACT] Standardized result:", result);
+      
+      // Notify listeners that a play was submitted successfully
+      try {
+        document.dispatchEvent(new CustomEvent('playSubmitted', { detail: { playData: result?.play || enrichedEvent } }));
+      } catch (err) {
+        debug.warn('[events] playSubmitted dispatch failed:', err);
+      }
       
       // Always refetch game state after submit
       try {
@@ -491,8 +500,10 @@ export function FootballGameProvider({ children }) {
       return result;
 
     } catch (error) {
-      console.error('Error submitting event:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      // Harden API error message fallback
+      const msg = getApiErrorMessage?.(error) || (error && error.message) || 'API error';
+      debug.error('Submit failed:', msg);
+      dispatch({ type: 'SET_ERROR', payload: msg });
       throw error;
     }
   };

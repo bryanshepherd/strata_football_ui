@@ -33,21 +33,14 @@ export default function FootballHotkeyHandler() {
   const handleTouchdownDetected = (playData) => {
     if (!detectTouchdown(playData)) return;
     
-    debug.log('Touchdown detected, triggering possession change', playData);
-    
-    // Flip possession after touchdown
-    const currentPossession = gameData?.live_state?.possession || 'home';
-    const newPossession = currentPossession === 'home' ? 'visitor' : 'home';
-    
-    // Update game state with possession flip
+    // Gate PAT flow only; DO NOT flip possession here.
+    debug.log('[TD] Touchdown detected — gating PAT flow; no early flip.');
     updateGameState({
-      possession: newPossession,
-      down: 1,
-      yardsToGo: 10,
-      yardLinePosition: 'H35' // Kickoff position
+      live_state: {
+        ...gameData.live_state,
+        lastPlayWasTouchdown: true
+      }
     });
-    
-    debug.log(`Possession flipped from ${currentPossession} to ${newPossession}`);
   };
   
   // Debounced submission guard
@@ -92,14 +85,12 @@ export default function FootballHotkeyHandler() {
           guardedStartFlow('kick');
           break;
         case 'a':
-          // PAT flow - check if PAT/2PT is appropriate
           e.preventDefault();
-          const currentScore = gameData?.live_state;
-          if (currentScore && (currentScore.down === 1 && currentScore.yardsToGo === 10)) {
-            debug.log('PAT flow available after recent touchdown');
-            guardedStartFlow('kick'); // Route to kick flow for PAT
+          // Allow PAT only immediately after a TD; otherwise warn.
+          if (gameData?.live_state?.lastPlayWasTouchdown) {
+            guardedStartFlow('pat');
           } else {
-            debug.warn('PAT flow only available immediately after touchdown');
+            debug.warn('[PAT] PAT is only available immediately after a touchdown.');
           }
           break;
         case 'e':

@@ -270,7 +270,11 @@ export class DataTransformer {
       is_turnover: frontendData.hasOwnProperty('is_turnover') ? frontendData.is_turnover : (frontendData.isTurnover || false),
       has_fumble: frontendData.hasOwnProperty('has_fumble') ? frontendData.has_fumble : (frontendData.hasFumble || false),
       is_safety: frontendData.hasOwnProperty('is_safety') ? frontendData.is_safety : (frontendData.isSafety || false),
-      is_kickoff: frontendData.hasOwnProperty('is_kickoff') ? frontendData.is_kickoff : (frontendData.isKickoff || false)
+      is_kickoff: frontendData.hasOwnProperty('is_kickoff') ? frontendData.is_kickoff : (frontendData.isKickoff || false),
+      
+      // Ensure drive meta is included if present
+      ...(frontendData.drive_ends !== undefined ? { drive_ends: !!frontendData.drive_ends } : {}),
+      ...(frontendData.drive_result ? { drive_result: String(frontendData.drive_result) } : {})
     };
     
     // Remove undefined values
