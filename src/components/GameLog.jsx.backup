@@ -1,0 +1,384 @@
+import React, { useState, useEffect } from 'react';
+import { playerManager } from '../utils/playerManager';
+import PlayEditModal from './PlayEditModal';
+import PlayDescription from './PlayDescription';
+
+export default function GameLog({ gameState, gameId, onPlayEdit, onPlayDelete, onPlayInsert, onPlayReplace }) {
+  const [editingPlay, setEditingPlay] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  if (!gameState || !gameState.game_info) {
+    return (
+      <div className="bg-white p-4">
+        <div className="text-gray-500">Loading game log...</div>
+      </div>
+    );
+  }
+
+  const { recent_plays = [], live_state } = gameState;
+
+  const formatTime = (timeRemaining) => {
+    if (!timeRemaining) return '00:00';
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = timeRemaining % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const getPlayIcon = (play) => {
+    // Enhanced emoji system with final specifications
+    if (play.has_penalty || play.HasPenalty || play.play_type === 'PENALTY' || play.PlayType === 'PENALTY') {
+      return '⚠️'; // Penalty plays
+    }
+    
+    if (play.play_type === 'TIMEOUT' || play.PlayType === 'TIMEOUT' || play.play_type === 'GAME_CONTROL' || play.PlayType === 'GAME_CONTROL') {
+      return '🛠️'; // Game control
+    }
+    
+    if (play.play_type?.includes('CLOCK') || play.PlayType?.includes('CLOCK') || play.play_type === 'DELAY' || play.PlayType === 'DELAY') {
+      return '⏱️'; // Clock operations
+    }
+
+    const playType = play.play_type || play.PlayType;
+    const icons = {
+      'RUSH': '�',
+      'PASS': '�', 
+      'PUNT': '🦵',
+      'KICK': '🏈',
+      'KICKOFF': '🏈',
+      'FIELD_GOAL': '🏈',
+      'EXTRA_POINT': '⭐',
+      'SAFETY': '🛡️',
+      'TOUCHDOWN': '🏆',
+      'INTERCEPTION': '✋',
+      'FUMBLE': '💥',
+      'INCOMPLETE': '❌',
+      'COMPLETE': '✅',
+      'SACK': '🚫'
+    };
+    return icons[playType] || '🏈';
+  };
+
+  const getPlayTypeColor = (playType) => {
+    const colors = {
+      'RUSH': 'text-green-600',
+      'PASS': 'text-blue-600',
+      'PUNT': 'text-purple-600',
+      'KICK': 'text-orange-600',
+      'PENALTY': 'text-red-600',
+      'TIMEOUT': 'text-gray-600',
+      'KICKOFF': 'text-indigo-600',
+      'FIELD_GOAL': 'text-yellow-600',
+      'EXTRA_POINT': 'text-yellow-500',
+      'SAFETY': 'text-red-500',
+      'TOUCHDOWN': 'text-green-500',
+      'INTERCEPTION': 'text-red-500',
+      'FUMBLE': 'text-orange-500'
+    };
+    return colors[playType] || 'text-gray-600';
+  };
+
+  const formatDownDistance = (play) => {
+
+  const formatFieldPosition = (play) => {
+  };
+
+  const getPlayDescription = (play) => {
+    // Enhanced play description with actual player names from roster data
+    let description = '';
+    
+    // Use the PlayDescription from API if available and it's not generic
+    if (play.PlayDescription && 
+        !play.PlayDescription.includes('Unknown Player') && 
+        !play.PlayDescription.includes('Unknown QB') &&
+        !play.PlayDescription.includes('Unknown Receiver')) {
+      return play.PlayDescription;
+    }
+    
+    // Base play type - handle both API format (PlayType) and component format (play_type)
+    const playType = play.PlayType || play.play_type;
+    const possession = play.PossessionTeam || play.possession;
+    
+    if (playType) {
+      description = playType.toLowerCase();
+    }
+
+    // Get actual player names from roster data
+    const primaryPlayerId = play.PrimaryPlayerID || play.primary_player_id;
+    const secondaryPlayerId = play.SecondaryPlayerID || play.secondary_player_id;
+    
+    const primaryPlayerName = getPlayerName(primaryPlayerId, possession);
+    const primaryPlayerNumber = getPlayerNumber(primaryPlayerId, possession);
+    const secondaryPlayerName = getPlayerName(secondaryPlayerId, possession);
+    const secondaryPlayerNumber = getPlayerNumber(secondaryPlayerId, possession);
+
+    // Build description with actual names
+    if (primaryPlayerName) {
+      if (playType === 'PASS') {
+        description = `${primaryPlayerName}`;
+        if (primaryPlayerNumber) description += ` (#${primaryPlayerNumber})`;
+        description += ` pass`;
+        
+        if (secondaryPlayerName) {
+          description += ` to ${secondaryPlayerName}`;
+          if (secondaryPlayerNumber) description += ` (#${secondaryPlayerNumber})`;
+        }
+      } else if (playType === 'RUSH') {
+        description = `${primaryPlayerName}`;
+        if (primaryPlayerNumber) description += ` (#${primaryPlayerNumber})`;
+        description += ` rush`;
+      } else {
+        description += ` by ${primaryPlayerName}`;
+        if (primaryPlayerNumber) description += ` (#${primaryPlayerNumber})`;
+      }
+    } else if (primaryPlayerNumber) {
+      description += ` by #${primaryPlayerNumber}`;
+    } else if (primaryPlayerId) {
+      // Fallback to player ID if name not found
+      description += ` by Player #${primaryPlayerId}`;
+    }
+
+    // Yardage - handle both formats
+    const yardsGained = play.yards_gained !== undefined ? play.yards_gained : play.YardsGained;
+    if (yardsGained !== undefined && yardsGained !== null) {
+      if (yardsGained > 0) {
+        description += ` for ${yardsGained} yards`;
+      } else if (yardsGained < 0) {
+        description += ` for ${Math.abs(yardsGained)} yard loss`;
+      } else {
+        description += ` for no gain`;
+      }
+    }
+
+    // End of play result - handle multiple formats
+    const result = play.end_of_play || play.result || play.PlayResult;
+    if (result && result !== 'TACKLE') {
+      description += ` (${result.toLowerCase()})`;
+    }
+
+    // Special results
+    if (play.result && play.result !== result) {
+      description += ` - ${play.result}`;
+    }
+
+    // Penalty information - handle multiple formats
+    const penaltyType = play.penalty_type || play.PenaltyType;
+    const penaltyYards = play.penalty_yards || play.PenaltyYards;
+    const hasPenalty = play.has_penalty || play.HasPenalty;
+    
+    if (hasPenalty || penaltyType) {
+      if (penaltyType) {
+        description += ` - ${penaltyType}`;
+      }
+      if (penaltyYards) {
+        description += ` (${penaltyYards} yards)`;
+      }
+    }
+
+    return description || 'Play details unavailable';
+  };
+
+  const formatDownDistance = (play) => {
+    // Handle both API format and component format
+    const down = play.down || play.Down;
+    const distance = play.distance || play.YardsToGo || play.yards_to_go;
+    
+    if (down && distance !== undefined) {
+      return `${down} & ${distance}`;
+    }
+    
+    return 'Down & Distance not set';
+  };
+
+  // Action button handlers
+  const handleEdit = (play) => {
+    setEditingPlay(play);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (play) => {
+    const playType = play.PlayType || play.play_type || 'play';
+    if (window.confirm(`Are you sure you want to delete this ${playType} play?`)) {
+      if (onPlayDelete) {
+        const playId = play.PlayID || play.id;
+        await onPlayDelete(playId);
+      }
+    }
+  };
+
+  const handleReplace = (play) => {
+    if (onPlayReplace) {
+      const playId = play.PlayID || play.id;
+      onPlayReplace(playId);
+    }
+  };
+
+  const handleInsertBefore = (play) => {
+    if (onPlayInsert) {
+      const playId = play.PlayID || play.id;
+      onPlayInsert(playId);
+    }
+  };
+
+  const handleEditComplete = () => {
+    setShowEditModal(false);
+    setEditingPlay(null);
+  };
+
+  return (
+    <div className="bg-white h-full flex flex-col">
+      <div className="p-4 border-b border-gray-200">
+        <h3 className="text-lg font-bold">Game Log</h3>
+        <div className="text-sm text-gray-600">
+          {recent_plays.length} plays recorded
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {recent_plays.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">
+            <div className="text-4xl mb-2">🏈</div>
+            <div>No plays recorded yet</div>
+            <div className="text-sm mt-1">Use the controls to start recording plays</div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {recent_plays.map((play, index) => (
+              <div 
+                key={play.id || index} 
+                className={`p-3 border-b border-gray-100 hover:bg-gray-50 ${
+                  index === 0 ? 'bg-blue-50' : ''
+                }`}
+              >
+                {/* First Line: Icon + Play Type + [Latest] + Action Buttons */}
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">{getPlayIcon(play)}</span>
+                    <span className={`font-bold text-sm ${getPlayTypeColor(play.PlayType || play.play_type)}`}>
+                      {play.PlayType || play.play_type || 'UNKNOWN'} {/* Temporarily simplified to debug */}
+                    </span>
+                    {(play.has_penalty || play.HasPenalty) && (
+                      <span className="px-1 py-0.5 bg-red-100 text-red-700 text-xs rounded">⚠️</span>
+                    )}
+                    {index === 0 && (
+                      <span className="px-1 py-0.5 bg-blue-100 text-blue-800 text-xs rounded font-medium">
+                        LATEST
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex items-center space-x-1">
+                    <button 
+                      onClick={() => handleInsertBefore(play)}
+                      className="p-1 hover:bg-green-100 rounded text-green-600 text-sm"
+                      title="Insert play before this one"
+                    >
+                      ＋
+                    </button>
+                    <button 
+                      onClick={() => handleEdit(play)}
+                      className="p-1 hover:bg-blue-100 rounded text-blue-600 text-sm"
+                      title="Edit this play"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      onClick={() => handleReplace(play)}
+                      className="p-1 hover:bg-orange-100 rounded text-orange-600 text-sm"
+                      title="Replace this play"
+                    >
+                      🔄
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(play)}
+                      className="p-1 hover:bg-red-100 rounded text-red-600 text-sm"
+                      title="Delete this play"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+
+                {/* Second Line: Quarter Time - Down & Distance on left, Field Position on right */}
+                <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                  <div className="flex items-center space-x-2">
+                    <span>Q{play.quarter || play.Period || live_state?.quarter || 1}</span>
+                    <span>{formatTime(play.time_remaining || play.TimeRemaining) || '00:00'}</span>
+                    <span>-</span>
+                    <span>{formatDownDistance(play)}</span>
+                  </div>
+                  <div>
+                    {formatFieldPosition(play)}
+                  </div>
+                </div>
+
+                {/* Play Description */}
+                <div className="text-sm text-gray-800 mb-1">
+                  <PlayDescription play={play} gameId={gameId} gameState={gameState} />
+                </div>
+
+                {/* Result Line */}
+                <div className="text-xs text-gray-600">
+                  Result: {(() => {
+                    const yards = play.yards_gained !== undefined ? play.yards_gained : play.YardsGained;
+                    if (yards === undefined || yards === null) return 'No gain';
+                    if (yards > 0) return `+${yards} yards`;
+                    if (yards < 0) return `${yards} yard loss`;
+                    return 'No gain';
+                  })()}
+                </div>
+
+                {/* Special Indicators */}
+                <div className="flex items-center space-x-2 mt-1">
+                  {play.is_touchdown && <span className="text-xs bg-green-100 text-green-700 px-1 rounded">🏆 TD</span>}
+                  {play.is_turnover && <span className="text-xs bg-red-100 text-red-700 px-1 rounded">🔄 TO</span>}
+                  {play.has_fumble && <span className="text-xs bg-orange-100 text-orange-700 px-1 rounded">💥 FUM</span>}
+                </div>
+
+                {/* Drive Information */}
+                {play.drive_number && (
+                  <div className="text-xs text-blue-600 mt-1">
+                    Drive #{play.drive_number}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quick Stats Footer */}
+      <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="text-center">
+            <div className="font-bold text-green-600">
+              {recent_plays.filter(p => p.play_type === 'RUSH').length}
+            </div>
+            <div className="text-gray-600">Rushes</div>
+          </div>
+          <div className="text-center">
+            <div className="font-bold text-blue-600">
+              {recent_plays.filter(p => p.play_type === 'PASS').length}
+            </div>
+            <div className="text-gray-600">Passes</div>
+          </div>
+          <div className="text-center">
+            <div className="font-bold text-red-600">
+              {recent_plays.filter(p => p.play_type === 'PENALTY').length}
+            </div>
+            <div className="text-gray-600">Penalties</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && editingPlay && (
+        <PlayEditModal
+          playId={editingPlay.id}
+          isOpen={showEditModal}
+          onClose={handleEditComplete}
+        />
+      )}
+    </div>
+  );
+}

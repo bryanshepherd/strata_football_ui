@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Football-specific utility classes */
+@layer utilities {
+  .w-main-content {
+    width: 65%;
+  }
+  
+  .w-sidebar-right {
+    width: 15%;
+  }
+}
+
+/* Football theme colors */
+:root {
+  --football-primary: #1a472a;
+  --football-secondary: #2d5a3d;
+  --football-accent: #4ade80;
+  --football-field: #2d7a2d;
+}
+
+.football-btn-primary {
+  @apply bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors;
+}
+
+.football-btn-secondary {
+  @apply bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors;
+}
+
+.bg-football-primary {
+  background-color: var(--football-primary);
+}
+
+.bg-football-secondary {
+  background-color: var(--football-secondary);
+}
+
+.text-football-accent {
+  color: var(--football-accent);
+}
+
+.bg-football-accent {
+  background-color: var(--football-accent);
+}
+
+/* Typography */
+.font-anton {
+  font-family: 'Anton', sans-serif;
+}
+
+/* Game board styling */
+.game-board {
+  background: linear-gradient(90deg, #2d7a2d 0%, #3a8a3a 100%);
+  border: 2px solid #1a472a;
+}
+
+/* Stats panels */
+.stats-panel {
+  @apply bg-white border border-gray-300 rounded-lg shadow-sm;
+}
+
+.stats-header {
+  @apply bg-gray-50 px-4 py-2 border-b font-bold text-gray-800;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .w-main-content {
+    width: 70%;
+  }
+  
+  .w-sidebar-right {
+    width: 10%;
+  }
+}
+
+@media (max-width: 768px) {
+  .w-main-content {
+    width: 100%;
+  }
+  
+  .w-sidebar-right {
+    width: 100%;
+  }
+}
