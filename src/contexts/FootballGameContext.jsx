@@ -6,6 +6,13 @@ import DownDistanceCalculator, {
   promptForGameTime 
 } from '../utils/DownDistanceCalculator';
 import { StandardizedAPIClient, DataTransformer } from '../utils/apiDataContract';
+import { apiGet, apiPost, footballAPI, getApiErrorMessage } from '../utils/apiClient';
+import { 
+  shouldStartNewDrive, 
+  shouldEndDrive as driveRulesShouldEndDrive, 
+  analyzeDriveTransition,
+  calculateDriveStats 
+} from '../utils/driveRules';
 import debug from '../utils/debug';
 
 const FootballGameContext = createContext();
@@ -108,8 +115,7 @@ export function FootballGameProvider({ children }) {
       let rostersData = { home: [], visitor: [] };
       
       try {
-        const rosterResponse = await fetch(`${API_BASE}/get_rosters.php?gameId=${gameId}`);
-        const rosterResult = await rosterResponse.json();
+        const rosterResult = await apiGet(`api/get_rosters.php?gameId=${gameId}`);
         
         if (rosterResult.success && rosterResult.rosters) {
           rostersData = rosterResult.rosters;
@@ -121,7 +127,7 @@ export function FootballGameProvider({ children }) {
           debug.warn("⚠️ [ROSTERS] Failed to load rosters:", rosterResult.error || 'Unknown error');
         }
       } catch (rosterError) {
-        debug.error("❌ [ROSTERS] Error loading rosters:", rosterError);
+        debug.error("❌ [ROSTERS] Error loading rosters:", getApiErrorMessage(rosterError));
       }
       
       const apiData = { gameState, success: true };
@@ -350,9 +356,25 @@ export function FootballGameProvider({ children }) {
         // DEBUG: Track end_yard_line field after enhancement
         debug.log('🔍 [FIELD TRACKING] After enhancement end_yard_line:', enhancedEventData.end_yard_line);
 
+        // Analyze drive transition using standardized rules
+        const driveAnalysis = analyzeDriveTransition(enhancedEventData, currentGameState);
+        debug.log('[DRIVE ANALYSIS]', driveAnalysis);
+        
+        // Override drive management with standardized rules if different
+        if (driveAnalysis.shouldEndCurrent !== postPlayState.driveEnds) {
+          debug.log('[DRIVE RULES] Override drive end decision:', {
+            originalDecision: postPlayState.driveEnds,
+            newDecision: driveAnalysis.shouldEndCurrent,
+            reason: driveAnalysis.notes
+          });
+          enhancedEventData.drive_ends = driveAnalysis.shouldEndCurrent;
+          enhancedEventData.drive_result = driveAnalysis.driveResult;
+        }
+
         // If drive ends, prompt for game time (required by user specification)
-        if (postPlayState.driveEnds) {
-          const gameTime = await promptForGameTime(`${postPlayState.driveResult} - drive end`);
+        if (enhancedEventData.drive_ends || postPlayState.driveEnds) {
+          const driveResult = enhancedEventData.drive_result || postPlayState.driveResult;
+          const gameTime = await promptForGameTime(`${driveResult} - drive end`);
           enhancedEventData.game_time = gameTime;
         }
 
@@ -506,25 +528,15 @@ export function FootballGameProvider({ children }) {
 
   const updateGameClock = async (clockData) => {
     try {
-      const response = await fetch(`${API_BASE}/update_game_clock.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(clockData)
-      });
-
-      if (!response.ok) throw new Error('Failed to update clock');
-      
-      const result = await response.json();
+      const result = await apiPost('api/update_game_clock.php', clockData);
       if (result.updated_game_state) {
         dispatch({ type: 'SET_GAME_DATA', payload: result.updated_game_state });
       }
       
       return result;
     } catch (error) {
-      debug.error('Error updating clock:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      debug.error('Error updating clock:', getApiErrorMessage(error));
+      dispatch({ type: 'SET_ERROR', payload: getApiErrorMessage(error) });
       throw error;
     }
   };
@@ -533,22 +545,9 @@ export function FootballGameProvider({ children }) {
     try {
       dispatch({ type: 'SET_SUBMITTING', payload: true });
       
-      const response = await fetch(`${API_BASE}/initialize_rosters.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          game_id: gameId || state.gameData?.game_info?.game_id || 1000
-        })
+      const result = await apiPost('api/initialize_rosters.php', {
+        game_id: gameId || state.gameData?.game_info?.game_id || 1000
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to initialize rosters');
-      }
-      
-      const result = await response.json();
       
       // Refresh game state to get the updated rosters
       if (gameId || state.gameData?.game_info?.game_id) {
@@ -559,8 +558,8 @@ export function FootballGameProvider({ children }) {
       
       return result;
     } catch (error) {
-      debug.error('Error initializing rosters:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      debug.error('Error initializing rosters:', getApiErrorMessage(error));
+      dispatch({ type: 'SET_ERROR', payload: getApiErrorMessage(error) });
       dispatch({ type: 'SET_SUBMITTING', payload: false });
       throw error;
     }
@@ -687,21 +686,11 @@ export function FootballGameProvider({ children }) {
     try {
       dispatch({ type: 'SET_API_STATUS', payload: 'connecting' });
       
-      const response = await fetch('/strata_football/health_check.php', {
-        method: 'GET',
-        credentials: 'include',
-        signal: AbortSignal.timeout(5000) // 5 second timeout
-      });
-      
-      if (response.ok) {
-        dispatch({ type: 'SET_API_STATUS', payload: 'connected' });
-        return true;
-      } else {
-        dispatch({ type: 'SET_API_STATUS', payload: 'error' });
-        return false;
-      }
+      await apiGet('/strata_football/health_check.php');
+      dispatch({ type: 'SET_API_STATUS', payload: 'connected' });
+      return true;
     } catch (error) {
-      debug.error('API health check failed:', error);
+      debug.error('API health check failed:', getApiErrorMessage(error));
       dispatch({ type: 'SET_API_STATUS', payload: 'disconnected' });
       return false;
     }
