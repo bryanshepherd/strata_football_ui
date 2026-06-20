@@ -1,0 +1,427 @@
+import { describe, expect, it } from 'vitest';
+import { gameEnvelopeFixtures } from '../src/data/footballGameEnvelopeFixtures';
+import {
+  applyFootballEventToEnvelope,
+  calculateLineToGain,
+  calculateYardsGained,
+  calculateYardsToGain,
+  isGoalToGo,
+  isRedZone,
+  possessionRelativeToSpot,
+  spotToPossessionRelative,
+} from '../src/utils/footballRulesEngine';
+
+const normalEnvelope = gameEnvelopeFixtures.normal;
+
+describe('footballRulesEngine field math', () => {
+  it('calculates possession-relative spots for H and V in both field directions', () => {
+    expect(spotToPossessionRelative('H25', 'H')).toBe(25);
+    expect(spotToPossessionRelative('V25', 'H')).toBe(75);
+    expect(spotToPossessionRelative('V25', 'V')).toBe(25);
+    expect(spotToPossessionRelative('H25', 'V')).toBe(75);
+    expect(spotToPossessionRelative('50', 'H')).toBe(50);
+    expect(spotToPossessionRelative('50', 'V')).toBe(50);
+  });
+
+  it('converts relative spots back to canonical yard-line strings', () => {
+    expect(possessionRelativeToSpot(25, 'H')).toBe('H25');
+    expect(possessionRelativeToSpot(75, 'H')).toBe('V25');
+    expect(possessionRelativeToSpot(25, 'V')).toBe('V25');
+    expect(possessionRelativeToSpot(75, 'V')).toBe('H25');
+    expect(possessionRelativeToSpot(50, 'H')).toBe('50');
+  });
+
+  it('calculates yards gained in either possession direction', () => {
+    expect(calculateYardsGained('H44', 'V46', 'H')).toBe(10);
+    expect(calculateYardsGained('V44', 'H46', 'V')).toBe(10);
+    expect(calculateYardsGained('V20', 'V15', 'V')).toBe(-5);
+  });
+
+  it('defines line-to-gain, red zone, and goal-to-go from canonical state', () => {
+    expect(calculateLineToGain('H44', 'H')).toBe('V46');
+    expect(calculateYardsToGain('H44', '50', 'H')).toBe(6);
+    expect(calculateLineToGain('H05', 'V')).toBe('goal');
+    expect(calculateYardsToGain('H05', 'goal', 'V')).toBe(5);
+    expect(isRedZone('H18', 'V')).toBe(true);
+    expect(isGoalToGo('H05', 'goal', 'V')).toBe(true);
+  });
+});
+
+describe('footballRulesEngine event application', () => {
+  it('calculates a normal first down without mutating the envelope', () => {
+    const event = {
+      clientEventId: 'test-first-down',
+      type: 'rush',
+      period: 1,
+      clock: '08:42',
+      possession: 'H',
+      preState: normalEnvelope.liveState,
+      result: {
+        code: 'tackle',
+        endYardLine: 'V46',
+      },
+      penalties: [],
+    };
+
+    const result = applyFootballEventToEnvelope(normalEnvelope, event);
+
+    expect(result.liveState).toMatchObject({
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'V46',
+      lineToGain: 'V36',
+      goalToGo: false,
+      redZone: false,
+      driveId: 'DRV-0002',
+    });
+    expect(result.firstDown).toBe(true);
+    expect(result.driveTransition.shouldEndCurrent).toBe(false);
+    expect(normalEnvelope.liveState.yardLine).toBe('H44');
+  });
+
+  it('keeps lineToGain explicit when a drive continues', () => {
+    const event = {
+      clientEventId: 'test-short-gain',
+      type: 'rush',
+      period: 1,
+      clock: '08:42',
+      possession: 'H',
+      preState: normalEnvelope.liveState,
+      result: {
+        code: 'tackle',
+        endYardLine: 'H48',
+      },
+      penalties: [],
+    };
+
+    const result = applyFootballEventToEnvelope(normalEnvelope, event);
+
+    expect(result.liveState).toMatchObject({
+      possession: 'H',
+      down: 3,
+      distance: 2,
+      yardLine: 'H48',
+      lineToGain: '50',
+      driveId: 'DRV-0002',
+    });
+  });
+
+  it('sets goal-to-go and red-zone after a first down inside the 10', () => {
+    const envelope = gameEnvelopeFixtures.redzone;
+    const event = {
+      clientEventId: 'test-goal-to-go',
+      type: 'pass',
+      period: 2,
+      clock: '04:11',
+      possession: 'H',
+      preState: envelope.liveState,
+      result: {
+        code: 'complete',
+        endYardLine: 'V05',
+      },
+      penalties: [],
+    };
+
+    const result = applyFootballEventToEnvelope(envelope, event);
+
+    expect(result.liveState).toMatchObject({
+      possession: 'H',
+      down: 1,
+      distance: 5,
+      yardLine: 'V05',
+      lineToGain: 'goal',
+      goalToGo: true,
+      redZone: true,
+    });
+  });
+
+  it('ends the drive and starts a receiving drive on kickoff without bogus result text', () => {
+    const event = gameEnvelopeFixtures.kickoffDrive.events[0];
+    const result = applyFootballEventToEnvelope(gameEnvelopeFixtures.pregame, event);
+
+    expect(result.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'V25',
+      lineToGain: 'V35',
+      goalToGo: false,
+      redZone: false,
+    });
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: true,
+      driveResult: null,
+      reason: 'kickoff',
+    });
+    expect(result.driveTransition.startedDrive).toMatchObject({
+      team: 'V',
+      startYardLine: 'V25',
+      startReason: 'kickoff',
+      result: null,
+    });
+    expect(JSON.stringify(result.driveTransition)).not.toMatch(/returned|received/i);
+  });
+
+  it('ends punts and starts the receiving team drive', () => {
+    const event = {
+      clientEventId: 'test-punt',
+      type: 'punt',
+      subtype: 'fairCatch',
+      period: 2,
+      clock: '11:02',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 4,
+        distance: 8,
+        yardLine: 'H32',
+        lineToGain: 'H40',
+        driveId: 'DRV-0003',
+        driveNumber: 3,
+      },
+      result: {
+        code: 'fairCatch',
+        endYardLine: 'V26',
+        driveEnds: true,
+        nextPossession: 'V',
+      },
+      penalties: [],
+    };
+
+    const result = applyFootballEventToEnvelope(normalEnvelope, event);
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: true,
+      endedDriveId: 'DRV-0003',
+      driveResult: 'punt',
+    });
+    expect(result.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'V26',
+      lineToGain: 'V36',
+    });
+  });
+
+  it('handles turnovers and turnover on downs', () => {
+    const turnoverEvent = gameEnvelopeFixtures.possessionChange.events[0];
+    const turnover = applyFootballEventToEnvelope(gameEnvelopeFixtures.normal, turnoverEvent);
+
+    expect(turnover.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: true,
+      driveResult: 'turnover',
+    });
+    expect(turnover.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'V31',
+      lineToGain: 'V41',
+    });
+
+    const turnoverOnDowns = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-turnover-on-downs',
+      type: 'rush',
+      period: 4,
+      clock: '02:00',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 4,
+        distance: 2,
+        yardLine: 'V40',
+        lineToGain: 'V38',
+        driveId: 'DRV-0010',
+        driveNumber: 10,
+      },
+      result: {
+        code: 'tackle',
+        endYardLine: 'V39',
+      },
+      penalties: [],
+    });
+
+    expect(turnoverOnDowns.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: true,
+      endedDriveId: 'DRV-0010',
+      driveResult: 'turnoverOnDowns',
+    });
+    expect(turnoverOnDowns.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      yardLine: 'V39',
+      lineToGain: 'V49',
+    });
+  });
+
+  it('handles scoring, safeties, field goals, and try context as drive-ending or inactive states', () => {
+    const touchdown = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-td',
+      type: 'rush',
+      possession: 'H',
+      preState: normalEnvelope.liveState,
+      result: {
+        code: 'touchdown',
+        endYardLine: 'V00',
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+      penalties: [],
+    });
+    expect(touchdown.driveTransition.driveResult).toBe('touchdown');
+    expect(touchdown.liveState.lineToGain).toBeNull();
+    expect(touchdown.scoringUpdate).toEqual({ team: 'H', points: 6, type: 'touchdown' });
+
+    const safety = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-safety',
+      type: 'rush',
+      possession: 'H',
+      preState: normalEnvelope.liveState,
+      result: {
+        code: 'safety',
+        endYardLine: 'H00',
+        scoring: { team: 'V', points: 2, type: 'safety' },
+      },
+      penalties: [],
+    });
+    expect(safety.driveTransition.driveResult).toBe('safety');
+    expect(safety.liveState.possession).toBeNull();
+
+    const fieldGoal = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-fg',
+      type: 'fieldGoal',
+      subtype: 'made',
+      possession: 'H',
+      preState: normalEnvelope.liveState,
+      result: {
+        code: 'made',
+        endYardLine: 'V18',
+        points: 3,
+        scoring: { team: 'H', points: 3, type: 'fieldGoal' },
+      },
+      penalties: [],
+    });
+    expect(fieldGoal.driveTransition.driveResult).toBe('fieldGoal');
+    expect(fieldGoal.liveState.down).toBeNull();
+
+    const tryResult = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-try',
+      type: 'try',
+      subtype: 'kick',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: null,
+        distance: null,
+        yardLine: 'V03',
+        lineToGain: null,
+        driveId: null,
+        driveNumber: 3,
+      },
+      result: {
+        code: 'made',
+        points: 1,
+        scoring: { team: 'H', points: 1, type: 'patKick' },
+      },
+      penalties: [],
+    });
+    expect(tryResult.driveTransition.driveResult).toBe('try');
+    expect(tryResult.liveState.lineToGain).toBeNull();
+  });
+
+  it('uses typed penalty flags without placeholder enforcement', () => {
+    const event = {
+      clientEventId: 'test-auto-first',
+      type: 'penalty',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 3,
+        distance: 8,
+        yardLine: 'H30',
+        lineToGain: 'H38',
+        driveId: 'DRV-0006',
+        driveNumber: 6,
+      },
+      result: {
+        code: 'accepted',
+        endYardLine: 'H35',
+      },
+      penalties: [
+        {
+          penaltyId: 'pen-1',
+          status: 'accepted',
+          automaticFirstDown: true,
+          lossOfDown: false,
+          replayDown: false,
+        },
+      ],
+    };
+
+    const result = applyFootballEventToEnvelope(normalEnvelope, event);
+
+    expect(result.liveState).toMatchObject({
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'H35',
+      lineToGain: 'H45',
+    });
+    expect(result.firstDown).toBe(true);
+
+    const replayDown = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-replay-down',
+      type: 'penalty',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 2,
+        distance: 6,
+        yardLine: 'H44',
+        lineToGain: '50',
+        driveId: 'DRV-0006',
+        driveNumber: 6,
+      },
+      result: {
+        code: 'accepted',
+        endYardLine: 'H44',
+      },
+      penalties: [{ penaltyId: 'pen-2', status: 'accepted', replayDown: true }],
+    });
+    expect(replayDown.liveState).toMatchObject({
+      down: 2,
+      distance: 6,
+      lineToGain: '50',
+    });
+
+    const lossOfDown = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-loss-of-down',
+      type: 'penalty',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 2,
+        distance: 6,
+        yardLine: 'H44',
+        lineToGain: '50',
+        driveId: 'DRV-0006',
+        driveNumber: 6,
+      },
+      result: {
+        code: 'accepted',
+        endYardLine: 'H44',
+      },
+      penalties: [{ penaltyId: 'pen-3', status: 'accepted', lossOfDown: true }],
+    });
+    expect(lossOfDown.liveState).toMatchObject({
+      down: 3,
+      distance: 6,
+      lineToGain: '50',
+    });
+  });
+});
