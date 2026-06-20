@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import App from './App.jsx'
-import QuickieReport from './pages/QuickieReport.jsx'
+import FootballReportPlaceholder from './pages/FootballReportPlaceholder.jsx'
+import FootballScorerShell from './pages/FootballScorerShell.jsx'
 import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx'
 import './index.css'
 
@@ -11,8 +11,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <GlobalErrorBoundary>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/quickie" element={<QuickieReport />} />
+          <Route path="/" element={<FootballScorerShell />} />
+          <Route path="/scorer" element={<FootballScorerShell />} />
+          <Route path="/reports" element={<FootballReportPlaceholder />} />
+          <Route path="/quickie" element={<FootballReportPlaceholder />} />
+          <Route path="*" element={<FootballScorerShell />} />
         </Routes>
       </BrowserRouter>
     </GlobalErrorBoundary>
