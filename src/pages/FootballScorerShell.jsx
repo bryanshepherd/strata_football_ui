@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
 import {
   defaultFixtureKey,
   fixtureOptions,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 
 const formatStatus = (status) =>
   String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -32,10 +34,28 @@ const formatSpot = (liveState) => liveState.yardLine || 'Not set';
 
 const formatDriveResult = (drive) => drive?.result || 'Active';
 
+const isDebugEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+
+const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
+  const next = {};
+  if (fixture && fixture !== defaultFixtureKey) {
+    next.fixture = fixture;
+  }
+  if (debug) {
+    next.debug = '1';
+  }
+  setSearchParams(next);
+};
+
 export default function FootballScorerShell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedFixture = searchParams.get('fixture') || defaultFixtureKey;
+  const debugMode = isDebugEnabled(searchParams.get('debug'));
   const envelope = getGameEnvelopeFixture(requestedFixture);
+  const traceEntries = useMemo(
+    () => (debugMode ? buildFootballFixtureDebugTrace(envelope) : []),
+    [debugMode, envelope],
+  );
 
   if (!envelope) {
     return (
@@ -47,14 +67,26 @@ export default function FootballScorerShell() {
   }
 
   const onFixtureChange = (event) => {
-    setSearchParams({ fixture: event.target.value });
+    setScorerSearchParams(setSearchParams, {
+      fixture: event.target.value,
+      debug: debugMode,
+    });
+  };
+
+  const onDebugToggle = () => {
+    setScorerSearchParams(setSearchParams, {
+      fixture: requestedFixture,
+      debug: !debugMode,
+    });
   };
 
   return (
-    <main className="min-h-screen bg-zinc-100 text-zinc-950">
+    <main className={`min-h-screen bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
       <ScorerHeader
+        debugMode={debugMode}
         envelope={envelope}
         fixtureKey={requestedFixture}
+        onDebugToggle={onDebugToggle}
         onFixtureChange={onFixtureChange}
       />
 
@@ -70,6 +102,8 @@ export default function FootballScorerShell() {
 
         <GameLogColumn envelope={envelope} />
       </div>
+
+      {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
     </main>
   );
 }
@@ -95,7 +129,7 @@ const ShellRouteState = ({ title, message }) => (
   </main>
 );
 
-const ScorerHeader = ({ envelope, fixtureKey, onFixtureChange }) => {
+const ScorerHeader = ({ debugMode, envelope, fixtureKey, onDebugToggle, onFixtureChange }) => {
   const teams = envelope.game.teams;
 
   return (
@@ -136,6 +170,17 @@ const ScorerHeader = ({ envelope, fixtureKey, onFixtureChange }) => {
           >
             Reports
           </Link>
+          <button
+            className={`rounded border px-3 py-2 text-sm font-semibold ${
+              debugMode
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-zinc-300 text-zinc-800 hover:bg-zinc-50'
+            }`}
+            onClick={onDebugToggle}
+            type="button"
+          >
+            Debug Trace
+          </button>
         </nav>
       </div>
     </header>

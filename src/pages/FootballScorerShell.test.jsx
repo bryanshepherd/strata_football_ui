@@ -1,6 +1,8 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { gameEnvelopeFixtures } from '../data/footballGameEnvelopeFixtures';
+import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import FootballReportPlaceholder from './FootballReportPlaceholder';
 import FootballScorerShell from './FootballScorerShell';
 
@@ -25,6 +27,7 @@ describe('FootballScorerShell', () => {
     expect(screen.getByRole('heading', { name: /play entry/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /game log/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /roster lookup/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/football debug trace/i)).not.toBeInTheDocument();
   });
 
   it('renders the acceptance fixture states without backend data', () => {
@@ -56,5 +59,54 @@ describe('FootballScorerShell', () => {
 
     expect(screen.getByRole('heading', { name: /fixture not found/i })).toBeInTheDocument();
     expect(screen.getByText(/No fixture envelope exists/)).toBeInTheDocument();
+  });
+
+  it('renders the bottom debug trace panel when debug mode is enabled', () => {
+    renderScorer('/?fixture=goalToGo&debug=1');
+
+    const panel = screen.getByLabelText(/football debug trace/i);
+    expect(within(panel).getByRole('heading', { name: /debug trace/i })).toBeInTheDocument();
+    expect(within(panel).getByText(/pre-play state read/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/possession-relative yard math/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/goal-to-go checks/i)).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: /copy session/i })).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: /export json/i })).toBeInTheDocument();
+    expect(within(panel).getAllByRole('button', { name: /copy play/i }).length).toBeGreaterThan(0);
+  });
+
+  it('emits structured trace entries for key rule and submit checks', () => {
+    const entries = buildFootballFixtureDebugTrace(gameEnvelopeFixtures.kickoffDrive);
+    const checkNames = entries.map((entry) => entry.checkName);
+
+    expect(checkNames).toContain('pre-play state read');
+    expect(checkNames).toContain('possession normalization');
+    expect(checkNames).toContain('yard-line parsing');
+    expect(checkNames).toContain('possession-relative yard math');
+    expect(checkNames).toContain('yards gained');
+    expect(checkNames).toContain('line-to-gain lookup');
+    expect(checkNames).toContain('yards-to-gain');
+    expect(checkNames).toContain('first-down checks');
+    expect(checkNames).toContain('kickoff new-drive checks');
+    expect(checkNames).toContain('drive start/end decisions');
+    expect(checkNames).toContain('penalty accepted/declined/offsetting checks');
+    expect(checkNames).toContain('backend submit request creation');
+    expect(checkNames).toContain('backend accepted envelope response');
+    expect(checkNames).toContain('duplicate clientEventId handling');
+    expect(checkNames).toContain('stale sequence/conflict handling');
+
+    expect(entries[0]).toEqual(
+      expect.objectContaining({
+        timestamp: expect.any(String),
+        gameId: 'FB-KICKOFF-DRIVE',
+        clientEventId: expect.any(String),
+        category: expect.any(String),
+        checkName: expect.any(String),
+        inputSummary: expect.any(String),
+        calculationDetails: expect.any(String),
+        result: expect.any(String),
+        reason: expect.any(String),
+        severity: expect.stringMatching(/info|pass|warning|error/),
+      }),
+    );
   });
 });
