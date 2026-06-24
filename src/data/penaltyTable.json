@@ -1,0 +1,222 @@
+[
+  {
+    "code": "HOLD",
+    "name": "Holding",
+    "liveBall": true,
+    "yards": 10,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "DPI",
+    "name": "Defensive Pass Interference",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": true,
+    "lossOfDown": false
+  },
+  {
+    "code": "OPI",
+    "name": "Offensive Pass Interference",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "FS",
+    "name": "False Start",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "OFF",
+    "name": "Offside",
+    "liveBall": true,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "DH",
+    "name": "Defensive Holding",
+    "liveBall": true,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": true,
+    "lossOfDown": false
+  },
+  {
+    "code": "PF",
+    "name": "Personal Foul",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "END",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "RGH",
+    "name": "Roughing the Passer",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "END",
+    "automaticFirstDown": true,
+    "lossOfDown": false
+  },
+  {
+    "code": "ILL",
+    "name": "Illegal Formation",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "DOG",
+    "name": "Delay of Game",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "ENC",
+    "name": "Encroachment",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "IG",
+    "name": "Intentional Grounding",
+    "liveBall": true,
+    "yards": 10,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": false,
+    "lossOfDown": true
+  },
+  {
+    "code": "TH",
+    "name": "Targeting",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": true,
+    "lossOfDown": false
+  },
+  {
+    "code": "UC",
+    "name": "Unsportsmanlike Conduct",
+    "liveBall": false,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "END",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "IBB",
+    "name": "Illegal Block in the Back",
+    "liveBall": true,
+    "yards": 10,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "CLI",
+    "name": "Clipping",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "SPOT",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "FMB",
+    "name": "Face Mask",
+    "liveBall": true,
+    "yards": 15,
+    "requiresYards": true,
+    "requiresSpot": true,
+    "defaultEnforcement": "END",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "12M",
+    "name": "12 Men on Field",
+    "liveBall": true,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "ILS",
+    "name": "Illegal Shift",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
+    "code": "ILM",
+    "name": "Illegal Motion",
+    "liveBall": false,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  }
+]

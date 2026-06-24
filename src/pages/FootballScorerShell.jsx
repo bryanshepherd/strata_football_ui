@@ -1,11 +1,22 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
+import FootballConfirmedQuickInput, {
+  getFootballFcqiAssistantMessage,
+} from '../components/fcqi/FootballConfirmedQuickInput';
+import FootballScoreboard from '../components/scorer/FootballScoreboard';
+import FootballTeamStats from '../components/scorer/FootballTeamStats';
+import ScorerLayoutShell from '../components/scorer/ScorerLayoutShell';
 import {
   defaultFixtureKey,
   fixtureOptions,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
+import {
+  fetchFootballEnvelope,
+  getDashboardSeededFootballEnvelopeRecord,
+} from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 
 const formatStatus = (status) =>
@@ -36,6 +47,9 @@ const formatDriveResult = (drive) => drive?.result || 'Active';
 
 const isDebugEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 
+const getRequestedGameId = (searchParams) =>
+  searchParams.get('gameId') || searchParams.get('game_id') || searchParams.get('id') || '';
+
 const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
   const next = {};
   if (fixture && fixture !== defaultFixtureKey) {
@@ -49,13 +63,95 @@ const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
 
 export default function FootballScorerShell() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const requestedGameId = getRequestedGameId(searchParams);
   const requestedFixture = searchParams.get('fixture') || defaultFixtureKey;
   const debugMode = isDebugEnabled(searchParams.get('debug'));
-  const envelope = getGameEnvelopeFixture(requestedFixture);
+  const fixtureEnvelope = getGameEnvelopeFixture(requestedFixture);
+  const [loadedGameState, setLoadedGameState] = useState(() => ({
+    status: requestedGameId ? 'loading' : 'idle',
+    envelope: null,
+    source: '',
+    error: '',
+  }));
+  const [fcqiState, setFcqiState] = useState(() => createInitialFootballQuickInputState());
+  const [acceptedScorerState, setAcceptedScorerState] = useState(() => createEmptyAcceptedScorerState());
+  const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
+  const envelope = useMemo(
+    () => buildActiveScorerEnvelope(baseEnvelope, acceptedScorerState),
+    [acceptedScorerState, baseEnvelope],
+  );
   const traceEntries = useMemo(
-    () => (debugMode ? buildFootballFixtureDebugTrace(envelope) : []),
+    () => (debugMode && envelope ? buildFootballFixtureDebugTrace(envelope) : []),
     [debugMode, envelope],
   );
+
+  useEffect(() => {
+    setAcceptedScorerState(createEmptyAcceptedScorerState());
+    setFcqiState(createInitialFootballQuickInputState());
+  }, [requestedFixture, requestedGameId]);
+
+  useEffect(() => {
+    if (!requestedGameId) {
+      setLoadedGameState({ status: 'idle', envelope: null, source: '', error: '' });
+      return undefined;
+    }
+
+    const seededRecord = getDashboardSeededFootballEnvelopeRecord(requestedGameId);
+    if (seededRecord?.envelope) {
+      setLoadedGameState({
+        status: 'ready',
+        envelope: seededRecord.envelope,
+        source: 'dashboard-seed',
+        error: '',
+      });
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    setLoadedGameState({ status: 'loading', envelope: null, source: 'server', error: '' });
+    fetchFootballEnvelope(requestedGameId, { signal: controller.signal })
+      .then((loadedEnvelope) => {
+        setLoadedGameState({
+          status: 'ready',
+          envelope: loadedEnvelope,
+          source: 'server',
+          error: '',
+        });
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return;
+        setLoadedGameState({
+          status: 'error',
+          envelope: null,
+          source: 'server',
+          error: error?.message || 'Failed to load football game envelope.',
+        });
+      });
+
+    return () => controller.abort();
+  }, [requestedGameId]);
+
+  const handleSubmitAccepted = useCallback((result) => {
+    setAcceptedScorerState((current) => reduceAcceptedScorerState(current, result));
+  }, []);
+
+  if (requestedGameId && loadedGameState.status === 'loading') {
+    return (
+      <ShellRouteState
+        title="Loading scorer"
+        message={`Loading football envelope for ${requestedGameId}.`}
+      />
+    );
+  }
+
+  if (requestedGameId && loadedGameState.status === 'error') {
+    return (
+      <ShellRouteState
+        title="Game envelope not available"
+        message={loadedGameState.error || `Could not load football envelope for ${requestedGameId}.`}
+      />
+    );
+  }
 
   if (!envelope) {
     return (
@@ -74,6 +170,15 @@ export default function FootballScorerShell() {
   };
 
   const onDebugToggle = () => {
+    if (requestedGameId) {
+      const next = { gameId: requestedGameId };
+      if (!debugMode) {
+        next.debug = '1';
+      }
+      setSearchParams(next);
+      return;
+    }
+
     setScorerSearchParams(setSearchParams, {
       fixture: requestedFixture,
       debug: !debugMode,
@@ -81,27 +186,32 @@ export default function FootballScorerShell() {
   };
 
   return (
-    <main className={`min-h-screen bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
+    <main className={`flex min-h-screen flex-col bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
       <ScorerHeader
         debugMode={debugMode}
         envelope={envelope}
         fixtureKey={requestedFixture}
+        gameId={requestedGameId}
+        loadSource={loadedGameState.source}
         onDebugToggle={onDebugToggle}
         onFixtureChange={onFixtureChange}
       />
 
-      <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-4 xl:grid-cols-[280px_minmax(0,1fr)_340px]">
-        <RosterLookup envelope={envelope} />
-
-        <section className="min-w-0 space-y-4">
-          <Scorebug envelope={envelope} />
-          <ClockDownDistanceStrip envelope={envelope} />
-          <DriveStatusBand envelope={envelope} />
-          <PlayEntryWorkspace envelope={envelope} />
-        </section>
-
-        <GameLogColumn envelope={envelope} />
-      </div>
+      <ScorerLayoutShell
+        scoreboard={<FootballScoreboardSlot envelope={envelope} />}
+        stats={<FootballStatsSlot envelope={envelope} />}
+        input={(
+          <FootballInputSlot
+            debugMode={debugMode}
+            envelope={envelope}
+            fcqiState={fcqiState}
+            onFcqiStateChange={setFcqiState}
+            onSubmitAccepted={handleSubmitAccepted}
+          />
+        )}
+        eventLog={<FootballEventLogSlot envelope={envelope} />}
+        inputAssistant={<FootballInputAssistantSlot envelope={envelope} fcqiState={fcqiState} />}
+      />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
     </main>
@@ -121,16 +231,25 @@ const ShellRouteState = ({ title, message }) => (
       <p className="mt-2 text-sm text-zinc-600">{message}</p>
       <Link
         className="mt-4 inline-flex rounded bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-        to={`/?fixture=${defaultFixtureKey}`}
+        to="/dashboard"
       >
-        Open scorer
+        Open dashboard
       </Link>
     </section>
   </main>
 );
 
-const ScorerHeader = ({ debugMode, envelope, fixtureKey, onDebugToggle, onFixtureChange }) => {
+const ScorerHeader = ({
+  debugMode,
+  envelope,
+  fixtureKey,
+  gameId,
+  loadSource,
+  onDebugToggle,
+  onFixtureChange,
+}) => {
   const teams = envelope.game.teams;
+  const isGameRoute = Boolean(gameId);
 
   return (
     <header className="border-b border-zinc-300 bg-white">
@@ -150,23 +269,35 @@ const ScorerHeader = ({ debugMode, envelope, fixtureKey, onDebugToggle, onFixtur
         </div>
 
         <nav className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
-            Dev fixture
-            <select
-              className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
-              value={fixtureKey}
-              onChange={onFixtureChange}
-            >
-              {fixtureOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <Link
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            to={`/reports?fixture=${fixtureKey}`}
+            to="/dashboard"
+          >
+            Dashboard
+          </Link>
+          {isGameRoute ? (
+            <span className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+              Game {gameId} · {loadSource || 'loaded'}
+            </span>
+          ) : (
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+              Dev fixture
+              <select
+                className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+                value={fixtureKey}
+                onChange={onFixtureChange}
+              >
+                {fixtureOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Link
+            className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+            to={isGameRoute ? `/reports?gameId=${encodeURIComponent(gameId)}` : `/reports?fixture=${fixtureKey}`}
           >
             Reports
           </Link>
@@ -187,77 +318,80 @@ const ScorerHeader = ({ debugMode, envelope, fixtureKey, onDebugToggle, onFixtur
   );
 };
 
-const Scorebug = ({ envelope }) => {
-  const teams = envelope.game.teams;
-  const possession = envelope.liveState.possession;
+export const FootballScoreboardSlot = ({ envelope }) => (
+  <FootballScoreboard envelope={envelope} />
+);
 
-  return (
-    <section className="grid overflow-hidden rounded border border-zinc-300 bg-white md:grid-cols-[1fr_auto_1fr]">
-      <TeamScoreCard team={teams.V} hasBall={possession === 'V'} align="left" />
-      <div className="flex flex-col items-center justify-center border-y border-zinc-200 bg-zinc-950 px-8 py-4 text-white md:border-x md:border-y-0">
-        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          {formatStatus(envelope.game.status)}
-        </div>
-        <div className="mt-1 text-4xl font-black tabular-nums">
-          {envelope.clock.clock}
-        </div>
-        <div className="mt-1 text-sm text-zinc-300">
-          Q{envelope.clock.period || '-'} · Play {envelope.clock.playClock || '--'}
-        </div>
-      </div>
-      <TeamScoreCard team={teams.H} hasBall={possession === 'H'} align="right" />
-    </section>
-  );
-};
-
-const TeamScoreCard = ({ team, hasBall, align }) => (
-  <div
-    className={`flex items-center justify-between gap-3 p-4 ${
-      align === 'right' ? 'md:flex-row-reverse md:text-right' : ''
-    }`}
-  >
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        {hasBall && (
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" aria-label="Possession" />
-        )}
-        <div className="truncate text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          {team.abbr}
-        </div>
-      </div>
-      <div className="truncate text-lg font-semibold">{team.name}</div>
-    </div>
-    <div className="text-5xl font-black tabular-nums">{team.score}</div>
+export const FootballStatsSlot = ({ envelope }) => (
+  <div className="h-full min-h-0 p-2">
+    <FootballTeamStats envelope={envelope} />
   </div>
 );
 
-const ClockDownDistanceStrip = ({ envelope }) => {
-  const liveState = envelope.liveState;
-  const possessionTeam = getPossessionTeam(envelope);
+export const FootballInputSlot = ({
+  debugMode = false,
+  envelope,
+  fcqiState,
+  onFcqiStateChange,
+  onSubmitAccepted,
+}) => (
+  <div className="space-y-4 p-4">
+    <DriveStatusBand envelope={envelope} />
+    <FootballConfirmedQuickInput
+      debug={debugMode}
+      envelope={envelope}
+      onSubmitAccepted={onSubmitAccepted}
+      onStateChange={onFcqiStateChange}
+      state={fcqiState}
+    />
+  </div>
+);
+
+export const FootballEventLogSlot = ({ envelope }) => (
+  <div className="h-full p-4">
+    <GameLogColumn envelope={envelope} />
+  </div>
+);
+
+export const FootballInputAssistantSlot = ({ envelope, fcqiState }) => {
+  const lastEvent = envelope.events[envelope.events.length - 1];
+  const assistantMessage = getFootballFcqiAssistantMessage(fcqiState);
+  const queuedPenaltyActive = Boolean(fcqiState?.queuedPenaltyRequested);
 
   return (
-    <section className="grid gap-px overflow-hidden rounded border border-zinc-300 bg-zinc-300 text-sm md:grid-cols-5">
-      <StripCell label="Ball" value={possessionTeam?.abbr || 'None'} />
-      <StripCell label="Down/Distance" value={formatDownDistance(liveState)} />
-      <StripCell label="Spot" value={formatSpot(liveState)} />
-      <StripCell label="Line To Gain" value={liveState.lineToGain || 'None'} />
-      <StripCell
-        label="Field State"
-        value={liveState.goalToGo ? 'Goal to go' : liveState.redZone ? 'Red zone' : 'Open field'}
-        tone={liveState.goalToGo || liveState.redZone ? 'warning' : 'default'}
-      />
+    <section
+      aria-label="Input Assistant"
+      className={`border-t px-4 py-3 ${
+        queuedPenaltyActive
+          ? 'border-yellow-400 bg-yellow-100 text-yellow-950'
+          : 'border-zinc-300 bg-white text-zinc-950'
+      }`}
+      data-testid="football-input-assistant"
+    >
+      <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="min-w-0">
+          <div className={`text-xs font-semibold uppercase tracking-wide ${queuedPenaltyActive ? 'text-yellow-800' : 'text-zinc-500'}`}>
+            Input Assistant
+          </div>
+          <div className={`mt-1 font-medium ${queuedPenaltyActive ? 'text-yellow-950' : 'text-zinc-900'}`}>
+            {assistantMessage}
+          </div>
+        </div>
+        <div className={`flex flex-wrap items-center gap-2 text-xs font-semibold ${queuedPenaltyActive ? 'text-yellow-950' : 'text-zinc-600'}`}>
+          <span className={`rounded px-2 py-1 ${queuedPenaltyActive ? 'bg-yellow-200 text-yellow-950' : 'bg-emerald-50 text-emerald-800'}`}>
+            {formatStatus(envelope.game.status)}
+          </span>
+          <span className={`rounded px-2 py-1 ${queuedPenaltyActive ? 'bg-yellow-200' : 'bg-zinc-100'}`}>
+            {formatDownDistance(envelope.liveState)}
+          </span>
+          <span className={`rounded px-2 py-1 ${queuedPenaltyActive ? 'bg-yellow-200' : 'bg-zinc-100'}`}>
+            Last event: {lastEvent?.sequence ? `#${lastEvent.sequence}` : 'None'}
+          </span>
+        </div>
+      </div>
     </section>
   );
 };
-
-const StripCell = ({ label, value, tone = 'default' }) => (
-  <div className={`bg-white p-3 ${tone === 'warning' ? 'text-amber-800' : 'text-zinc-950'}`}>
-    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-      {label}
-    </div>
-    <div className="mt-1 text-lg font-semibold">{value}</div>
-  </div>
-);
 
 const DriveStatusBand = ({ envelope }) => {
   const currentDrive = envelope.drives.current;
@@ -351,11 +485,11 @@ const EnvelopeRow = ({ label, value }) => (
 );
 
 const GameLogColumn = ({ envelope }) => (
-  <aside className="rounded border border-zinc-300 bg-white">
+  <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
     <div className="border-b border-zinc-200 px-4 py-3">
       <h2 className="text-base font-semibold">Game Log</h2>
     </div>
-    <div className="max-h-[calc(100vh-170px)] overflow-auto">
+    <div className="min-h-0 flex-1 overflow-auto">
       {envelope.events.length === 0 ? (
         <div className="p-4 text-sm text-zinc-600">No accepted events.</div>
       ) : (
@@ -363,8 +497,8 @@ const GameLogColumn = ({ envelope }) => (
           {envelope.events
             .slice()
             .reverse()
-            .map((event) => (
-              <li key={event.eventId} className="p-4">
+            .map((event, index) => (
+              <li key={event.eventId || event.clientEventId || `event-${index}`} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold capitalize">
@@ -376,7 +510,7 @@ const GameLogColumn = ({ envelope }) => (
                     </p>
                   </div>
                   <span className="shrink-0 rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
-                    #{event.sequence}
+                    #{event.sequence ?? '-'}
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
@@ -387,14 +521,14 @@ const GameLogColumn = ({ envelope }) => (
         </ol>
       )}
     </div>
-  </aside>
+  </section>
 );
 
 const RosterLookup = ({ envelope }) => {
   const teams = envelope.rosters.teams;
 
   return (
-    <aside className="rounded border border-zinc-300 bg-white">
+    <section className="rounded border border-zinc-300 bg-white">
       <div className="border-b border-zinc-200 px-4 py-3">
         <h2 className="text-base font-semibold">Roster Lookup</h2>
       </div>
@@ -427,6 +561,113 @@ const RosterLookup = ({ envelope }) => {
           </section>
         ))}
       </div>
-    </aside>
+    </section>
   );
 };
+
+function createEmptyAcceptedScorerState() {
+  return {
+    gameEnvelope: null,
+    projection: null,
+    acceptedEvents: [],
+  };
+}
+
+function reduceAcceptedScorerState(current, result) {
+  const gameEnvelope = result?.gameEnvelope ?? result?.envelope ?? null;
+  const projection = result?.projection ?? null;
+
+  if (gameEnvelope || projection) {
+    return {
+      gameEnvelope: gameEnvelope ?? current.gameEnvelope,
+      projection: projection ?? current.projection,
+      acceptedEvents: [],
+    };
+  }
+
+  if (isDisplayableAcceptedEvent(result?.acceptedEvent)) {
+    return {
+      ...current,
+      acceptedEvents: appendAcceptedEvent(current.acceptedEvents, result.acceptedEvent),
+    };
+  }
+
+  return current;
+}
+
+function buildActiveScorerEnvelope(fixtureEnvelope, acceptedState) {
+  if (!fixtureEnvelope) return null;
+
+  const submittedEnvelope = acceptedState.gameEnvelope || fixtureEnvelope;
+  const projectedEnvelope = applyProjectionToEnvelope(submittedEnvelope, acceptedState.projection);
+  if (acceptedState.acceptedEvents.length === 0) return projectedEnvelope;
+
+  const existingClientIds = new Set(projectedEnvelope.events.map((event) => event.clientEventId).filter(Boolean));
+  const existingEventIds = new Set(projectedEnvelope.events.map((event) => event.eventId).filter(Boolean));
+  const appendedEvents = acceptedState.acceptedEvents.filter((event) => {
+    if (event.eventId && existingEventIds.has(event.eventId)) return false;
+    if (event.clientEventId && existingClientIds.has(event.clientEventId)) return false;
+    return true;
+  });
+
+  if (appendedEvents.length === 0) return projectedEnvelope;
+
+  return {
+    ...projectedEnvelope,
+    events: [
+      ...projectedEnvelope.events,
+      ...appendedEvents,
+    ],
+  };
+}
+
+function applyProjectionToEnvelope(envelope, projection) {
+  if (!projection) return envelope;
+
+  const liveState = projection.liveState ?? projection.live_state;
+  const clock = projection.clock;
+  const stats = projection.stats;
+  const drives = projection.drives;
+  const events = projection.events;
+  const gamePatch = projection.game;
+  const teamPatch = gamePatch?.teams ?? projection.teams;
+
+  return {
+    ...envelope,
+    game: {
+      ...envelope.game,
+      ...(gamePatch || {}),
+      teams: teamPatch
+        ? {
+            ...envelope.game.teams,
+            H: { ...envelope.game.teams.H, ...(teamPatch.H || {}) },
+            V: { ...envelope.game.teams.V, ...(teamPatch.V || {}) },
+          }
+        : envelope.game.teams,
+    },
+    clock: clock ? { ...envelope.clock, ...clock } : envelope.clock,
+    liveState: liveState ? { ...envelope.liveState, ...liveState } : envelope.liveState,
+    stats: stats ? { ...envelope.stats, ...stats } : envelope.stats,
+    drives: drives ? { ...envelope.drives, ...drives } : envelope.drives,
+    events: Array.isArray(events) ? events : envelope.events,
+  };
+}
+
+function isDisplayableAcceptedEvent(event) {
+  return Boolean(
+    event
+      && (event.eventId || event.clientEventId)
+      && (event.type || event.description || event.result?.code),
+  );
+}
+
+function appendAcceptedEvent(events, event) {
+  const eventId = event.eventId;
+  const clientEventId = event.clientEventId;
+  const alreadyExists = events.some((existing) => (
+    (eventId && existing.eventId === eventId)
+    || (clientEventId && existing.clientEventId === clientEventId)
+  ));
+
+  return alreadyExists ? events : [...events, event];
+}
