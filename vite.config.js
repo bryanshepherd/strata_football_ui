@@ -9,9 +9,10 @@ export default defineConfig({
     host: 'localhost',
     proxy: {
       '/strata_football': {
-        target: 'http://localhost',
+        target: 'http://127.0.0.1:8081',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => path.replace(/^\/strata_football/, '')
       }
     }
   }
