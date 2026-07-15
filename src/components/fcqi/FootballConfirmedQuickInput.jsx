@@ -9,6 +9,7 @@ import FootballDuplicatePlayerModal from './FootballDuplicatePlayerModal';
 import FootballFlowModal from './FootballFlowModal';
 import { buildFootballFlowProgressSteps } from './FootballFlowProgress';
 import FootballPlaySummaryModal from './FootballPlaySummaryModal';
+import { gamePhaseForEnvelope, isPlayFamilyAvailable, pregameForEnvelope } from '../../pregame/footballPregame';
 
 const PLAY_BUTTONS = [
   { label: 'Rush', hotkey: 'R', enabled: true },
@@ -140,6 +141,7 @@ export default function FootballConfirmedQuickInput({
     () => buildQuickInputContext(envelope, startMeta),
     [envelope, startMeta],
   );
+  const gamePhase = gamePhaseForEnvelope(envelope);
 
   const publishState = (nextState) => {
     onStateChange?.(nextState);
@@ -158,6 +160,7 @@ export default function FootballConfirmedQuickInput({
     transitionFootballQuickInput(baseState, event, activeContext).state;
 
   const startRush = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -176,6 +179,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPass = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'pass')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -194,6 +198,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPunt = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'punt')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -212,6 +217,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startKick = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'kickoff')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -230,6 +236,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPenalty = (startedBy, source = 'immediate') => {
+    if (!isPlayFamilyAvailable(gamePhase, 'penalty')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -248,6 +255,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startGameControl = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'gameControl')) return;
     startCounter.current += 1;
     const nextStartMeta = {
       startedBy,
@@ -426,17 +434,20 @@ export default function FootballConfirmedQuickInput({
 
       <div className="space-y-4 p-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {PLAY_BUTTONS.map((button) => (
+          {PLAY_BUTTONS.map((button) => {
+            const family = button.label === 'Kick' ? 'kickoff' : button.label === 'Game Control' ? 'gameControl' : button.label.toLowerCase();
+            const enabled = button.enabled && isPlayFamilyAvailable(gamePhase, family);
+            return (
             <button
               key={button.label}
               className={`flex min-h-12 items-center justify-between gap-3 rounded border px-3 py-3 text-sm font-semibold ${
-                button.enabled
+                enabled
                   ? 'border-emerald-700 bg-white text-zinc-950 hover:bg-emerald-50'
                   : 'border-zinc-300 bg-zinc-50 text-zinc-500'
               }`}
-              disabled={!button.enabled}
+              disabled={!enabled}
               onClick={() => {
-                if (!button.enabled) return;
+                if (!enabled) return;
                 if (button.label === 'Pass') {
                   startPass('button');
                 } else if (button.label === 'Punt') {
@@ -458,8 +469,17 @@ export default function FootballConfirmedQuickInput({
                 {button.hotkey}
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
+
+        {(gamePhase === 'pregame' || gamePhase === 'awaitingKickoff') && (
+          <div className="rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+            {gamePhase === 'awaitingKickoff'
+              ? 'Awaiting Kickoff: kickoff and applicable dead-ball penalty input are enabled; scrimmage input is blocked.'
+              : 'Complete the coin toss in Pregame before kickoff input is available.'}
+          </div>
+        )}
 
         <div className="rounded border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
           <span className="font-semibold text-zinc-950">Assistant:</span>{' '}
@@ -567,7 +587,10 @@ function formatSubmitErrors(errors) {
 }
 
 function buildQuickInputContext(envelope, startMeta) {
-  const possession = envelope.liveState.possession || 'H';
+  const pregame = pregameForEnvelope(envelope);
+  const phase = gamePhaseForEnvelope(envelope);
+  const possession = envelope.liveState.possession || null;
+  const actionTeam = possession || (phase === 'awaitingKickoff' ? pregame.coinToss.firstHalfKickingTeam : null);
   const baseEventSequence = envelope.events.at(-1)?.sequence ?? 0;
 
   return {
@@ -590,7 +613,7 @@ function buildQuickInputContext(envelope, startMeta) {
       baseEventSequence,
     },
     play: {
-      actionTeam: possession,
+      actionTeam: actionTeam || 'H',
       possession,
       period: envelope.clock.period || envelope.game.period || 1,
       clock: envelope.clock.clock || null,
@@ -607,6 +630,7 @@ function buildQuickInputContext(envelope, startMeta) {
       driveNumber: envelope.liveState.driveNumber || 0,
     },
     roster: flattenRoster(envelope),
+    gamePhase: phase,
     intentId: `${startMeta.seed}-intent`,
     clientEventId: `${startMeta.seed}-client`,
     now: startMeta.startedAt,

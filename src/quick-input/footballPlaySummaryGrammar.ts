@@ -47,8 +47,8 @@ function summaryForPlay(context: SummaryContext): string {
   }
 
   if (intent.play.family === 'try') return trySummary(context);
-  if (intent.result.code === 'fumble') return fumbleSummary(context);
   if (intent.play.family === 'rush') return rushSummary(context);
+  if (intent.result.code === 'fumble') return fumbleSummary(context);
   if (intent.play.family === 'pass' && intent.play.subtype === 'sack') return sackSummary(context);
   if (intent.play.family === 'pass' && intent.play.subtype === 'interception') return interceptionSummary(context);
   if (intent.play.family === 'pass') return passSummary(context);
@@ -77,6 +77,13 @@ function rushSummary(context: SummaryContext): string {
   if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
   const tacklers = tacklerPhrase(intent.participants.defenders);
   if (tacklers) clauses.push(tacklers);
+  if (intent.result.fumble) {
+    const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, intent.result.fumble.forcedByPlayerId);
+    const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, intent.result.fumble.recoveredByPlayerId);
+    clauses.push(`fumbled ${spotPhrase(context, 'at', intent.result.fumble.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`);
+    if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
+    clauses.push(`recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, intent.result.fumble.recoveredByTeam)} ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
+  }
 
   return sentence(joinClauses(clauses));
 }

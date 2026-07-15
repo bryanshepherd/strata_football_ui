@@ -6,6 +6,7 @@ import FootballConfirmedQuickInput, {
 } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballScoreboard from '../components/scorer/FootballScoreboard';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
+import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
 import ScorerLayoutShell from '../components/scorer/ScorerLayoutShell';
 import {
   defaultFixtureKey,
@@ -16,6 +17,7 @@ import { createInitialFootballQuickInputState } from '../quick-input/footballCon
 import {
   fetchFootballEnvelope,
   getDashboardSeededFootballEnvelopeRecord,
+  persistFootballPregameEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 
@@ -135,6 +137,21 @@ export default function FootballScorerShell() {
     setAcceptedScorerState((current) => reduceAcceptedScorerState(current, result));
   }, []);
 
+  const handlePregameEnvelopeChange = useCallback(async (nextEnvelope) => {
+    // Optimistically keep the current workspace responsive; the canonical
+    // persisted envelope replaces it as soon as the configured store returns.
+    setAcceptedScorerState({ gameEnvelope: nextEnvelope, projection: null, acceptedEvents: [] });
+    if (!requestedGameId) return;
+    try {
+      const persisted = await persistFootballPregameEnvelope(requestedGameId, nextEnvelope);
+      setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+    } catch (error) {
+      // The workspace remains editable, but callers receive the failure so the
+      // operator is never told that an unsaved pregame change is durable.
+      throw error;
+    }
+  }, [requestedGameId]);
+
   if (requestedGameId && loadedGameState.status === 'loading') {
     return (
       <ShellRouteState
@@ -207,6 +224,7 @@ export default function FootballScorerShell() {
             fcqiState={fcqiState}
             onFcqiStateChange={setFcqiState}
             onSubmitAccepted={handleSubmitAccepted}
+            onPregameEnvelopeChange={handlePregameEnvelopeChange}
           />
         )}
         eventLog={<FootballEventLogSlot envelope={envelope} />}
@@ -333,10 +351,12 @@ export const FootballInputSlot = ({
   envelope,
   fcqiState,
   onFcqiStateChange,
+  onPregameEnvelopeChange,
   onSubmitAccepted,
 }) => (
   <div className="space-y-4 p-4">
     <DriveStatusBand envelope={envelope} />
+    <FootballPregameWorkspace envelope={envelope} onEnvelopeChange={onPregameEnvelopeChange} />
     <FootballConfirmedQuickInput
       debug={debugMode}
       envelope={envelope}
@@ -574,6 +594,14 @@ function createEmptyAcceptedScorerState() {
 }
 
 function reduceAcceptedScorerState(current, result) {
+  if (result?.contractMode === 'canonicalRush' && result?.gameEnvelope) {
+    return {
+      gameEnvelope: result.gameEnvelope,
+      projection: null,
+      acceptedEvents: [],
+    };
+  }
+
   const gameEnvelope = result?.gameEnvelope ?? result?.envelope ?? null;
   const projection = result?.projection ?? null;
 

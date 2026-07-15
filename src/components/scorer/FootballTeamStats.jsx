@@ -63,8 +63,8 @@ export default function FootballTeamStats({ envelope }) {
 
 export function buildTeamStats(envelope, teamCode) {
   const source = resolveTeamStatsSource(envelope, teamCode);
-  const rushAtt = readNumber(source, ['rush.att', 'rushing.att', 'rushAtt', 'RushPlays', 'rushing_attempts']);
-  const rushYds = readNumber(source, ['rush.yds', 'rushing.yds', 'rushYds', 'RushYards', 'rushing_yards']);
+  const rushAtt = readNumber(source, ['rushAttempts', 'rush.att', 'rushing.att', 'rushAtt', 'RushPlays', 'rushing_attempts']);
+  const rushYds = readNumber(source, ['rushYards', 'rush.yds', 'rushing.yds', 'rushYds', 'RushYards', 'rushing_yards']);
   const passComp = readNumber(source, ['pass.cmp', 'passing.cmp', 'passComp', 'PassComp', 'completions']);
   const passAtt = readNumber(source, ['pass.att', 'passing.att', 'passAtt', 'PassAtt', 'attempts']);
   const passYds = readNumber(source, ['pass.yds', 'passing.yds', 'passYds', 'PassYards', 'passing_yards']);

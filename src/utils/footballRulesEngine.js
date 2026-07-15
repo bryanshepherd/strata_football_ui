@@ -88,6 +88,10 @@ export function possessionRelativeToSpot(relativeYards, possession) {
 
 export function calculateYardsGained(startSpot, endSpot, possession) {
   const startRelative = spotToPossessionRelative(startSpot, possession);
+  const parsedEnd = typeof endSpot === 'string' ? parseSpot(endSpot) : endSpot;
+  if (typeof startRelative === 'number' && parsedEnd?.valid && parsedEnd.goal) {
+    return 100 - startRelative;
+  }
   const endRelative = spotToPossessionRelative(endSpot, possession);
 
   if (typeof startRelative !== 'number' || typeof endRelative !== 'number') {

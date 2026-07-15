@@ -39,6 +39,24 @@ describe('footballEventBuilder', () => {
     expect(result.event).not.toHaveProperty('status');
     expect(result.event).not.toHaveProperty('acceptedAt');
     expect(result.event).not.toHaveProperty('postState');
+    expect(result.event).not.toHaveProperty('source');
+    expect(result.event).not.toHaveProperty('confirmation');
+    expect(result.event).not.toHaveProperty('warnings');
+  });
+
+  it.each([
+    ['normal', { code: 'tackle' as const, yards: 4, endYardLine: 'H48' as const }],
+    ['loss', { code: 'tackle' as const, yards: -2, endYardLine: 'H42' as const }],
+    ['out of bounds', { code: 'outOfBounds' as const, yards: 5, endYardLine: 'H49' as const }],
+  ])('builds canonical %s Rush outcome', (_label, resultShape) => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      result: resultShape,
+    }));
+
+    expect(result.event.result).toMatchObject(resultShape);
   });
 
   it('builds complete pass', () => {
@@ -127,8 +145,75 @@ describe('footballEventBuilder', () => {
       recoverySpot: 'H35',
       turnover: true,
     });
-    expect(result.event.result.turnover).toEqual({ type: 'fumble', team: 'V', playerId: 'V-04', spot: 'H35', recoveredBy: 'V' });
-    expect(result.event.result.nextPossession).toBe('V');
+    expect(result.event.result.turnover).toEqual({ type: 'fumble', team: 'H', playerId: 'H-22', spot: 'H35', recoveredBy: 'V' });
+  });
+
+  it('builds a Rush touchdown with backend-projectable scoring metadata', () => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      result: { code: 'touchdown', yards: 56, scoring: { team: 'H', points: 6, type: 'touchdown' } },
+    }));
+
+    expect(result.event.result).toEqual({
+      code: 'touchdown',
+      yards: 56,
+      scoring: { team: 'H', points: 6, type: 'touchdown' },
+    });
+    expect(result.event.description).toBe('HOM #22 Jordan Smith rush for 56 yards for a touchdown.');
+  });
+
+  it('builds an offensive fumble recovery without turnover metadata', () => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      fumbler: participant('fumbler', 'H', 'H-22', '22', 'Jordan Smith'),
+      recoveredBy: participant('recoverer', 'H', 'H-70', '70', 'Avery Cole'),
+      result: {
+        code: 'fumble', yards: 5, endYardLine: 'H49',
+        fumble: {
+          fumblerPlayerId: 'H-22', recoveredByPlayerId: 'H-70', recoveredByTeam: 'H',
+          recoverySpot: 'H49', turnover: false,
+        },
+      },
+    }));
+
+    expect(result.event.result.fumble).toMatchObject({ recoveredByPlayerId: 'H-70', recoveredByTeam: 'H', turnover: false });
+    expect(result.event.result).not.toHaveProperty('turnover');
+  });
+
+  it('rejects a Rush fumble with an unresolved recovery identity', () => {
+    const intent = makeFumbleLostIntent();
+    delete intent.participants.recoveredBy;
+
+    const result = buildFootballEvent(intent);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.map((error) => error.code)).toContain('UNRESOLVED_PLAYER');
+  });
+
+  it('blocks a duplicate jersey until the rusher has a stable selected identity', () => {
+    const intent = makeRushIntent();
+    delete intent.participants.primary;
+
+    const result = buildFootballEvent(intent);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.map((error) => error.code)).toContain('MISSING_REQUIRED_PARTICIPANT');
+  });
+
+  it('keeps non-blocking Rush warnings separate from the canonical event', () => {
+    const intent = makeRushIntent();
+    intent.warnings = [{
+      code: 'MISSING_OPTIONAL_DEFENDER', severity: 'warning', message: 'Second tackler omitted.', source: 'fcqi',
+    }];
+
+    const result = expectBuilt(intent);
+
+    expect(result.warnings).toEqual(intent.warnings);
+    expect(result.event).not.toHaveProperty('warnings');
   });
 
   it('builds punt return', () => {
@@ -150,7 +235,7 @@ describe('footballEventBuilder', () => {
     const result = expectBuilt(makeKickoffTouchbackIntent());
 
     expect(result.event.type).toBe('kickoff');
-    expect(result.event.possession).toBe('H');
+    expect(result.event.possession).toBeNull();
     expect(result.event.preState).toEqual(possessionFreePrePlay());
     expect(result.event.result).toMatchObject({ code: 'touchback', endYardLine: 'V25', nextPossession: 'V' });
   });
@@ -247,14 +332,14 @@ describe('footballEventBuilder', () => {
     expect(result.submitRequest.event.clientEventId).toBe('client-rush-base');
   });
 
-  it('copies confirmed summary text into description and confirmation metadata', () => {
+  it('rejects a confirmation whose text no longer matches regenerated Rush grammar', () => {
     const intent = makeRushIntent();
     intent.confirmation!.summaryText = 'Operator-confirmed custom summary.';
 
-    const result = expectBuilt(intent);
+    const result = buildFootballEvent(intent);
 
-    expect(result.event.description).toBe('Operator-confirmed custom summary.');
-    expect(result.event.confirmation.summaryText).toBe('Operator-confirmed custom summary.');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.map((error) => error.code)).toContain('SUMMARY_STALE');
   });
 
   it('does not mutate input', () => {
@@ -284,14 +369,20 @@ function expectBuilt(intent: FootballDraftIntent): Extract<ReturnType<typeof bui
     baseEnvelopeVersion: '2026-06-20T00:00:00Z',
     baseEventSequence: 41,
   });
-  expect(result.event.source).toEqual({
-    kind: 'fcqi',
-    draftIntentId: intent.intentId,
-    draftRevision: intent.revision,
-    summaryRevision: intent.confirmation!.summaryRevision,
-    confirmedAt: '2026-06-20T00:00:05Z',
-  });
-  expect(result.warnings).toEqual([]);
+  if (intent.play.family === 'rush') {
+    expect(result.event).not.toHaveProperty('source');
+    expect(result.event).not.toHaveProperty('confirmation');
+    expect(result.event).not.toHaveProperty('warnings');
+  } else {
+    expect(result.event.source).toEqual({
+      kind: 'fcqi',
+      draftIntentId: intent.intentId,
+      draftRevision: intent.revision,
+      summaryRevision: intent.confirmation!.summaryRevision,
+      confirmedAt: '2026-06-20T00:00:05Z',
+    });
+  }
+  expect(result.warnings).toEqual(intent.warnings);
   return result;
 }
 

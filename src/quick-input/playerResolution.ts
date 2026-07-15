@@ -28,6 +28,8 @@ export type PlayerResolutionRosterPlayer = {
   def_position?: string;
   st_position?: string;
   side?: string;
+  /** Game-roster snapshot availability. Defaults to active for legacy snapshots. */
+  active?: boolean;
   [key: string]: unknown;
 };
 
@@ -119,6 +121,7 @@ export function resolvePlayerByJersey(options: ResolvePlayerOptions): PlayerReso
   const matches = options.roster
     .map((player, rosterIndex) => normalizeCandidate(player, rosterIndex))
     .filter((candidate): candidate is ResolvedPlayerCandidate => Boolean(candidate))
+    .filter((candidate) => candidate.player.active !== false)
     .filter((candidate) => candidate.team === teamScope && candidate.jersey === jerseyToken);
 
   if (matches.length === 0) {

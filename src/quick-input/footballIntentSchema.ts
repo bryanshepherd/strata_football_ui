@@ -219,6 +219,14 @@ export type DraftResultCode =
   | 'noPlay';
 
 export type DraftPassResult = {
+  outcome?: 'complete' | 'incomplete' | 'interception';
+  startYardLine?: Spot;
+  terminalYardLine?: Spot;
+  interceptionYardLine?: Spot;
+  passingYards?: number;
+  receivingYards?: number;
+  interceptionReturnYards?: number;
+  outOfBounds?: boolean;
   targetPlayerId?: string;
   completed?: boolean;
   caughtAtYardLine?: Spot;
@@ -614,7 +622,7 @@ export function isCanonicalSpot(value: unknown): value is Spot {
   const match = value.match(/^([HV])(\d{2})$/);
   if (!match) return false;
   const yard = Number(match[2]);
-  return yard >= 0 && yard <= 50;
+  return yard >= 1 && yard <= 49;
 }
 
 function validateTopLevel(intent: Record<string, unknown>, errors: FootballIntentValidationError[]) {
@@ -761,6 +769,9 @@ function validatePrePlayContext(
     if (prePlay[field] !== null && prePlay[field] !== undefined && !isCanonicalSpot(prePlay[field])) {
       errors.push(error('INVALID_SPOT', `prePlay.${field} must use canonical spot format`, `prePlay.${field}`));
     }
+  }
+  if (prePlay.yardLine === 'goal') {
+    errors.push(error('INVALID_SPOT', 'prePlay.yardLine cannot use the line-to-gain sentinel goal', 'prePlay.yardLine'));
   }
 
   if (!Number.isInteger(prePlay.driveNumber) || Number(prePlay.driveNumber) < 0) {
@@ -1034,7 +1045,7 @@ function validatePlayFamilyRequirements(
 
   if (family === 'rush') {
     requireParticipant(participants.primary, 'rusher', 'participants.primary', errors);
-    requireEndYardLine(result, errors);
+    if (result.code !== 'touchdown') requireEndYardLine(result, errors);
   }
 
   if (family === 'pass') {

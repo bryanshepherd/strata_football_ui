@@ -161,6 +161,21 @@ describe('playerResolution', () => {
 
     expect(roster).toEqual(before);
   });
+
+  it('excludes inactive players centrally while preserving duplicate-jersey resolution for active players', () => {
+    const result = resolvePlayerByJersey({
+      jerseyToken: '3',
+      teamScope: 'H',
+      actionContext: 'offense',
+      roster: [
+        player('h-3-inactive', 'H', '3', 'Inactive Back', { position: 'RB', off_position: 'RB', active: false }),
+        player('h-3-active', 'H', '3', 'Active Back', { position: 'RB', off_position: 'RB' }),
+      ],
+    });
+
+    expect(result.kind).toBe('resolved');
+    if (result.kind === 'resolved') expect(result.player.playerId).toBe('h-3-active');
+  });
 });
 
 function duplicateNumberRoster(): PlayerResolutionRosterPlayer[] {
@@ -182,6 +197,7 @@ function player(
     off_position?: string;
     def_position?: string;
     st_position?: string;
+    active?: boolean;
   } = {},
 ): PlayerResolutionRosterPlayer {
   return {

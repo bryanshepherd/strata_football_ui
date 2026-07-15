@@ -26,17 +26,27 @@ const renderScorer = (initialEntry = '/scorer') =>
 
 function mockSubmitSuccess(overrides = {}) {
   const originalFetch = globalThis.fetch;
-  const fetchSpy = vi.fn().mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => ({
-      success: true,
-      status: 'accepted',
-      acceptedEvent: { eventId: 'EVT-TEST', clientEventId: 'client-test' },
-      gameEnvelope: null,
-      warnings: [],
-      ...overrides,
-    }),
+  const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+    const request = JSON.parse(init.body);
+    const canonicalEvent = ['rush', 'pass'].includes(request.event.type) && !request.event.source;
+    const base = canonicalEvent
+      ? makeCanonicalSubmitSuccess(request)
+      : {
+          success: true,
+          status: 'accepted',
+          acceptedEvent: { eventId: 'EVT-TEST', clientEventId: request.event.clientEventId },
+          gameEnvelope: null,
+          warnings: [],
+        };
+    const selectedOverrides = typeof overrides === 'function' ? overrides(request) : overrides;
+    const payload = { ...base, ...selectedOverrides };
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify(payload),
+      json: async () => payload,
+    };
   });
   globalThis.fetch = fetchSpy;
 
@@ -55,19 +65,37 @@ function mockSubmitFailure({
   body,
 } = {}) {
   const originalFetch = globalThis.fetch;
-  const payload = body ?? {
-    success: false,
-    status: 'rejected',
-    errors,
-    warnings: [],
-  };
-  const responseText = JSON.stringify(payload);
-  const fetchSpy = vi.fn().mockResolvedValue({
-    ok: false,
-    status,
-    statusText,
-    text: async () => responseText,
-    json: async () => payload,
+  const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+    const request = JSON.parse(init.body);
+    const payload = body ? {
+      schemaVersion: 'football.submitEventResponse.v1',
+      success: false,
+      status: 'rejected',
+      acceptedEvent: null,
+      gameEnvelope: canonicalEnvelopeForRequest(request),
+      errors: [{
+        code: body.code || 'BACKEND_ERROR',
+        message: body.error || body.message || 'Football submit failed.',
+        field: body.details?.field || null,
+      }],
+      warnings: body.warnings || [],
+    } : {
+      schemaVersion: 'football.submitEventResponse.v1',
+      success: false,
+      status: 'rejected',
+      acceptedEvent: null,
+      gameEnvelope: canonicalEnvelopeForRequest(request),
+      errors,
+      warnings: [],
+    };
+    const responseText = JSON.stringify(payload);
+    return {
+      ok: false,
+      status,
+      statusText,
+      text: async () => responseText,
+      json: async () => payload,
+    };
   });
   globalThis.fetch = fetchSpy;
 
@@ -87,17 +115,45 @@ function cloneNormalEnvelope() {
   return JSON.parse(JSON.stringify(gameEnvelopeFixtures.normal));
 }
 
-function makeReturnedEnvelope() {
+function canonicalEnvelopeForRequest(request) {
   const envelope = cloneNormalEnvelope();
+  envelope.gameId = request.gameId;
+  envelope.rosters.gameId = request.gameId;
+  return envelope;
+}
+
+function makeCanonicalSubmitSuccess(request) {
+  const envelope = canonicalEnvelopeForRequest(request);
+  const sequence = Math.max(0, ...envelope.events.map((event) => event.sequence || 0)) + 1;
   const acceptedEvent = {
+    ...request.event,
+    eventId: `EVT-TEST-${sequence}`,
+    sequence,
+    status: 'accepted',
+    acceptedAt: '2026-06-23T21:00:00Z',
+    postState: request.event.preState,
+  };
+  envelope.events = [...envelope.events, acceptedEvent];
+  envelope.stats.sourceEventSequence = sequence;
+  return {
+    schemaVersion: 'football.submitEventResponse.v1',
+    success: true,
+    status: 'accepted',
+    acceptedEvent,
+    gameEnvelope: envelope,
+    warnings: [],
+    errors: [],
+  };
+}
+
+function makeReturnedEnvelope(request) {
+  const envelope = canonicalEnvelopeForRequest(request);
+  const acceptedEvent = {
+    ...request.event,
     eventId: 'EVT-BACKEND-001',
-    clientEventId: 'fcqi-rush-accepted',
     sequence: 13,
-    type: 'rush',
-    subtype: null,
-    period: 1,
-    clock: '08:01',
-    possession: 'V',
+    status: 'accepted',
+    acceptedAt: '2026-06-23T21:00:00Z',
     description: 'Backend accepted rush for 9 yards.',
     result: {
       code: 'tackle',
@@ -120,6 +176,8 @@ function makeReturnedEnvelope() {
     lineToGain: 'V45',
     nextPlayContext: 'Backend accepted state',
   };
+  const { nextPlayContext: _ignored, ...postState } = envelope.liveState;
+  acceptedEvent.postState = postState;
   envelope.game = {
     ...envelope.game,
     teams: {
@@ -128,7 +186,7 @@ function makeReturnedEnvelope() {
       V: { ...envelope.game.teams.V, score: 7 },
     },
   };
-  envelope.events = [...envelope.events, acceptedEvent];
+  envelope.events = [...envelope.events.filter((event) => (event.sequence || 0) < 13), acceptedEvent];
   envelope.stats = {
     ...envelope.stats,
     sourceEventSequence: 13,
@@ -1145,6 +1203,27 @@ describe('FootballScorerShell', () => {
     expect(within(summaryDialog).getByRole('button', { name: /^submit play$/i })).toBeInTheDocument();
   });
 
+  it('builds a canonical Rush touchdown when the confirmed end spot is goal', async () => {
+    renderScorer();
+    fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+    const jerseyInput = screen.getByLabelText(/rusher jersey/i);
+    fireEvent.change(jerseyInput, { target: { value: '22' } });
+    fireEvent.submit(jerseyInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+    const tacklerInput = screen.getByLabelText(/^tackler jersey/i);
+    fireEvent.change(tacklerInput, { target: { value: '44' } });
+    fireEvent.submit(tacklerInput.closest('form'));
+    const secondTacklerInput = screen.getByLabelText(/second tackler jersey/i);
+    fireEvent.change(secondTacklerInput, { target: { value: '' } });
+    fireEvent.submit(secondTacklerInput.closest('form'));
+    const spotInput = screen.getByLabelText(/final ball spot/i);
+    fireEvent.change(spotInput, { target: { value: 'goal' } });
+    fireEvent.submit(spotInput.closest('form'));
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(within(summaryDialog).getByText(/jordan smith rush for 56 yards for a touchdown/i)).toBeInTheDocument();
+  });
+
   it('submit play calls the FCQI submit adapter once and clears the draft on success', async () => {
     const submitMock = mockSubmitSuccess();
 
@@ -1169,17 +1248,16 @@ describe('FootballScorerShell', () => {
       );
       expect(screen.queryByRole('dialog', { name: /play summary review/i })).not.toBeInTheDocument();
       expect(screen.getAllByText('Choose a play type.').length).toBeGreaterThan(0);
-      expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents);
+      expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents + 1);
     } finally {
       submitMock.restore();
     }
   });
 
   it('returned gameEnvelope updates the active scoreboard and event log after submit', async () => {
-    const { envelope: returnedEnvelope, acceptedEvent } = makeReturnedEnvelope();
-    const submitMock = mockSubmitSuccess({
-      acceptedEvent,
-      gameEnvelope: returnedEnvelope,
+    const submitMock = mockSubmitSuccess((request) => {
+      const { envelope, acceptedEvent } = makeReturnedEnvelope(request);
+      return { acceptedEvent, gameEnvelope: envelope };
     });
 
     try {
@@ -1207,72 +1285,53 @@ describe('FootballScorerShell', () => {
     }
   });
 
-  it('returned projection updates active scoreboard state without manually patching FCQI', async () => {
+  it('replaces scorer state with the authoritative defensive-fumble recovery envelope', async () => {
+    const submitMock = mockSubmitSuccess((request) => {
+      const payload = makeCanonicalSubmitSuccess(request);
+      payload.gameEnvelope.liveState = {
+        possession: 'V', down: 1, distance: 10, yardLine: 'H49', lineToGain: 'H39',
+        goalToGo: false, redZone: false, driveId: 'DRV-0003', driveNumber: 3,
+        nextPlayContext: 'V,1,10,H49',
+      };
+      const { nextPlayContext: _ignored, ...postState } = payload.gameEnvelope.liveState;
+      payload.acceptedEvent.postState = postState;
+      payload.gameEnvelope.events[payload.gameEnvelope.events.length - 1] = payload.acceptedEvent;
+      return payload;
+    });
+
+    try {
+      renderScorer();
+      fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+      submitTextToken(/rusher jersey/i, '22');
+      fireEvent.click(screen.getByRole('button', { name: /^fumble/i }));
+      submitTextToken(/forced by jersey/i, '44');
+      submitTextToken(/recovering team/i, 'V');
+      submitTextToken(/recovery player jersey/i, '4');
+      submitTextToken(/recovery spot/i, 'H49');
+      submitTextToken(/returned/i, 'no');
+
+      const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+      expect(summaryDialog).toHaveTextContent(/recovered by #4 andre cole for vis at the h49/i);
+      fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
+      const scoreboardSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="scoreboard"]');
+      await waitFor(() => {
+        expect(within(scoreboardSlot).getByText('1 and 10')).toBeInTheDocument();
+        expect(within(scoreboardSlot).getByText('H49')).toBeInTheDocument();
+      });
+      expect(submittedRequest(submitMock.fetchSpy).event.result.fumble).toMatchObject({
+        recoveredByPlayerId: 'V-04', recoveredByTeam: 'V', turnover: true,
+      });
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('canonical Rush rejects a legacy projection alias and retains the draft', async () => {
     const submitMock = mockSubmitSuccess({
-      gameEnvelope: null,
       projection: {
-        clock: { clock: '07:30', period: 2 },
-        liveState: {
-          possession: 'H',
-          down: 3,
-          distance: 2,
-          yardLine: 'V12',
-          lineToGain: 'V10',
-        },
-        game: {
-          teams: {
-            H: { score: 21 },
-            V: { score: 10 },
-          },
-        },
-        stats: {
-          teams: {
-            H: {
-              firstDowns: 18,
-              rushAtt: 22,
-              rushYds: 148,
-              passComp: 14,
-              passAtt: 21,
-              passInt: 1,
-              passYds: 184,
-              totalPlays: 58,
-              totalYds: 332,
-              avgPerPlay: 5.7,
-              kickReturnCount: 3,
-              kickReturnYds: 67,
-              puntReturnCount: 2,
-              puntReturnYds: 19,
-              intReturnCount: 1,
-              intReturnYds: 24,
-              fumbleReturnCount: 0,
-              fumbleReturnYds: 0,
-              fumbles: 2,
-              fumblesLost: 1,
-              penalties: 6,
-              penaltyYds: 55,
-              punts: 5,
-              puntAverage: 41.8,
-              timeOfPossession: '17:42',
-              thirdDownConversions: 4,
-              thirdDownAttempts: 10,
-              fourthDownConversions: 1,
-              fourthDownAttempts: 2,
-            },
-            V: {
-              firstDowns: 9,
-              rushAtt: 15,
-              rushYds: 72,
-              passComp: 9,
-              passAtt: 16,
-              passInt: 2,
-              passYds: 110,
-              totalPlays: 41,
-              totalYds: 182,
-              avgPerPlay: 4.4,
-              timeOfPossession: '12:18',
-            },
-          },
-        },
+        liveState: { down: 3, distance: 2, yardLine: 'V12' },
       },
     });
 
@@ -1280,36 +1339,20 @@ describe('FootballScorerShell', () => {
       renderScorer();
       const shell = screen.getByTestId('scorer-layout-shell');
       const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
-      const statsSlot = shell.querySelector('[data-scorer-slot="stats"]');
-
       completeRushFlowInputs();
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
-      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
-      await waitFor(() => {
-        expect(within(scoreboardSlot).getByText('07:30')).toBeInTheDocument();
-        expect(within(scoreboardSlot).getByText('3 and 2')).toBeInTheDocument();
-        expect(within(scoreboardSlot).getByText('V12')).toBeInTheDocument();
-        expect(within(scoreboardSlot).getByText('21')).toBeInTheDocument();
-        expect(within(scoreboardSlot).getByText('10')).toBeInTheDocument();
-      });
-      expect(within(statsSlot).getByText('22 for 148 yards')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('14 for 21, 1 INT')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('184')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('58 for 332 yards')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('5.7')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('3 for 67 yards')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('2-1 lost')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('5 for 41.8 yards')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('17:42')).toBeInTheDocument();
-      expect(within(statsSlot).getByText('4 for 10')).toBeInTheDocument();
+      expect(await screen.findByText(/cannot use legacy alias projection/i)).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
+      expect(within(scoreboardSlot).getByText('2 and 6')).toBeInTheDocument();
+      expect(within(scoreboardSlot).getByText('H44')).toBeInTheDocument();
     } finally {
       submitMock.restore();
     }
   });
 
-  it('acceptedEvent-only submit safely appends to the event log and leaves scoreboard state unchanged', async () => {
+  it('canonical Rush rejects acceptedEvent-only responses and retains the draft', async () => {
     const submitMock = mockSubmitSuccess({
       acceptedEvent: {
         eventId: 'EVT-LOCAL-ONLY',
@@ -1322,21 +1365,18 @@ describe('FootballScorerShell', () => {
         description: 'Accepted event only from backend.',
       },
       gameEnvelope: null,
-      projection: null,
     });
 
     try {
       renderScorer();
       const shell = screen.getByTestId('scorer-layout-shell');
       const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
-      const eventLogSlot = shell.querySelector('[data-scorer-slot="event-log"]');
-
       completeRushFlowInputs();
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
-      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
-      expect(within(eventLogSlot).getByText(/accepted event only from backend/i)).toBeInTheDocument();
+      expect(await screen.findByText(/response envelope fields are malformed/i)).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('2 and 6')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('H44')).toBeInTheDocument();
@@ -1368,16 +1408,13 @@ describe('FootballScorerShell', () => {
         submittedRequest(fetchSpy).event.clientEventId,
       );
 
+      const payload = makeCanonicalSubmitSuccess(submittedRequest(fetchSpy));
       resolveSubmit({
         ok: true,
         status: 200,
-        json: async () => ({
-          success: true,
-          status: 'accepted',
-          acceptedEvent: { eventId: 'EVT-TEST', clientEventId: 'client-test' },
-          gameEnvelope: null,
-          warnings: [],
-        }),
+        statusText: 'OK',
+        text: async () => JSON.stringify(payload),
+        json: async () => payload,
       });
 
       expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
@@ -1461,9 +1498,8 @@ describe('FootballScorerShell', () => {
         eventSubtype: null,
         responseText: expect.stringContaining('Missing event.type'),
         responseJson: expect.objectContaining({
-          error: 'Missing event.type',
-          details: { field: 'event.type' },
-          traceId: 'trace-500',
+          status: 'rejected',
+          errors: [expect.objectContaining({ message: 'Missing event.type', field: 'event.type' })],
         }),
         requestSummary: expect.objectContaining({
           event: expect.objectContaining({ type: 'rush' }),
@@ -1497,7 +1533,7 @@ describe('FootballScorerShell', () => {
       expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
       expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1);
       expect(submittedRequest(submitMock.fetchSpy).event.type).toBe('pass');
-      expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents);
+      expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents + 1);
     } finally {
       submitMock.restore();
     }
@@ -1538,7 +1574,7 @@ describe('FootballScorerShell', () => {
     }
   });
 
-  it('enter penalty from summary opens queued accepted penalty flow and returns to summary', async () => {
+  it('retains a Rush draft when a queued penalty reaches the out-of-scope canonical boundary', async () => {
     const submitMock = mockSubmitSuccess();
 
     try {
@@ -1579,17 +1615,9 @@ describe('FootballScorerShell', () => {
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
       fireEvent.click(within(updatedSummary).getByRole('button', { name: /^submit play$/i }));
 
-      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
-      expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1);
-      const request = submittedRequest(submitMock.fetchSpy);
-      expect(request.event.penalties).toEqual([
-        expect.objectContaining({
-          name: 'Holding',
-          source: 'queued',
-          resolution: 'accepted',
-          yards: -10,
-        }),
-      ]);
+      expect(await screen.findByText(/penalties are not supported by the first rush vertical slice/i)).toBeInTheDocument();
+      expect(submitMock.fetchSpy).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
     } finally {
       submitMock.restore();
     }
@@ -1716,6 +1744,12 @@ function completeRushFlowInputs() {
   const spotInput = screen.getByLabelText(/final ball spot/i);
   fireEvent.change(spotInput, { target: { value: 'V49' } });
   fireEvent.submit(spotInput.closest('form'));
+}
+
+function submitTextToken(label, value) {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value } });
+  fireEvent.submit(input.closest('form'));
 }
 
 function completePassFlowInputs() {

@@ -1,5 +1,10 @@
 import type { DraftFootballEvent, FootballSubmitEventRequest } from './footballEventBuilder';
 import type { DraftWarning } from './footballIntentSchema';
+import {
+  isCanonicalRushSubmitRequest,
+  submitCanonicalRushEvent,
+} from './footballRushSubmitAdapter';
+import { isCanonicalPassSubmitRequest, submitCanonicalPassEvent } from './footballPassSubmitAdapter';
 
 export const FOOTBALL_SUBMIT_EVENT_ENDPOINT = '/strata_football/api/football/events/submit.php' as const;
 
@@ -96,6 +101,12 @@ export async function submitFootballFcqiEvent(
   submitRequest: FootballSubmitEventRequest,
   options: FootballSubmitAdapterOptions = {},
 ): Promise<FootballSubmitAdapterResult> {
+  if (isCanonicalRushSubmitRequest(submitRequest)) {
+    return submitCanonicalRushEvent(submitRequest, options) as unknown as Promise<FootballSubmitAdapterResult>;
+  }
+  if (isCanonicalPassSubmitRequest(submitRequest)) {
+    return submitCanonicalPassEvent(submitRequest, options) as unknown as Promise<FootballSubmitAdapterResult>;
+  }
   const preflightError = validateSubmitRequest(submitRequest);
   if (preflightError) {
     return { ok: false, errors: [preflightError], warnings: [] };

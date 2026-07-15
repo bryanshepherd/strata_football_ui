@@ -1,0 +1,8 @@
+# Local dependencies, tooling state, and OS metadata are not source artifacts.
+node_modules/
+.venv/
+.DS_Store
+
+# Vite output and local file-backed game envelopes are reproducible/runtime-only.
+dist/
+storage/envelopes/

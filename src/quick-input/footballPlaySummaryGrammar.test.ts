@@ -124,7 +124,7 @@ describe('footballPlaySummaryGrammar', () => {
           },
         },
       }),
-      'HOM #22 Jordan Smith fumbled at the H35, forced by #44 Caleb Moss, recovered by #4 Noah Reed for VIS at the H35.',
+      'HOM #22 Jordan Smith rush for 5 yards to the H35, fumbled at the H35, forced by #44 Caleb Moss, recovered by #4 Noah Reed for VIS at the H35.',
     );
   });
 

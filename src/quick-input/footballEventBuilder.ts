@@ -12,6 +12,8 @@ import type {
 } from './footballIntentSchema';
 import { validateFootballDraftIntent } from './footballIntentSchema';
 import { generateFootballPlaySummary } from './footballPlaySummaryGrammar';
+import { buildCanonicalRushEvent } from './footballRushEventBuilder';
+import { buildCanonicalPassEvent } from './footballPassEventBuilder';
 
 export const FOOTBALL_SUBMIT_EVENT_REQUEST_SCHEMA_VERSION = 'football.submitEventRequest.v1' as const;
 
@@ -116,6 +118,12 @@ export type FootballEventBuildResult =
     };
 
 export function buildFootballEvent(intent: FootballDraftIntent): FootballEventBuildResult {
+  if (intent.play.family === 'rush') {
+    return buildCanonicalRushEvent(intent) as unknown as FootballEventBuildResult;
+  }
+  if (intent.play.family === 'pass' && intent.result.pass?.outcome && ['complete', 'incomplete', 'interception'].includes(String(intent.play.subtype))) {
+    return buildCanonicalPassEvent(intent) as unknown as FootballEventBuildResult;
+  }
   const preflightErrors = validateBuilderPreconditions(intent);
   if (preflightErrors.length > 0) {
     return {
@@ -214,7 +222,10 @@ function buildDraftEvent(
     subtype: intent.play.subtype,
     period: intent.play.period,
     clock: intent.play.clock,
-    possession: intent.play.possession ?? intent.play.actionTeam,
+    // Kickoffs deliberately retain possession-free pre-play context. The
+    // kicking/action team is represented by the kicker participant, while the
+    // accepted kickoff result establishes the receiving team's possession.
+    possession: intent.play.possession,
     preState: copyPreState(intent.prePlay),
     participants: mapParticipants(intent),
     result: copyResult(intent.result),

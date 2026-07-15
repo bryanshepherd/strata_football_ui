@@ -5,6 +5,7 @@ import {
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
 export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/strata_football/api/football/games/envelope.php';
+export const FOOTBALL_PREGAME_ENDPOINT = '/strata_football/api/football/games/pregame.php';
 
 export const footballTeamOptions = [
   { teamId: 'TEAM-H', name: 'Home State', abbr: 'HOM' },
@@ -170,6 +171,54 @@ export function getDashboardSeededFootballEnvelopeRecord(gameId) {
   const store = readStore();
   const record = store.games?.[String(gameId)];
   return record?.envelope ? clone(record) : null;
+}
+
+/**
+ * Dashboard-created games intentionally keep their canonical full envelope in
+ * the dashboard store until they are handed to the backend. This updates that
+ * same envelope record; it does not create a separate pregame/roster cache.
+ */
+export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
+  const store = readStore();
+  const record = store.games?.[String(gameId)];
+  if (!record || !envelope) return null;
+  const updatedAt = new Date().toISOString();
+  const nextRecord = {
+    ...record,
+    updatedAt,
+    envelope: {
+      ...envelope,
+      updatedAt,
+    },
+  };
+  writeStore({
+    games: {
+      ...store.games,
+      [String(gameId)]: nextRecord,
+    },
+  });
+  return clone(nextRecord.envelope);
+}
+
+export async function persistFootballPregameEnvelope(gameId, envelope, { fetchImpl = globalThis.fetch } = {}) {
+  const dashboardEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
+  if (dashboardEnvelope) return dashboardEnvelope;
+  if (typeof fetchImpl !== 'function') throw new Error('No fetch implementation is available to save pregame configuration.');
+  const response = await fetchImpl(FOOTBALL_PREGAME_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      gameId,
+      baseEnvelopeVersion: envelope.updatedAt,
+      pregame: envelope.pregame,
+      rosters: envelope.rosters,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.schemaVersion) {
+    throw new Error(payload?.errors?.map((error) => error.message || error.code).join(' ') || 'Pregame configuration was rejected.');
+  }
+  return payload;
 }
 
 export async function fetchFootballEnvelope(gameId, { signal, fetchImpl = globalThis.fetch } = {}) {

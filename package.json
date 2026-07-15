@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "contracts:sync": "node scripts/sync-football-contracts.mjs"
   },
   "dependencies": {
     "prop-types": "^15.8.1",

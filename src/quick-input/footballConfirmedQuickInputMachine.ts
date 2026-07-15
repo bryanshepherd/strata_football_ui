@@ -25,6 +25,7 @@ import {
   findFootballPenaltyDefinition,
   type FootballPenaltyTableEntry,
 } from './penaltyTable';
+import { isPlayFamilyAvailable, type FootballGamePhase } from '../pregame/footballPregame';
 
 export type FootballQuickInputStateName =
   | 'idle'
@@ -306,6 +307,7 @@ export type FootballQuickInputContext = {
   play: Pick<FootballDraftIntent['play'], 'actionTeam' | 'possession' | 'period' | 'clock'>;
   prePlay: FootballDraftIntent['prePlay'];
   roster: readonly PlayerResolutionRosterPlayer[];
+  gamePhase?: FootballGamePhase;
   intentId?: string;
   clientEventId?: string;
   now?: string;
@@ -397,6 +399,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_RUSH') {
+    if (!canStartFamily(context, 'rush')) return { state: phaseBlockedState(state, 'rush', context.gamePhase) };
     return {
       state: {
         status: 'token.awaiting',
@@ -409,6 +412,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_PASS') {
+    if (!canStartFamily(context, 'pass')) return { state: phaseBlockedState(state, 'pass', context.gamePhase) };
     return {
       state: {
         status: 'token.awaiting',
@@ -421,6 +425,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_PUNT') {
+    if (!canStartFamily(context, 'punt')) return { state: phaseBlockedState(state, 'punt', context.gamePhase) };
     return {
       state: {
         status: 'token.awaiting',
@@ -433,6 +438,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_KICK') {
+    if (!canStartFamily(context, 'kickoff')) return { state: phaseBlockedState(state, 'kickoff', context.gamePhase) };
     return {
       state: {
         status: 'token.awaiting',
@@ -445,6 +451,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_PENALTY') {
+    if (!canStartFamily(context, 'penalty')) return { state: phaseBlockedState(state, 'penalty', context.gamePhase) };
     const source = event.source ?? (state.queuedPenaltyRequested || state.draft ? 'queued' : 'immediate');
     return {
       state: {
@@ -465,6 +472,7 @@ export function transitionFootballQuickInput(
   }
 
   if (event.type === 'START_GAME_CONTROL') {
+    if (!canStartFamily(context, 'gameControl')) return { state: phaseBlockedState(state, 'gameControl', context.gamePhase) };
     return {
       state: {
         status: 'token.awaiting',
@@ -1094,6 +1102,17 @@ function commitKickToken(
           state,
           'INVALID_KICK_MENU_SELECTION',
           'Kick menu selection must be O, F, or A.',
+          'play.subtype',
+        ),
+      };
+    }
+
+    if (context.gamePhase === 'awaitingKickoff' && selection !== 'kickoff') {
+      return {
+        state: tokenError(
+          state,
+          'PLAY_FAMILY_UNAVAILABLE',
+          'Awaiting kickoff permits kickoff input only; field goal and PAT input remain unavailable.',
           'play.subtype',
         ),
       };
@@ -3201,6 +3220,8 @@ function buildPassResult(tokens: FootballFlowTokens, context: FootballQuickInput
       code: 'incomplete',
       driveEnds: false,
       pass: {
+        outcome: 'incomplete',
+        startYardLine: context.prePlay.yardLine ?? undefined,
         targetPlayerId: tokens.intendedReceiver?.playerId,
         completed: false,
         intendedYardLine: tokens.passYardLine,
@@ -3232,6 +3253,12 @@ function buildPassResult(tokens: FootballFlowTokens, context: FootballQuickInput
     endYardLine,
     driveEnds: false,
     pass: {
+      outcome: 'complete',
+      startYardLine: context.prePlay.yardLine ?? undefined,
+      terminalYardLine: endYardLine,
+      passingYards: yards,
+      receivingYards: yards,
+      outOfBounds: code === 'outOfBounds',
       targetPlayerId: tokens.receiver?.playerId,
       completed: true,
       caughtAtYardLine: tokens.caughtAtSpot,
@@ -4180,6 +4207,25 @@ function tokenError(
   };
 }
 
+function canStartFamily(context: FootballQuickInputContext, family: string): boolean {
+  // Older callers do not yet supply a lifecycle phase; retain their existing
+  // behavior while phase-aware scorer callers are rejected at the dispatcher.
+  return !context.gamePhase || isPlayFamilyAvailable(context.gamePhase, family);
+}
+
+function phaseBlockedState(
+  state: FootballConfirmedQuickInputState,
+  family: string,
+  phase: FootballGamePhase | undefined,
+): FootballConfirmedQuickInputState {
+  return tokenError(
+    state,
+    'PLAY_FAMILY_UNAVAILABLE',
+    `${family} input is unavailable during ${phase || 'the current'} game phase.`,
+    'play.family',
+  );
+}
+
 function parseYards(value: string): number | null {
   const trimmed = value.trim();
   if (!/^-?\d+$/.test(trimmed)) return null;
@@ -4527,6 +4573,7 @@ function stepForDuplicateRole(
 
 function parseSpot(value: string): Spot | null {
   const normalized = value.trim().toUpperCase();
+  if (normalized === 'GOAL') return 'goal';
   if (isCanonicalSpot(normalized)) return normalized;
   return null;
 }
@@ -4556,14 +4603,18 @@ function parseOptionalBooleanToken(value: string): boolean | null {
 }
 
 function buildRushResult(tokens: RushFlowTokens, context: FootballQuickInputContext): FootballDraftIntent['result'] {
-  const code = rushResultCode(tokens.result);
+  const touchdown = tokens.endYardLine === 'goal';
+  const code = touchdown ? 'touchdown' : rushResultCode(tokens.result);
   const endYardLine = tokens.result === 'fumble' ? tokens.recoverSpot : tokens.endYardLine;
   const yards = endYardLine ? (tokens.yards ?? deriveRushYards(context, endYardLine)) : tokens.yards;
   const base = {
     code,
     yards,
-    endYardLine,
-    driveEnds: false,
+    endYardLine: touchdown ? undefined : endYardLine,
+    driveEnds: touchdown,
+    scoring: touchdown
+      ? { team: context.play.possession ?? context.play.actionTeam, points: 6, type: 'touchdown' }
+      : undefined,
   };
 
   if (tokens.result !== 'fumble') return base;
