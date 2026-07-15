@@ -44,6 +44,9 @@ const resolveChallengeLimit = (envelope) => {
 
 export default function FootballScoreboard({ envelope }) {
   const liveState = envelope.liveState;
+  // `game.status` remains "pregame" until a kickoff is accepted. The explicit
+  // pregame lifecycle is the authoritative display state in that interval.
+  const displayStatus = envelope.pregame?.gamePhase || envelope.game.status;
 
   return (
     <div className="space-y-3 border-b border-zinc-300 bg-zinc-100 p-4">
@@ -51,7 +54,7 @@ export default function FootballScoreboard({ envelope }) {
         <TeamScoreCard envelope={envelope} teamCode="V" align="left" />
         <div className="flex flex-col items-center justify-center border-y border-zinc-200 bg-zinc-950 px-8 py-4 text-white md:border-x md:border-y-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            {formatStatus(envelope.game.status)}
+            {formatStatus(displayStatus)}
           </div>
           <div className="mt-1 text-4xl font-black tabular-nums">
             {envelope.clock.clock}
