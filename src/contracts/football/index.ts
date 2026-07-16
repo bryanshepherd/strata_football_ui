@@ -5,3 +5,5 @@ export type { SubmitEventResponse } from './SubmitEventResponse';
 export type { RosterEnvelope } from './RosterEnvelope';
 export type { ReportEnvelope } from './ReportEnvelope';
 export type { FootballDraftIntent } from './FootballDraftIntent';
+export type { FootballInitializeGameRequest } from './FootballInitializeGameRequest';
+export type { FootballInitializeGameResponse } from './FootballInitializeGameResponse';
