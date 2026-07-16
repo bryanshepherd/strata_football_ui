@@ -20,6 +20,7 @@ import {
   persistFootballPregameEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
+import { getFootballScorerRuntimeConfig } from '../services/footballRuntimeConfig';
 
 const formatStatus = (status) =>
   String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -65,7 +66,8 @@ const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
 
 export default function FootballScorerShell() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedGameId = getRequestedGameId(searchParams);
+  const runtimeConfig = getFootballScorerRuntimeConfig();
+  const requestedGameId = runtimeConfig?.envelopeGameId || getRequestedGameId(searchParams);
   const requestedFixture = searchParams.get('fixture') || defaultFixtureKey;
   const debugMode = isDebugEnabled(searchParams.get('debug'));
   const fixtureEnvelope = getGameEnvelopeFixture(requestedFixture);

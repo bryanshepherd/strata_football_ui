@@ -6,7 +6,7 @@ import {
 } from './footballRushSubmitAdapter';
 import { isCanonicalPassSubmitRequest, submitCanonicalPassEvent } from './footballPassSubmitAdapter';
 
-export const FOOTBALL_SUBMIT_EVENT_ENDPOINT = '/strata_football/api/football/events/submit.php' as const;
+export const FOOTBALL_SUBMIT_EVENT_ENDPOINT = '/api/football/events' as const;
 
 export type FootballSubmitErrorCode =
   | 'INVALID_SUBMIT_REQUEST'

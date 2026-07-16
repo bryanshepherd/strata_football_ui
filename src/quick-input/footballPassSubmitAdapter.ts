@@ -1,6 +1,7 @@
 import type { AcceptedScoringEvent, GameEnvelope, SubmitEventRequest, SubmitEventResponse } from '../contracts/football';
+import { getFootballScorerRuntimeConfig } from '../services/footballRuntimeConfig';
 
-export const CANONICAL_FOOTBALL_PASS_SUBMIT_ENDPOINT = '/strata_football/api/football/events/submit.php' as const;
+export const CANONICAL_FOOTBALL_PASS_SUBMIT_ENDPOINT = '/api/football/events' as const;
 export type CanonicalPassSubmitResult =
   | { ok: true; contractMode: 'canonicalPass'; status: 'accepted' | 'duplicateAccepted'; acceptedEvent: AcceptedScoringEvent; gameEnvelope: GameEnvelope; warnings: SubmitEventResponse['warnings']; rawResponse: SubmitEventResponse }
   | { ok: false; contractMode: 'canonicalPass'; errors: Array<{ code: string; message: string; field?: string; status?: number }>; warnings: SubmitEventResponse['warnings']; rawResponse?: unknown };
@@ -15,7 +16,7 @@ export async function submitCanonicalPassEvent(request: SubmitEventRequest, opti
   const fetcher = options.fetchImpl ?? globalThis.fetch;
   if (typeof fetcher !== 'function') return fail({ code: 'NETWORK_ERROR', message: 'No fetch implementation is available for canonical Pass submit.' });
   let response: Response;
-  try { response = await fetcher(options.endpoint ?? CANONICAL_FOOTBALL_PASS_SUBMIT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); }
+  try { response = await fetcher(options.endpoint ?? getFootballScorerRuntimeConfig()?.eventSubmitUrl ?? CANONICAL_FOOTBALL_PASS_SUBMIT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); }
   catch (error) { return fail({ code: 'NETWORK_ERROR', message: error instanceof Error ? error.message : 'Canonical Pass submit failed.' }); }
   let payload: unknown;
   try { payload = JSON.parse(await response.text()); } catch { return fail({ code: 'INVALID_RESPONSE', message: 'Canonical Pass response was not valid JSON.', status: response.status }); }

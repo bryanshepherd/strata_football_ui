@@ -4,8 +4,9 @@ import type {
   SubmitEventRequest,
   SubmitEventResponse,
 } from '../contracts/football';
+import { getFootballScorerRuntimeConfig } from '../services/footballRuntimeConfig';
 
-export const CANONICAL_FOOTBALL_SUBMIT_ENDPOINT = '/strata_football/api/football/events/submit.php' as const;
+export const CANONICAL_FOOTBALL_SUBMIT_ENDPOINT = '/api/football/events' as const;
 
 export type CanonicalRushSubmitResult =
   | {
@@ -50,7 +51,7 @@ export async function submitCanonicalRushEvent(
 
   let response: Response;
   try {
-    response = await fetcher(options.endpoint ?? CANONICAL_FOOTBALL_SUBMIT_ENDPOINT, {
+    response = await fetcher(options.endpoint ?? getFootballScorerRuntimeConfig()?.eventSubmitUrl ?? CANONICAL_FOOTBALL_SUBMIT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

@@ -2,10 +2,10 @@ import {
   defaultFixtureKey,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import { getFootballScorerRuntimeConfig } from './footballRuntimeConfig';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
-export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/strata_football/api/football/games/envelope.php';
-export const FOOTBALL_PREGAME_ENDPOINT = '/strata_football/api/football/games/pregame.php';
+export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/api/football/games';
 
 export const footballTeamOptions = [
   { teamId: 'TEAM-H', name: 'Home State', abbr: 'HOM' },
@@ -204,7 +204,9 @@ export async function persistFootballPregameEnvelope(gameId, envelope, { fetchIm
   const dashboardEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
   if (dashboardEnvelope) return dashboardEnvelope;
   if (typeof fetchImpl !== 'function') throw new Error('No fetch implementation is available to save pregame configuration.');
-  const response = await fetchImpl(FOOTBALL_PREGAME_ENDPOINT, {
+  const runtime = getFootballScorerRuntimeConfig();
+  if (!runtime || runtime.envelopeGameId !== gameId) throw new Error('Football scorer runtime is unavailable. Open this game from the dashboard.');
+  const response = await fetchImpl(runtime.pregameUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
@@ -229,7 +231,9 @@ export async function fetchFootballEnvelope(gameId, { signal, fetchImpl = global
     throw new Error('No fetch implementation is available to load a football envelope.');
   }
 
-  const url = `${FOOTBALL_ENVELOPE_ENDPOINT_PREFIX}?gameId=${encodeURIComponent(String(gameId))}`;
+  const runtime = getFootballScorerRuntimeConfig();
+  if (!runtime || runtime.envelopeGameId !== gameId) throw new Error('Football scorer runtime is unavailable. Open this game from the dashboard.');
+  const url = runtime.envelopeUrl;
   const response = await fetchImpl(url, {
     method: 'GET',
     headers: { Accept: 'application/json' },
