@@ -36,8 +36,14 @@ export interface TeamRoster {
   players: {
     [k: string]: Player;
   };
-  jerseyIndex: {
-    [k: string]: string;
+  /**
+   * Derived active-player candidates keyed by the exact jersey string. Jersey values are not identities; duplicate numbers retain every stable player ID in deterministic order.
+   */
+  jerseyIndex?: {
+    /**
+     * @minItems 1
+     */
+    [k: string]: [string, ...string[]];
   };
 }
 /**

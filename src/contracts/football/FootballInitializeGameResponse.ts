@@ -1,26 +1,11 @@
 /* eslint-disable */
 /**
  * GENERATED FILE - DO NOT EDIT.
- * Source: contracts/football/game-envelope.schema.json
+ * Source: contracts/football/initialize-game-response.schema.json
  * Contract version: football.v1
  * Regenerate with: npm run contracts:generate
  */
 
-/**
- * This interface was referenced by `GameEnvelope`'s JSON-Schema
- * via the `definition` "spot".
- */
-export type Spot = string;
-/**
- * This interface was referenced by `GameEnvelope`'s JSON-Schema
- * via the `definition` "clockText".
- */
-export type ClockText = string;
-/**
- * This interface was referenced by `GameEnvelope`'s JSON-Schema
- * via the `definition` "teamCode".
- */
-export type TeamCode = 'H' | 'V';
 export type AcceptedScoringEvent = EventProperties & {
   eventId: string;
   sequence: number;
@@ -78,6 +63,17 @@ export type Result = {
   pass?: Pass;
 };
 
+export interface FootballInitializeGameResponse {
+  schemaVersion: 'football.initializeGameResponse.v1';
+  success: boolean;
+  status: 'initialized' | 'alreadyInitialized' | 'conflict' | 'rejected';
+  gameEnvelope: GameEnvelope;
+  errors: {
+    code: string;
+    message: string;
+    field: string | null;
+  }[];
+}
 /**
  * The backend-owned authoritative football game state.
  */
@@ -137,9 +133,21 @@ export interface Rules {
   downs: number;
   yardsToFirstDown: number;
   fieldLength?: number;
-  kickoffSpot?: Spot;
-  touchbackSpot?: Spot;
-  patSpot?: Spot;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "spot".
+   */
+  kickoffSpot?: string;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "spot".
+   */
+  touchbackSpot?: string;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "spot".
+   */
+  patSpot?: string;
   overtimeEnabled?: boolean;
 }
 /**
@@ -148,7 +156,11 @@ export interface Rules {
  */
 export interface GameClock {
   period: number;
-  clock: ClockText;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "clockText".
+   */
+  clock: string;
   clockTenths?: number;
   isRunning: boolean;
   playClock: number | null;
@@ -159,11 +171,11 @@ export interface GameClock {
  * via the `definition` "liveState".
  */
 export interface LiveState {
-  possession: TeamCode | null;
+  possession: ('H' | 'V') | null;
   down: number | null;
   distance: number | null;
-  yardLine: Spot | null;
-  lineToGain: Spot | 'goal' | null;
+  yardLine: string | null;
+  lineToGain: string | 'goal' | null;
   goalToGo: boolean;
   redZone: boolean;
   driveId: string | null;
@@ -333,9 +345,21 @@ export interface Drives {
 export interface Drive {
   driveId: string;
   driveNumber: number;
-  team: TeamCode;
-  startYardLine: Spot;
-  startClock?: ClockText;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "teamCode".
+   */
+  team: 'H' | 'V';
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "spot".
+   */
+  startYardLine: string;
+  /**
+   * This interface was referenced by `GameEnvelope`'s JSON-Schema
+   * via the `definition` "clockText".
+   */
+  startClock?: string;
   startReason?: string;
   plays: number;
   yards: number;
@@ -384,16 +408,16 @@ export interface Pregame {
 export interface CoinToss {
   status: 'notStarted' | 'inProgress' | 'complete';
   captains: CaptainTeams;
-  winnerTeam: TeamCode | null;
-  loserTeam: TeamCode | null;
+  winnerTeam: ('H' | 'V') | null;
+  loserTeam: ('H' | 'V') | null;
   winnerInitialChoice: ('kick' | 'receive' | 'side' | 'defer') | null;
   loserChoice: ('kick' | 'receive' | 'side') | null;
   winnerSecondaryChoice: ('kick' | 'receive' | 'side') | null;
   direction: ('north' | 'south' | 'east' | 'west') | null;
-  directionChoiceTeam: TeamCode | null;
-  firstHalfKickingTeam: TeamCode | null;
-  firstHalfReceivingTeam: TeamCode | null;
-  secondHalfChoiceTeam: TeamCode | null;
+  directionChoiceTeam: ('H' | 'V') | null;
+  firstHalfKickingTeam: ('H' | 'V') | null;
+  firstHalfReceivingTeam: ('H' | 'V') | null;
+  secondHalfChoiceTeam: ('H' | 'V') | null;
   completedAt: string | null;
 }
 /**
