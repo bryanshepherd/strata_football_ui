@@ -61,19 +61,18 @@ const YardlineInput = ({
   };
 
   const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
+    // Accept raw, uppercase for consistency, but do not add zeros
+    const raw = e.target.value.toUpperCase();
+    setInputValue(raw);
     
-    const validation = validateYardlineFormat(newValue);
+    const validation = validateYardlineFormat(raw);
     
     if (validation.isValid) {
       setError('');
-      // Use normalized format
-      const normalized = normalizeYardLine(newValue);
-      onChange(normalized);
+      onChange(raw); // Send raw value - backend will normalize
     } else {
       setError(validation.error);
-      onChange(newValue); // Still pass the raw value for intermediate states
+      onChange(raw); // Still pass the raw value for intermediate states
     }
   };
 
@@ -105,7 +104,10 @@ const YardlineInput = ({
           type="text"
           value={inputValue}
           onChange={handleInputChange}
-          placeholder={placeholder}
+          placeholder="H5 or V39"
+          inputMode="text"
+          pattern="^[HVhv]?\d{1,2}$"
+          title="H/V followed by 1–2 digits (e.g., H5, V39). It will be normalized server-side."
           disabled={disabled}
           autoFocus={autoFocus}
           className={`

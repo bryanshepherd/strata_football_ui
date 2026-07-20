@@ -21,6 +21,58 @@
   --football-field: #2d7a2d;
 }
 
+/* Drive Summary Chips */
+.chips-row {
+  @apply flex gap-2 flex-wrap items-center p-3 bg-slate-800 rounded-lg;
+}
+
+.chips-row .chip {
+  @apply bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap;
+  padding: 0.25rem 0.6rem;
+  border-radius: 10px;
+}
+
+/* Play Log Icons */
+.play-type-icon { 
+  margin-right: .25rem; 
+}
+
+/* Inline chip row for yardage + 1ST */
+.yardage-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;            /* small, consistent gap between chips */
+  margin-left: 0.25rem;    /* tiny separation from preceding text if any */
+}
+
+/* Optional: slightly more compact chips in the log row context */
+.chip-compact {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.85em;
+  line-height: 1.1;
+}
+
+/* Basic chip styles */
+.chip {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.chip-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.chip-yardage {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
 .football-btn-primary {
   @apply bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors;
 }

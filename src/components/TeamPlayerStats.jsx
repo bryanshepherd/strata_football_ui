@@ -1,12 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import debug from '../utils/debug';
 import { playerManager } from '../utils/playerManager';
+import { getTeamTotals, getPlayerTotals } from '../utils/apiClient';
 import PlayerName from './PlayerName';
+import DriveSummary from './DriveSummary';
+import { useSimpleDriveModel } from '../hooks/useSimpleDriveModel';
 
-export default function TeamPlayerStats({ gameState, gameId }) {
+export default function TeamPlayerStats({ gameState, gameId, refreshKey = 0 }) {
+  // State for real stats data
+  const [teamStats, setTeamStats] = useState([]);
+  const [players, setPlayers] = useState({ rushing: [], passing: [], receiving: [] });
+  const [statsLoading, setStatsLoading] = useState(false);
+
   // Debug logging
   debug.log('TeamPlayerStats received gameState:', gameState);
   debug.log('gameState keys:', gameState ? Object.keys(gameState) : 'gameState is null/undefined');
+  
+  // Get simplified drive model
+  const { driveModel, loading: driveLoading, error: driveError } = useSimpleDriveModel(gameState);
+
+  // Load team stats from DB
+  useEffect(() => {
+    if (!gameId) return;
+    (async () => {
+      try {
+        setStatsLoading(true);
+        const teams = await getTeamTotals(gameId);
+        setTeamStats(teams); // [{Team:'HOME', RushPlays, RushYards, PassAtt, PassComp, PassYards, ...}, ...]
+        debug.log('Loaded team stats from DB:', teams);
+      } catch (e) { 
+        console.error('Team stats load failed', e); 
+      } finally {
+        setStatsLoading(false);
+      }
+    })();
+  }, [gameId, refreshKey]); // refreshKey should bump when CRUD ops succeed
+
+  // Load player stats from DB  
+  useEffect(() => {
+    if (!gameId) return;
+    (async () => {
+      try {
+        const data = await getPlayerTotals(gameId);
+        setPlayers({
+          rushing:  data.rushing,
+          passing:  data.passing,
+          receiving: data.receiving
+        });
+        debug.log('Loaded player stats from DB:', data);
+      } catch (e) { 
+        console.error('Player stats load failed', e); 
+      }
+    })();
+  }, [gameId, refreshKey]);
   
   if (!gameState?.game_info || !gameState?.live_state) {
     debug.log('Missing game_info or live_state:', {
@@ -26,59 +72,59 @@ export default function TeamPlayerStats({ gameState, gameId }) {
     );
   }
 
-  const { game_info: gameInfo, live_state: liveState, stats } = gameState;
-  const statsData = stats || { teams: { home: {}, visitor: {} } };
+  const { game_info: gameInfo, live_state: liveState } = gameState;
 
-  // Extract team stats from the football structure
+  // Extract team stats from the DB data
   const getTeamStats = (team) => {
-    const teamData = statsData.teams?.[team] || {};
+    const teamName = team === 'home' ? 'HOME' : 'VISITOR';
+    const teamData = teamStats.find(t => t.Team === teamName) || {};
     return {
-      // First Downs
-      firstDowns: teamData.first_downs || 0,
+      // First Downs (we don't have this in basic stats, use 0 for now)
+      firstDowns: 0,
       
-      // Passing
-      passComp: teamData.pass_completions || 0,
-      passAtt: teamData.pass_attempts || 0,
-      passYds: teamData.passing_yards || 0,
-      passTD: teamData.touchdowns || 0, // Note: API has combined touchdowns
-      passInt: teamData.pass_interceptions || 0,
+      // Passing - from DB with sack exclusion
+      passComp: teamData.PassComp || 0,
+      passAtt: teamData.PassAtt || 0,
+      passYds: teamData.PassYards || 0,
+      passTD: 0, // TD info not in basic team totals
+      passInt: teamData.Interceptions || 0,
       
-      // Rushing  
-      rushAtt: teamData.rushing_attempts || 0,
-      rushYds: teamData.rushing_yards || 0,
-      rushTD: teamData.touchdowns || 0, // Note: API has combined touchdowns
+      // Rushing - from DB including sacks
+      rushAtt: teamData.RushPlays || 0,
+      rushYds: teamData.RushYards || 0,
+      rushTD: 0, // TD info not in basic team totals
       
       // Total Offense
-      totalYds: teamData.total_yards || 0,
-      totalPlays: teamData.total_plays || 0,
-      totalTD: teamData.touchdowns || 0,
+      totalYds: (teamData.RushYards || 0) + (teamData.PassYards || 0),
+      totalPlays: (teamData.RushPlays || 0) + (teamData.PassAtt || 0),
+      totalTD: 0, // TD info not in basic team totals
       
-      // Defense
-      sacks: teamData.sacks || 0,
-      tackles: teamData.tackles || 0,
-      tackleForLoss: teamData.tackle_for_loss || 0,
-      interceptions: teamData.pass_interceptions || 0,
-      fumbles: teamData.fumbles || 0,
-      fumblesLost: teamData.fumbles_lost || 0,
+      // Defense (not available in basic stats)
+      sacks: 0,
+      tackles: 0,
+      tackleForLoss: 0,
+      interceptions: teamData.Interceptions || 0,
+      fumbles: 0,
+      fumblesLost: 0,
       
-      // Special Teams
-      punts: teamData.punts || 0,
-      puntAverage: teamData.punt_average || 0,
-      puntStats: teamData.punt_stats || '0-0.0',
-      fieldGoals: teamData.field_goals || 0,
-      fieldGoalAtt: teamData.field_goal_attempts || 0,
+      // Special Teams - from DB
+      punts: teamData.Punts || 0,
+      puntAverage: 0, // Not calculated in basic stats
+      puntStats: `${teamData.Punts || 0}-0.0`,
+      fieldGoals: teamData.FGM || 0,
+      fieldGoalAtt: teamData.FGA || 0,
       
-      // Penalties
-      penalties: teamData.penalties || 0,
-      penaltyYds: teamData.penalty_yards || 0,
+      // Penalties - from DB
+      penalties: teamData.Penalties || 0,
+      penaltyYds: teamData.PenaltyYards || 0,
       
-      // Down conversions
-      thirdDownAttempts: teamData.third_down_attempts || 0,
-      thirdDownConversions: teamData.third_down_conversions || 0,
-      fourthDownAttempts: teamData.fourth_down_attempts || 0,
-      fourthDownConversions: teamData.fourth_down_conversions || 0,
+      // Down conversions (not in basic stats)
+      thirdDownAttempts: 0,
+      thirdDownConversions: 0,
+      fourthDownAttempts: 0,
+      fourthDownConversions: 0,
       
-      players: teamData.players || []
+      players: [] // Will use separate players state
     };
   };
 
@@ -91,45 +137,57 @@ export default function TeamPlayerStats({ gameState, gameId }) {
     return `${comp}-${att} (${compPct}%), ${yds} yds, ${td}-${int}`;
   };
 
-  // Get top players across both teams
+  // Get top players across both teams from real DB data
   const getAllPlayers = () => {
     const allPlayers = [];
     
-    ['home', 'visitor'].forEach(team => {
-      const teamData = statsData.teams?.[team] || {};
-      const players = teamData.players || [];
-      
-      // Handle array format from API
-      if (Array.isArray(players)) {
-        players.forEach(playerData => {
-          allPlayers.push({
-            id: playerData.id,
-            team: team,
-            name: playerData.name || `#${playerData.id}`,
-            stats: playerData.stats || {},
-            position: playerData.position || '',
-            ...playerData
-          });
+    // Combine rushing, passing, and receiving stats from DB
+    if (players.rushing) {
+      players.rushing.forEach(p => {
+        allPlayers.push({
+          id: p.PlayerID,
+          team: p.Team === 'HOME' ? 'home' : 'visitor',
+          name: `Player #${p.PlayerID}`,
+          type: 'rushing',
+          stats: { rushes: p.Rushes, rushYards: p.RushYards }
         });
-      } else {
-        // Handle object format (legacy)
-        Object.entries(players).forEach(([playerId, playerData]) => {
-          allPlayers.push({
-            id: playerId,
-            team: team,
-            name: playerData.name || `#${playerId}`,
-            stats: playerData.stats || {},
-            position: playerData.position || '',
-            ...playerData
-          });
+      });
+    }
+    
+    if (players.passing) {
+      players.passing.forEach(p => {
+        allPlayers.push({
+          id: p.PlayerID,
+          team: p.Team === 'HOME' ? 'home' : 'visitor',
+          name: `Player #${p.PlayerID}`,
+          type: 'passing',
+          stats: { 
+            attempts: p.Attempts, 
+            completions: p.Completions, 
+            passYards: p.PassYards,
+            interceptions: p.Interceptions 
+          }
         });
-      }
-    });
+      });
+    }
+    
+    if (players.receiving) {
+      players.receiving.forEach(p => {
+        allPlayers.push({
+          id: p.PlayerID,
+          team: p.Team === 'HOME' ? 'home' : 'visitor',
+          name: `Player #${p.PlayerID}`,
+          type: 'receiving',
+          stats: { receptions: p.Receptions, recYards: p.RecYards }
+        });
+      });
+    }
     
     return allPlayers;
   };
 
-  const allPlayers = getAllPlayers();
+  // Memoize players list to avoid recalculating on every render
+  const allPlayers = useMemo(() => getAllPlayers(), [players]);
 
   // Find top players - only show if they have actual stats
   const topPasser = allPlayers.reduce((top, player) => 
@@ -375,6 +433,17 @@ export default function TeamPlayerStats({ gameState, gameId }) {
             {renderTopPlayersByCategory('tackler-loss', 'tackleForLoss', 'tfl')}
           </tbody>
         </table>
+        
+        {/* Drive Summary */}
+        <div className="mt-4">
+          <h3 className="text-sm font-bold mb-2">CURRENT DRIVE</h3>
+          {driveLoading && <div className="text-xs text-gray-500">Loading drive info...</div>}
+          {driveError && <div className="text-xs text-red-500">Error: {driveError}</div>}
+          {driveModel && <DriveSummary model={driveModel} />}
+          {!driveModel && !driveLoading && !driveError && (
+            <div className="text-xs text-gray-500">No active drive</div>
+          )}
+        </div>
       </div>
     </div>
   );

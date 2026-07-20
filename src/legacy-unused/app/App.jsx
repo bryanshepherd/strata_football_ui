@@ -4,7 +4,8 @@ import { FootballFlowProvider, useFootballFlow } from './contexts/FootballFlowCo
 import { GameClockProvider } from './contexts/GameClockContext';
 import { useRosters, rosterManager } from './utils/rosterManager';
 import Scoreboard from './components/Scoreboard';
-import DriveStatusBar from './components/DriveStatusBar';
+import DriveSummaryChips from './components/DriveSummaryChips';
+import { useSimpleDriveModel } from './hooks/useSimpleDriveModel';
 import TeamPlayerStats from './components/TeamPlayerStats';
 import EventControls from './components/EventControls';
 import GameLog from './components/GameLog';
@@ -16,6 +17,7 @@ import FootballHotkeyHandler from './components/FootballHotkeyHandler';
 import debug from './utils/debug';
 import ReportsButton from './components/ReportsButton';
 import RosterManagement from './components/RosterManagement';
+import LockStatus from './components/LockStatus';
 
 export default function App() {
   debug.log('🏈 Strata Football React app initializing...');
@@ -76,6 +78,7 @@ const NavigationBar = ({ onShowRoster }) => {
             <span className="text-sm">Game #{currentGameId}</span>
           )}
           <APIStatus status={apiStatus} />
+          <LockStatus />
           {currentGameId && gameState && (
             <>
               <ReportsButton className="football-btn-secondary text-sm" />
@@ -137,6 +140,7 @@ const RosterModal = ({ isOpen, onClose, gameId, onRosterUpdate }) => {
 const FootballGame = ({ showRosterModal, setShowRosterModal }) => {
   const { gameState: gameData, currentGameId, isLoading, refetchGameState, fetchGameState } = useGameState();
   const { startFlow } = useFootballFlow();
+  const { driveModel } = useSimpleDriveModel(gameData);
 
   const handleRosterUpdate = async (updatedRosters) => {
     // Invalidate roster cache to force reload
@@ -152,7 +156,7 @@ const FootballGame = ({ showRosterModal, setShowRosterModal }) => {
     );
   }
 
-  if (!gameState) {
+  if (!gameData) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-xl text-red-600">No game state available</div>
@@ -280,35 +284,35 @@ const FootballGame = ({ showRosterModal, setShowRosterModal }) => {
       <div className="flex flex-1">
         {/* Left Sidebar - Team/Player Stats (20%) - Full height */}
         <div className="w-1/5 bg-white border-r border-black">
-          <TeamPlayerStats gameState={gameState} gameId={currentGameId} />
+          <TeamPlayerStats 
+            gameState={gameData} 
+            gameId={currentGameId}
+            refreshKey={gameData?.playLog?.length || 0}
+          />
         </div>
         
         {/* Middle Section - Scoreboard + Drive Status + Play Input Controls (65%) */}
         <div className="w-main-content bg-white flex flex-col">
           {/* Scoreboard - matches input container width */}
-          <Scoreboard gameState={gameState} />
+          <Scoreboard gameState={gameData} />
           
-          {/* Drive Status Bar - matches input container width */}
-          <DriveStatusBar />
+          {/* Drive Summary Chips - matches input container width */}
+          <DriveSummaryChips model={driveModel} />
           
           {/* Play Input Controls */}
           <div className="flex-1">
-            <EventControls gameState={gameState} />
+            <EventControls gameState={gameData} />
           </div>
           
           {/* Input Assistant - anchored to bottom of middle section, matches input container width */}
-          <InputAssistant gameState={gameState} />
+          <InputAssistant gameState={gameData} />
         </div>
         
         {/* Right Sidebar - Play Log (15%) - Full height */}
         <div className="w-sidebar-right">
           <GameLog 
-            gameState={gameState} 
+            gameState={gameData} 
             gameId={currentGameId}
-            onPlayEdit={handlePlayEdit}
-            onPlayDelete={handlePlayDelete}
-            onPlayInsert={handlePlayInsert}
-            onPlayReplace={handlePlayReplace}
           />
         </div>
       </div>

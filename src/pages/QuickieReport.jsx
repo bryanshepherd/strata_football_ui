@@ -1,5 +1,8 @@
 // src/pages/QuickieReport.jsx
 import React, { useEffect, useState } from 'react';
+import DriveSummaryChips from '../components/DriveSummaryChips';
+import { useSimpleDriveModel } from '../hooks/useSimpleDriveModel';
+import { useGameState } from '../contexts/FootballGameContext';
 
 const Cell = ({children, className=''}) => (
   <td className={`px-2 py-1 text-xs align-top ${className}`}>{children}</td>
@@ -8,6 +11,8 @@ const Cell = ({children, className=''}) => (
 export default function QuickieReport({ gameId }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
+  const { gameState } = useGameState();
+  const { driveModel, loading: driveLoading, error: driveError } = useSimpleDriveModel(gameState);
 
   useEffect(() => {
     const id = gameId ?? new URLSearchParams(location.search).get('game_id');
@@ -136,6 +141,14 @@ export default function QuickieReport({ gameId }) {
           {statRow('Red-Zone Scores-Chances', rz(V), rz(H))}
         </tbody>
       </table>
+
+      {/* Current Drive Summary */}
+      <section style={{marginTop:12}}>
+        <h3 style={{fontWeight:700,fontSize:14}}>CURRENT DRIVE</h3>
+        {driveLoading && <div style={{fontSize:12,color:'#666'}}>Loading…</div>}
+        {driveError && <div style={{fontSize:12,color:'#b00'}}>Error: {driveError}</div>}
+        {driveModel ? <DriveSummaryChips model={driveModel}/> : (!driveLoading && !driveError && <div style={{fontSize:12,color:'#666'}}>No active drive</div>)}
+      </section>
 
       {/* Individuals – Visitor */}
       <div className="grid grid-cols-2 gap-4">

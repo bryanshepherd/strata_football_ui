@@ -25,11 +25,14 @@
 - **TypeScript** (partial): Type definitions in apiDataContract.ts
 - **Custom API Client**: StandardizedAPIClient for backend communication
 - **Data Transformation**: Automatic camelCase ↔ snake_case conversion
+- **Drive Rules Engine**: Automatic drive transitions and game state management
+- **Multi-User Safety**: Lock status tracking and concurrent user protection
 
 ### Backend Integration
-- **PHP Backend**: RESTful API endpoints
-- **MySQL Database**: Persistent storage (inferred from PHP patterns)
+- **PHP Backend**: RESTful API endpoints with game locking system
+- **MySQL Database**: Persistent storage with multi-user lock tables
 - **Proxy Configuration**: Vite proxy for development API routing
+- **Real-time Updates**: Lock status polling and game state synchronization
 
 ## Application Architecture Overview
 

@@ -243,26 +243,34 @@ export class DataTransformer {
   
   /**
    * Convert frontend data to backend format (snake_case)
+   * Uses strict allowlist to prevent frontend-only fields from being sent to backend
    */
   static frontendToBackend(frontendData: any): any {
-    const transformed: any = {
+    // Build strict allowlist of backend-recognized fields only
+    const allowed: any = {
       // Core game state mappings - backend fields take precedence
       period: frontendData.period || frontendData.quarter,
       time_remaining: frontendData.time_remaining || this.clockToSeconds(frontendData.clock || frontendData.timeRemaining),
       possession: this.possessionToBackend(frontendData.possession),
       down: frontendData.down,
       distance: frontendData.distance || frontendData.yardsToGo,
-      yard_line: frontendData.yardLinePosition || frontendData.spot,
       
       // Play data mappings - backend fields take precedence
       play_type: frontendData.playType,
-      primary_player_id: frontendData.primary_player_id || frontendData.primaryPlayerID,
-      secondary_player_id: frontendData.secondary_player_id || frontendData.secondaryPlayerID,
+      primary_player_id: frontendData.primary_player_id || frontendData.primaryPlayerID || null,
+      secondary_player_id: frontendData.secondary_player_id || frontendData.secondaryPlayerID || null,
+      // Note: tertiaryPlayerID is intentionally excluded - frontend-only field
+      
       yards: frontendData.yards || frontendData.yardsGained,
       net_yards: frontendData.yardsGained,
       post_down: frontendData.postDown,
       post_distance: frontendData.postDistance,
-      post_yard_line: frontendData.postYardLine || frontendData.endYardLine,
+      
+      // Position fields - send raw yardlines (backend will normalize)
+      yard_line: (frontendData.yardLinePosition || frontendData.spot)?.toUpperCase(),
+      start_yard_line: (frontendData.startYardLine || frontendData.start_yard_line)?.toUpperCase(),
+      end_yard_line: (frontendData.endYardLine || frontendData.end_yard_line)?.toUpperCase(),
+      post_yard_line: (frontendData.postYardLine || frontendData.endYardLine)?.toUpperCase(),
       
       // Backend flags - backend fields take precedence
       is_touchdown: frontendData.hasOwnProperty('is_touchdown') ? frontendData.is_touchdown : (frontendData.isTouchdown || false),
@@ -272,26 +280,68 @@ export class DataTransformer {
       is_safety: frontendData.hasOwnProperty('is_safety') ? frontendData.is_safety : (frontendData.isSafety || false),
       is_kickoff: frontendData.hasOwnProperty('is_kickoff') ? frontendData.is_kickoff : (frontendData.isKickoff || false),
       
-      // Ensure drive meta is included if present
-      ...(frontendData.drive_ends !== undefined ? { drive_ends: !!frontendData.drive_ends } : {}),
-      ...(frontendData.drive_result ? { drive_result: String(frontendData.drive_result) } : {})
+      // Play result
+      result: frontendData.result || frontendData.resultCode,
+      
+      // Additional backend-recognized fields
+      description: frontendData.description,
+      timestamp: frontendData.timestamp,
+      session_id: frontendData.session_id,
+      user_id: frontendData.user_id,
     };
     
-    // Remove undefined values
-    Object.keys(transformed).forEach(key => {
-      if (transformed[key] === undefined) {
-        delete transformed[key];
-      }
-    });
+    // Add drive metadata if present (using spread to avoid adding if undefined)
+    if (frontendData.drive_ends !== undefined) {
+      allowed.drive_ends = !!frontendData.drive_ends;
+    }
+    if (frontendData.drive_result) {
+      allowed.drive_result = String(frontendData.drive_result);
+    }
     
-    return transformed;
+    // Handle penalty arrays with strict field mapping
+    if (Array.isArray(frontendData.penalties)) {
+      allowed.penalties = frontendData.penalties.map((p: any) => ({
+        // Only include backend-recognized penalty fields
+        team: p.team,
+        code: p.code,
+        yards: p.yards ?? null,
+        // Note: spot is excluded - not recognized by backend
+        enforced_from: p.enforcedFrom,
+        accepted: p.accepted,
+        automatic_first_down: !!p.automaticFirstDown,
+        loss_of_down: !!p.lossOfDown,
+        live_ball: !!p.liveBall,
+        carry_over_to_ko: !!p.carryOverToKO,
+        notes: p.notes ?? null
+      }));
+    }
+    
+    // Handle penalty resolution metadata if present
+    if (frontendData.penaltyResolution) {
+      allowed.penalty_resolution = {
+        mode: frontendData.penaltyResolution.mode,
+        analysis: frontendData.penaltyResolution.analysis ?? null,
+        user_override: frontendData.penaltyResolution.userOverride ?? null
+      };
+    }
+    
+    // Frontend-only fields that are explicitly excluded:
+    // - tertiaryPlayerID: Frontend convenience field for additional player reference
+    // - playContext: Frontend string format "H,1,10,H25" 
+    // - newContext: Frontend post-play context string
+    // These are intentionally not included in the allowed object
+    
+    // Clean up: Remove undefined values from the result
+    return Object.fromEntries(
+      Object.entries(allowed).filter(([_, value]) => value !== undefined)
+    );
   }
   
   /**
    * Convert backend data to frontend format (camelCase) 
    */
   static backendToFrontend(backendData: any): any {
-    const transformed = {
+    const transformed: any = {
       // Core game state mappings
       quarter: backendData.period || backendData.quarter,
       clock: this.secondsToClock(backendData.time_remaining) || backendData.timeRemaining,
@@ -318,6 +368,32 @@ export class DataTransformer {
       isKickoff: backendData.is_kickoff || false
     };
     
+    // Handle penalty arrays
+    if (Array.isArray(backendData.penalties)) {
+      transformed.penalties = backendData.penalties.map((p: any) => ({
+        team: p.team,
+        code: p.code,
+        yards: p.yards ?? undefined,
+        spot: p.spot ?? undefined,
+        enforcedFrom: p.enforced_from,
+        accepted: !!p.accepted,
+        automaticFirstDown: !!p.automatic_first_down,
+        lossOfDown: !!p.loss_of_down,
+        liveBall: !!p.live_ball,
+        carryOverToKO: !!p.carry_over_to_ko,
+        notes: p.notes ?? ''
+      }));
+    }
+    
+    // Handle penalty resolution metadata
+    if (backendData.penalty_resolution) {
+      transformed.penaltyResolution = {
+        mode: backendData.penalty_resolution.mode,
+        analysis: backendData.penalty_resolution.analysis ?? undefined,
+        userOverride: backendData.penalty_resolution.user_override ?? undefined
+      };
+    }
+    
     // Remove undefined values
     Object.keys(transformed).forEach(key => {
       if (transformed[key] === undefined) {
@@ -331,22 +407,24 @@ export class DataTransformer {
   /**
    * Convert React play data to backend format
    * Transforms camelCase frontend fields to snake_case backend fields
+   * Uses strict allowlist to prevent frontend-only fields from being sent to backend
    */
   static transformPlayData(frontendData: any): any {
-    // Transform to backend expected format with snake_case fields
-    const transformed: any = {
+    // Build strict allowlist of backend-recognized fields only
+    const allowed: any = {
       // Core play fields - map camelCase to snake_case
       play_type: frontendData.playType || frontendData.play_type || 'other',
       primary_player_id: frontendData.primaryPlayerID || frontendData.primary_player_id || this.getPrimaryPlayer(frontendData),
       secondary_player_id: frontendData.secondaryPlayerID || frontendData.secondary_player_id || this.getSecondaryPlayer(frontendData),
+      // Note: tertiaryPlayerID is intentionally excluded - frontend-only field
       
       // Result mapping - backend expects 'result' not 'resultCode'
       result: frontendData.resultCode || frontendData.result,
       
-      // Yard line fields
-      yard_line: frontendData.yardLine || frontendData.yard_line || frontendData.startSpot,
-      end_yard_line: frontendData.endYardLine || frontendData.end_yard_line || frontendData.finalSpot,
-      post_yard_line: frontendData.post_yard_line || frontendData.endYardLine,
+      // Yard line fields - send raw (backend will normalize)
+      yard_line: (frontendData.yardLine || frontendData.yard_line || frontendData.startSpot)?.toUpperCase(),
+      end_yard_line: (frontendData.endYardLine || frontendData.end_yard_line || frontendData.finalSpot)?.toUpperCase(),
+      post_yard_line: (frontendData.post_yard_line || frontendData.endYardLine)?.toUpperCase(),
       
       // Yardage fields
       yards: frontendData.yardsGained || frontendData.yards || 0,
@@ -376,34 +454,42 @@ export class DataTransformer {
       possession: frontendData.possession,
       is_kickoff: frontendData.is_kickoff || false,
       session_id: frontendData.session_id || 'current-session',
-      user_id: frontendData.user_id || 'current-user'
+      user_id: frontendData.user_id || 'current-user',
+      
+      // Frontend-only fields explicitly excluded:
+      // - playContext: Frontend convenience string format
+      // - newContext: Frontend post-play context string
+      // - tertiaryPlayerID: Additional player reference not used by backend
     };
     
     // Handle tackler data - preserve IDs as primary data
     if (frontendData.tackler1_id) {
-      transformed.tackler1 = frontendData.tackler1_id;
-      transformed.tackler1_jersey = frontendData.tackler1_jersey;
+      allowed.tackler1 = frontendData.tackler1_id;
+      allowed.tackler1_jersey = frontendData.tackler1_jersey;
     }
     if (frontendData.tackler2_id) {
-      transformed.tackler2 = frontendData.tackler2_id;
-      transformed.tackler2_jersey = frontendData.tackler2_jersey;
+      allowed.tackler2 = frontendData.tackler2_id;
+      allowed.tackler2_jersey = frontendData.tackler2_jersey;
     }
     
-    // Preserve additional fields that might be needed
-    const additionalFields = [
+    // Add backend-recognized additional fields (carefully selected)
+    const backendRecognizedFields = [
       'forcedBy', 'recoveringTeam', 'recoveringPlayer', 'recoverySpot',
       'blockingPlayer', 'kickType', 'kicked_to_yard_line', 'kickResult',
       'drive_ends', 'drive_result', 'is_goal_to_go', 'is_red_zone',
       'line_to_gain'
     ];
     
-    additionalFields.forEach(field => {
+    backendRecognizedFields.forEach(field => {
       if (frontendData[field] !== undefined) {
-        transformed[field] = frontendData[field];
+        allowed[field] = frontendData[field];
       }
     });
     
-    return transformed;
+    // Clean up: Remove undefined values from the result
+    return Object.fromEntries(
+      Object.entries(allowed).filter(([_, value]) => value !== undefined)
+    );
   }
   
   /**
@@ -615,15 +701,126 @@ export class DataValidator {
 /**
  * Enhanced API client that handles data transformation
  */
-export class StandardizedAPIClient {
-  private static baseUrl = '/strata_football/api/';
+// Import URL normalization from apiClient
+import { normalizeUrl } from './apiClient.js';
+
+// ===========================
+// YARDLINE NORMALIZATION HELPERS
+// ===========================
+
+/**
+ * Parse raw yardline input into side and position components
+ * @param raw - Raw yardline input (e.g., "H5", "V039", "H00")
+ * @returns Object with side ('H' | 'V' | null) and position (0-50)
+ */
+function parseYardline(raw: any): { side: 'H' | 'V' | null; pos: number } {
+  if (!raw || typeof raw !== "string") return { side: null, pos: NaN };
+  const m = raw.trim().toUpperCase().match(/^([HV])0*(\d{1,2}|50)$/);
+  if (!m) return { side: null, pos: NaN };
+  const side = m[1] as 'H' | 'V';
+  const pos = Math.max(0, Math.min(50, parseInt(m[2], 10)));
+  return { side, pos };
+}
+
+/**
+ * Format yardline to exactly 3 characters: side + 2-digit position
+ * @param side - Team side ('H' or 'V')
+ * @param pos - Position (0-50)
+ * @returns Formatted yardline (e.g., "H05", "V39", "H00", "V50")
+ */
+function formatYardline(side: 'H' | 'V' | null, pos: number): string {
+  if (!side || Number.isNaN(pos)) return "";
+  const p = pos.toString().padStart(2, "0"); // always 2 digits
+  return `${side}${p}`; // e.g. H05, V39, H00, V50
+}
+
+/**
+ * Normalize any yardline input to exactly 3 characters
+ * @param yl - Raw yardline input
+ * @returns Normalized yardline string or empty string if invalid
+ */
+function normalizeYardlineCode(yl: any): string {
+  const { side, pos } = parseYardline(yl);
+  return formatYardline(side, pos);
+}
+
+/**
+ * Map API play object to UI format
+ * Ensures consistent field names for Play Log display
+ */
+function mapApiPlayToUi(apiPlay: any): any {
+  if (!apiPlay) return null;
   
+  const toBool = (x: any) => {
+    if (x === true || x === false) return x;
+    if (x == null) return false;
+    const s = String(x).toLowerCase();
+    return s === '1' || s === 'true' || s === 'yes';
+  };
+  
+  // Handle the actual API structure from load_game_state.php
+  return {
+    // Generate playId from timestamp + index if missing
+    playId: apiPlay.PlayID || apiPlay.playId || Math.random().toString(36).substr(2, 9),
+    gameId: apiPlay.GameID || apiPlay.gameId || 1000,
+    driveId: apiPlay.DriveID || apiPlay.driveNumber || null,
+    playNumber: apiPlay.PlayNumber || apiPlay.playNumber || 0,
+    period: apiPlay.Period || apiPlay.quarter || 1,
+    timeRemaining: (() => {
+      const timeStr = apiPlay.TimeRemaining || apiPlay.clock;
+      if (!timeStr) return NaN;
+      if (typeof timeStr === 'number') return timeStr;
+      // Convert "15:00" format to seconds
+      const parts = timeStr.split(':');
+      if (parts.length === 2) {
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+      return NaN;
+    })(),
+    possession: (() => {
+      const poss = apiPlay.PossessionTeam || apiPlay.possession;
+      if (poss === 'HOME' || poss === 'H') return 'HOME';
+      if (poss === 'VISITOR' || poss === 'V') return 'VISITOR'; 
+      return poss;
+    })(),
+    yardLine: normalizeYardlineCode(apiPlay.YardLinePosition || apiPlay.spot),
+    endYardLine: normalizeYardlineCode(apiPlay.EndYardLinePosition || apiPlay.endSpot),
+    postYardLine: normalizeYardlineCode(apiPlay.PostYardLinePosition || apiPlay.postSpot),
+    primaryPlayerId: apiPlay.PrimaryPlayerID || apiPlay.primaryPlayerId || null,
+    secondaryPlayerId: apiPlay.SecondaryPlayerID || apiPlay.secondaryPlayerId || null,
+    playType: (apiPlay.PlayType || apiPlay.playType || '').toString().toUpperCase(),
+    playSubType: apiPlay.PlaySubType || apiPlay.playSubType || null,
+    result: apiPlay.PlayResult || apiPlay.result || '',
+    yardsGained: Number(apiPlay.YardsGained || apiPlay.yardsGained) || 0,
+    netYards: Number(apiPlay.NetYards || apiPlay.yardsGained) || 0,
+    isFirstDown: toBool(apiPlay.isFirstDown ?? apiPlay.IsFirstDown),
+    isTouchdown: toBool(apiPlay.isTouchdown ?? apiPlay.IsTouchdown),
+    isTurnover: toBool(apiPlay.isTurnover ?? apiPlay.IsTurnover),
+    isSafety: toBool(apiPlay.isSafety ?? apiPlay.IsSafety),
+    isNegated: !!(apiPlay.isNegated || apiPlay.IsNegated),
+    description: apiPlay.PlayDescription || apiPlay.description || null,
+    
+    // Player ID fields
+    PrimaryPlayerID: apiPlay.PrimaryPlayerID || apiPlay.primaryPlayerID || apiPlay.primary_player_id,
+    SecondaryPlayerID: apiPlay.SecondaryPlayerID || apiPlay.secondaryPlayerID || apiPlay.secondary_player_id,
+    primary_player_id: apiPlay.PrimaryPlayerID || apiPlay.primaryPlayerID || apiPlay.primary_player_id,
+    secondary_player_id: apiPlay.SecondaryPlayerID || apiPlay.secondaryPlayerID || apiPlay.secondary_player_id,
+    
+    // Legacy fields for compatibility
+    down: apiPlay.Down || apiPlay.down,
+    distance: apiPlay.YardsToGo || apiPlay.distance,
+    play_type: (apiPlay.PlayType || apiPlay.playType || '').toString().toUpperCase(),
+    PlayType: (apiPlay.PlayType || apiPlay.playType || '').toString().toUpperCase(),
+  };
+}
+
+export class StandardizedAPIClient {
   /**
    * Load game state with data transformation
    */
   static async loadGameState(gameId: number): Promise<any> {
     try {
-      const response = await fetch(`${this.baseUrl}load_game_state.php?game_id=${gameId}`);
+      const response = await fetch(normalizeUrl(`load_game_state.php?game_id=${gameId}`));
       const rawData = await response.json();
       
       if (rawData.error) {
@@ -634,7 +831,7 @@ export class StandardizedAPIClient {
       return {
         ...DataTransformer.transformGameState(rawData.gameState),
         gameInfo: rawData.gameInfo,
-        playLog: rawData.playLog,
+        playLog: (rawData.playLog || []).map(mapApiPlayToUi),
         stats: rawData.stats,
         driveChart: rawData.driveChart,
         gameRules: rawData.gameRules
@@ -659,7 +856,7 @@ export class StandardizedAPIClient {
         throw new Error('Invalid play data: play_type is required');
       }
       
-      const response = await fetch(`${this.baseUrl}submit_play_enhanced.php`, {
+      const response = await fetch(normalizeUrl(`submit_play_enhanced.php`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

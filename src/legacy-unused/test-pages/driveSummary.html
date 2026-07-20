@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drive Summary Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        // Mock the drive model data we get from API
+        const mockDriveModel = {
+            offense: 'H',
+            number: 2,
+            start: 'V23',
+            howGained: 'Kickoff',
+            timeGainedSec: 155, // Should show as "2:35"
+            playsRush: 3,
+            playsPass: 1,
+            penCount: 2,
+            penYards: -10
+        };
+
+        function fmtMMSS(totalSeconds) {
+            const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+            return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+        }
+
+        function DriveSummary({ model }) {
+            if (!model) return null;
+
+            return (
+                <div style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px', fontSize: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '500', color: '#475569' }}>Start:</span>
+                        <span style={{ fontFamily: 'monospace', color: '#1e293b' }}>{model.start}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '500', color: '#475569' }}>Time Gained:</span>
+                        <span style={{ fontFamily: 'monospace', color: '#1e293b' }}>{fmtMMSS(model.timeGainedSec)}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '500', color: '#475569' }}>How Gained:</span>
+                        <span style={{ color: '#1e293b' }}>{model.howGained ?? '—'}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '500', color: '#475569' }}>Plays:</span>
+                        <span style={{ color: '#1e293b' }}>Rush – {model.playsRush} | Pass – {model.playsPass}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: '500', color: '#475569' }}>Penalties:</span>
+                        <span style={{ color: '#1e293b' }}>{model.penCount} for {model.penYards >= 0 ? '+' : ''}{model.penYards} yards</span>
+                    </div>
+                </div>
+            );
+        }
+
+        function TestApp() {
+            return (
+                <div>
+                    <h1>Drive Summary Test</h1>
+                    <h2>Expected Output:</h2>
+                    <ul>
+                        <li>Start: V23</li>
+                        <li>Time Gained: 2:35</li>
+                        <li>How Gained: Kickoff</li>
+                        <li>Plays: Rush – 3 | Pass – 1</li>
+                        <li>Penalties: 2 for -10 yards</li>
+                    </ul>
+                    
+                    <h2>Actual Output:</h2>
+                    <DriveSummary model={mockDriveModel} />
+                    
+                    <div className="debug">
+                        <h3>Debug Data:</h3>
+                        <pre>{JSON.stringify(mockDriveModel, null, 2)}</pre>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TestApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

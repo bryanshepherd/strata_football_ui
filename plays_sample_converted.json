@@ -1,0 +1,4718 @@
+{
+  "game": {
+    "venue": {
+      "gameId": "plays-sample",
+      "visId": "GSU",
+      "homeId": "WVS",
+      "visName": "Glenville State",
+      "homeName": "West Virginia State",
+      "date": null,
+      "location": null,
+      "stadium": null,
+      "start": null,
+      "end": null,
+      "isLeagueGame": null,
+      "duration": null,
+      "attendance": null,
+      "temperature": null,
+      "wind": null,
+      "weather": null
+    },
+    "liveController": {
+      "hasball": "H",
+      "id": "WVS",
+      "down": 1,
+      "togo": 10,
+      "spot": "H35",
+      "context": "H,1,10,H35",
+      "qtr": 3,
+      "clock": "15:00",
+      "vtoh": 2,
+      "htoh": 1,
+      "lastplay": "plays-sample-0100",
+      "status": "active",
+      "flag": "N",
+      "review": "N",
+      "drivenum": 10
+    },
+    "officials": {
+      "ref": null,
+      "ump": null,
+      "headLinesman": null,
+      "lineJudge": null,
+      "backJudge": null,
+      "fieldJudge": null,
+      "sideJudge": null,
+      "centerJudge": null,
+      "replay": null,
+      "scorer": null
+    },
+    "rules": {
+      "quarters": 4,
+      "minutesPerQuarter": 15,
+      "downs": 4,
+      "yardsToFirstDown": 10,
+      "koSpot": 35,
+      "tbSpot": 20,
+      "koTbSpot": 25,
+      "patSpot": 3,
+      "safetySpot": 20,
+      "touchdownPoints": 6,
+      "fieldGoalPoints": 3,
+      "patKickPoints": 1,
+      "patConversionPoints": 2,
+      "safetyPoints": 2,
+      "defensivePatPoints": 2,
+      "rougePoints": 0,
+      "fieldLength": 100
+    },
+    "plays": [
+      {
+        "playId": "plays-sample-0001",
+        "sequenceKey": "1-0-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": null,
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "comment",
+              "text": "West Virginia St. wins toss and will receive; GSU will defend West end-zone."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": null,
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0002",
+        "sequenceKey": "1-0-2",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": "15:00",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "quarterAdvance",
+              "clock": "15:00",
+              "qtr": 1,
+              "instruction": "Start of 1st quarter, clock 15:00."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": "15:00",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0003",
+        "sequenceKey": "1-1--1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": "14:53",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "freekick": {
+              "kicker": "Villasenor,Johann",
+              "kickedTo": "H02",
+              "isTouchback": false,
+              "isOB": false
+            },
+            "return": {
+              "type": "Kick",
+              "returner": "Cox,Devin",
+              "fromSpot": "H02",
+              "toSpot": "H25"
+            },
+            "tackle": {
+              "tackleA": "Davis,Gavin"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "14:53",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0004",
+        "sequenceKey": "1-1-0",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "14:53",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "H",
+              "driveNumber": 1,
+              "spot": "H25",
+              "clock": "14:53",
+              "qtr": 1,
+              "howStart": "Kickoff"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "14:53",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0005",
+        "sequenceKey": "1-1-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "14:44",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H35"
+            },
+            "tackle": {
+              "tackleA": "McLendon Parker,Jaiden"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "14:44",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0006",
+        "sequenceKey": "1-1-2",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "14:15",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H39"
+            },
+            "tackle": {
+              "tackleA": "Penn,Brandon",
+              "tackleB": "Grimball,Jamar"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 6,
+          "spot": "H39",
+          "clock": "14:15",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0007",
+        "sequenceKey": "1-1-3",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 6,
+          "spot": "H39",
+          "clock": "13:41",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H48"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H48",
+          "clock": "13:41",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0008",
+        "sequenceKey": "1-1-4",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H48",
+          "clock": "13:04",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V48"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary",
+              "tackleB": "Hamn,Kon'Trel"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 6,
+          "spot": "V48",
+          "clock": "13:04",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0009",
+        "sequenceKey": "1-1-5",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 6,
+          "spot": "V48",
+          "clock": "12:25",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V40"
+            },
+            "tackle": {
+              "tackleA": "Williams,Donovan",
+              "tackleB": "Hamn,Kon'Trel"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V40",
+          "clock": "12:25",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0010",
+        "sequenceKey": "1-1-6",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V40",
+          "clock": "11:50",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "INC",
+              "targetSpot": "V02"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V40",
+          "clock": "11:50",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0011",
+        "sequenceKey": "1-1-7",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V40",
+          "clock": "11:43",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "HO",
+              "foulOn": "McWhite,Sowande",
+              "enforcement": "Accepted",
+              "enforceFrom": "V40",
+              "enforceTo": "V50",
+              "isPlayNull": true,
+              "isFirstDown": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 20,
+          "spot": "V50",
+          "clock": "11:43",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0012",
+        "sequenceKey": "1-1-8",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 20,
+          "spot": "V50",
+          "clock": "11:21",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V31"
+            },
+            "tackle": {
+              "tackleA": "Ofosu,Elia",
+              "tackleB": "Blanding,Kaevon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 1,
+          "spot": "V31",
+          "clock": "11:21",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0013",
+        "sequenceKey": "1-1-9",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 1,
+          "spot": "V31",
+          "clock": "10:39",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "V29"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V29",
+          "clock": "10:39",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0014",
+        "sequenceKey": "1-1-10",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V29",
+          "clock": "10:05",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "V27"
+            },
+            "tackle": {
+              "tackleA": "Croghan,Derek",
+              "tackleB": "Allen,Eugene"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "V27",
+          "clock": "10:05",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0015",
+        "sequenceKey": "1-1-11",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "V27",
+          "clock": "09:19",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V22"
+            },
+            "tackle": {
+              "tackleA": "Penn,Brandon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 3,
+          "spot": "V22",
+          "clock": "09:19",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0016",
+        "sequenceKey": "1-1-12",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 3,
+          "spot": "V22",
+          "clock": "08:31",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V06"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 6,
+          "spot": "V06",
+          "clock": "08:31",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0017",
+        "sequenceKey": "1-1-13",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 6,
+          "spot": "V06",
+          "clock": "07:57",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V03"
+            },
+            "tackle": {
+              "tackleA": "Scott,Sean"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 0,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 3,
+          "spot": "V03",
+          "clock": "07:57",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0018",
+        "sequenceKey": "1-1-14",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 3,
+          "spot": "V03",
+          "clock": "07:15",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Dailey,Joe",
+              "endSpot": "V00"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 6,
+          "awayScore": 0,
+          "teamScored": "H",
+          "pointsAdded": 6
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V03",
+          "clock": "07:15",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0019",
+        "sequenceKey": "1-1-15",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V03",
+          "clock": "07:15",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pat": {
+              "type": "kick",
+              "playerId": "Hornbuckle,Tony",
+              "result": "good"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 7,
+          "awayScore": 0,
+          "teamScored": "H",
+          "pointsAdded": 1
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "07:15",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0020",
+        "sequenceKey": "1-1-16",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "07:15",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": null,
+              "timeoutType": "Official",
+              "clock": "07:15",
+              "qtr": 1,
+              "instruction": "Timeout on the field."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "07:15",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0021",
+        "sequenceKey": "1-2--1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "07:09",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "freekick": {
+              "kicker": "Shrader,Joseph",
+              "kickedTo": "V07",
+              "isTouchback": false,
+              "isOB": false
+            },
+            "return": {
+              "type": "Kick",
+              "returner": "Phares,Andrew",
+              "fromSpot": "V07",
+              "toSpot": "V25"
+            },
+            "tackle": {
+              "tackleA": "Coulter,Peyton"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "07:09",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0022",
+        "sequenceKey": "1-2-0",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "07:09",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "H",
+              "driveNumber": 1,
+              "spot": "V00",
+              "clock": "07:15",
+              "qtr": 1,
+              "howEnd": "Touchdown"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "V",
+              "driveNumber": 2,
+              "spot": "V25",
+              "clock": "07:09",
+              "qtr": 1,
+              "howStart": "Kickoff"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 0,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "07:09",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0023",
+        "sequenceKey": "1-2-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V25",
+          "clock": "06:56",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Pacheco,Naseem",
+              "result": "COMP",
+              "targetSpot": "H40"
+            },
+            "receive": {
+              "receiver": "Pacheco,Naseem",
+              "endSpot": "H00"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 7,
+          "awayScore": 6,
+          "teamScored": "V",
+          "pointsAdded": 6
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H03",
+          "clock": "06:56",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0024",
+        "sequenceKey": "1-2-2",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H03",
+          "clock": "06:56",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pat": {
+              "type": "kick",
+              "playerId": "Layman,Brody",
+              "result": "good"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 7,
+          "awayScore": 7,
+          "teamScored": "V",
+          "pointsAdded": 1
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": "06:56",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0025",
+        "sequenceKey": "1-3--1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V35",
+          "clock": "06:54",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "freekick": {
+              "kicker": "Layman,Brody",
+              "kickedTo": "V48",
+              "isTouchback": false,
+              "isOB": false,
+              "isOnside": true
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V48",
+          "clock": "06:54",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0026",
+        "sequenceKey": "1-3-0",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V48",
+          "clock": "06:54",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "V",
+              "driveNumber": 2,
+              "spot": "H00",
+              "clock": "06:56",
+              "qtr": 1,
+              "howEnd": "Touchdown"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "H",
+              "driveNumber": 3,
+              "spot": "V48",
+              "clock": "06:54",
+              "qtr": 1,
+              "howStart": "Kickoff"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V48",
+          "clock": "06:54",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0027",
+        "sequenceKey": "1-3-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V48",
+          "clock": "06:48",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "HO",
+              "foulOn": "Hall,Dalton",
+              "enforcement": "Accepted",
+              "enforceFrom": "V46",
+              "enforceTo": "H44",
+              "isPlayNull": true,
+              "isFirstDown": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 18,
+          "spot": "H44",
+          "clock": "06:48",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0028",
+        "sequenceKey": "1-3-2",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 18,
+          "spot": "H44",
+          "clock": "06:27",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "H43"
+            },
+            "tackle": {
+              "tackleA": "Gant,Tank",
+              "isTfl": true
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 7,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 19,
+          "spot": "H43",
+          "clock": "06:27",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0029",
+        "sequenceKey": "1-3-3",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 19,
+          "spot": "H43",
+          "clock": "05:46",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Ary,Amare",
+              "result": "COMP",
+              "targetSpot": "V40"
+            },
+            "receive": {
+              "receiver": "Ary,Amare",
+              "endSpot": "H00"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 13,
+          "awayScore": 7,
+          "teamScored": "H",
+          "pointsAdded": 6
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V03",
+          "clock": "05:46",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0030",
+        "sequenceKey": "1-3-4",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V03",
+          "clock": "05:46",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pat": {
+              "type": "kick",
+              "playerId": "Hornbuckle,Tony",
+              "result": "good"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": true,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": "H",
+          "pointsAdded": 1
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "05:46",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0031",
+        "sequenceKey": "1-3-5",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:46",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": null,
+              "timeoutType": "Official",
+              "clock": "05:46",
+              "qtr": 1,
+              "instruction": "Timeout on the field."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:46",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0032",
+        "sequenceKey": "1-4--1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "05:39",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "freekick": {
+              "kicker": "Shrader,Joseph",
+              "kickedTo": "V02",
+              "isTouchback": false,
+              "isOB": false
+            },
+            "return": {
+              "type": "Kick",
+              "returner": "Phares,Andrew",
+              "fromSpot": "V02",
+              "toSpot": "V12"
+            },
+            "tackle": {
+              "tackleA": "Muhammad,Amir"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:39",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0033",
+        "sequenceKey": "1-4-0",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:39",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "H",
+              "driveNumber": 3,
+              "spot": "V00",
+              "clock": "05:46",
+              "qtr": 1,
+              "howEnd": "Touchdown"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "V",
+              "driveNumber": 4,
+              "spot": "V12",
+              "clock": "05:39",
+              "qtr": 1,
+              "howStart": "Kickoff"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:39",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0034",
+        "sequenceKey": "1-4-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V12",
+          "clock": "05:26",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "King,Jeremiah",
+              "result": "COMP",
+              "targetSpot": "V10"
+            },
+            "receive": {
+              "receiver": "King,Jeremiah",
+              "endSpot": "V23"
+            },
+            "tackle": {
+              "tackleA": "Wilson,Mike",
+              "tackleB": "Covington-Griggs,Jeremiah"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V23",
+          "clock": "05:26",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0035",
+        "sequenceKey": "1-4-2",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V23",
+          "clock": "05:03",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Miller,Tariq",
+              "result": "INC",
+              "targetSpot": "V26",
+              "passBreak": "Daniels,Demarcus"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V23",
+          "clock": "05:03",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0036",
+        "sequenceKey": "1-4-3",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V23",
+          "clock": "05:03",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "FS",
+              "foulOn": "Drvar,Seth",
+              "enforcement": "Accepted",
+              "enforceFrom": "V23",
+              "enforceTo": "V18",
+              "isPlayNull": true,
+              "isFirstDown": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 15,
+          "spot": "V18",
+          "clock": "05:03",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0037",
+        "sequenceKey": "1-4-4",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 15,
+          "spot": "V18",
+          "clock": "04:53",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "King,Jeremiah",
+              "endSpot": "V25"
+            },
+            "tackle": {
+              "tackleA": "Covington-Griggs,Jeremiah"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 8,
+          "spot": "V25",
+          "clock": "04:53",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0038",
+        "sequenceKey": "1-4-5",
+        "context": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 8,
+          "spot": "V25",
+          "clock": "04:20",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Thornhill,Arnav",
+              "result": "COMP",
+              "targetSpot": "V41"
+            },
+            "receive": {
+              "receiver": "Thornhill,Arnav",
+              "endSpot": "V41"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V41",
+          "clock": "04:20",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0039",
+        "sequenceKey": "1-4-6",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V41",
+          "clock": "03:57",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Miller,Tariq",
+              "result": "COMP",
+              "targetSpot": "H47"
+            },
+            "receive": {
+              "receiver": "Miller,Tariq",
+              "endSpot": "H47"
+            },
+            "tackle": {
+              "tackleA": "Mankins,Marshawn"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "03:57",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0040",
+        "sequenceKey": "1-4-7",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "03:14",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Pacheco,Naseem",
+              "result": "COMP",
+              "targetSpot": "V38"
+            },
+            "receive": {
+              "receiver": "Pacheco,Naseem",
+              "endSpot": "V38"
+            },
+            "tackle": {
+              "tackleA": "Russ Jr.,Shawn"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 1,
+          "spot": "V38",
+          "clock": "03:14",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0041",
+        "sequenceKey": "1-4-8",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 1,
+          "spot": "V38",
+          "clock": "03:02",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Garrett,Anthony",
+              "endSpot": "H42"
+            },
+            "fumble": {
+              "forcedBy": null,
+              "recoverTeam": "H",
+              "recoverPlayer": "Covington-Griggs,Jeremiah",
+              "recoverSpot": "H42"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H42",
+          "clock": "03:02",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0042",
+        "sequenceKey": "1-5-0",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H42",
+          "clock": "03:02",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "V",
+              "driveNumber": 4,
+              "spot": "H42",
+              "clock": "03:02",
+              "qtr": 1,
+              "howEnd": "Fumble"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "H",
+              "driveNumber": 5,
+              "spot": "H42",
+              "clock": "03:02",
+              "qtr": 1,
+              "howStart": "Fumble"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H42",
+          "clock": "03:02",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0043",
+        "sequenceKey": "1-5-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H42",
+          "clock": "02:57",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H45"
+            },
+            "tackle": {
+              "tackleA": "Lyes,Henry",
+              "tackleB": "Croghan,Derek"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 7,
+          "spot": "H45",
+          "clock": "02:57",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0044",
+        "sequenceKey": "1-5-2",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 7,
+          "spot": "H45",
+          "clock": "02:20",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H48"
+            },
+            "tackle": {
+              "tackleA": "Curry,Kalon",
+              "tackleB": "Hamn,Kon'Trel"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 4,
+          "spot": "H48",
+          "clock": "02:20",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0045",
+        "sequenceKey": "1-5-3",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 4,
+          "spot": "H48",
+          "clock": "01:39",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "H49"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "failed",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 3,
+          "spot": "H49",
+          "clock": "01:39",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0046",
+        "sequenceKey": "1-5-4",
+        "context": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 3,
+          "spot": "H49",
+          "clock": "00:58",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "punt": {
+              "punter": "Shrader,Joseph",
+              "kickedTo": "V11",
+              "isTouchback": false,
+              "isFairCatch": true,
+              "fairCatchBy": "Phares,Andrew"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "nullified",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:58",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0047",
+        "sequenceKey": "1-6-0",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:58",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "H",
+              "driveNumber": 5,
+              "spot": "V11",
+              "clock": "00:58",
+              "qtr": 1,
+              "howEnd": "Punt"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "V",
+              "driveNumber": 6,
+              "spot": "V11",
+              "clock": "00:58",
+              "qtr": 1,
+              "howStart": "Punt"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:58",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0048",
+        "sequenceKey": "1-6-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:53",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "George,Ben",
+              "result": "INC",
+              "targetSpot": "V16"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:53",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0049",
+        "sequenceKey": "1-6-2",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V11",
+          "clock": "00:48",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "King,Jeremiah",
+              "endSpot": "V12"
+            },
+            "tackle": {
+              "tackleA": "McGrew,Keontavius"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 9,
+          "spot": "V12",
+          "clock": "00:48",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0050",
+        "sequenceKey": "1-6-3",
+        "context": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 9,
+          "spot": "V12",
+          "clock": "00:00",
+          "qtr": 1
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Garrett,Anthony",
+              "endSpot": "V30"
+            },
+            "tackle": {
+              "tackleA": "Daniels,Demarcus"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V30",
+          "clock": "00:00",
+          "qtr": 1
+        }
+      },
+      {
+        "playId": "plays-sample-0051",
+        "sequenceKey": "2-0-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V30",
+          "clock": "15:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "quarterAdvance",
+              "clock": "15:00",
+              "qtr": 2,
+              "instruction": "Start of 2nd quarter, clock 15:00."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V30",
+          "clock": "15:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0052",
+        "sequenceKey": "2-6-4",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V30",
+          "clock": "14:54",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "King,Jeremiah",
+              "endSpot": "V34"
+            },
+            "tackle": {
+              "tackleA": "Washington,Keyshon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 6,
+          "spot": "V34",
+          "clock": "14:54",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0053",
+        "sequenceKey": "2-6-5",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 6,
+          "spot": "V34",
+          "clock": "14:31",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Colon-Brown,Amari",
+              "result": "INC",
+              "targetSpot": "H47"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 6,
+          "spot": "V34",
+          "clock": "14:31",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0054",
+        "sequenceKey": "2-6-6",
+        "context": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 6,
+          "spot": "V34",
+          "clock": "14:20",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "King,Jeremiah",
+              "result": "COMP",
+              "targetSpot": "V44"
+            },
+            "receive": {
+              "receiver": "King,Jeremiah",
+              "endSpot": "H33"
+            },
+            "tackle": {
+              "tackleA": "Garcia,Kyeran"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H33",
+          "clock": "14:20",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0055",
+        "sequenceKey": "2-6-7",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H33",
+          "clock": "13:49",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "King,Jeremiah",
+              "endSpot": "H29"
+            },
+            "tackle": {
+              "tackleA": "Jackson,Daesean"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 6,
+          "spot": "H29",
+          "clock": "13:49",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0056",
+        "sequenceKey": "2-6-8",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 6,
+          "spot": "H29",
+          "clock": "13:16",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Holland,Graylan",
+              "endSpot": "H28"
+            },
+            "tackle": {
+              "tackleA": "Toney,Demary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 5,
+          "spot": "H28",
+          "clock": "13:16",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0057",
+        "sequenceKey": "2-6-9",
+        "context": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 5,
+          "spot": "H28",
+          "clock": "12:31",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "result": "SACK"
+            },
+            "sack": {
+              "sackerA": "Toney,Demary",
+              "endSpot": "H33"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "failed",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 4,
+          "toGo": 10,
+          "spot": "H33",
+          "clock": "12:31",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0058",
+        "sequenceKey": "2-6-10",
+        "context": {
+          "hasBall": "V",
+          "down": 4,
+          "toGo": 10,
+          "spot": "H33",
+          "clock": "11:56",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "result": "SACK"
+            },
+            "sack": {
+              "sackerA": "Mankins,Marshawn",
+              "endSpot": "H35"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "failed",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "11:56",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0059",
+        "sequenceKey": "2-7-0",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "11:56",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "V",
+              "driveNumber": 6,
+              "spot": "H35",
+              "clock": "11:56",
+              "qtr": 2,
+              "howEnd": "Downs"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "H",
+              "driveNumber": 7,
+              "spot": "H35",
+              "clock": "11:56",
+              "qtr": 2,
+              "howStart": "Downs"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "11:56",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0060",
+        "sequenceKey": "2-7-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "11:50",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "H36"
+            },
+            "tackle": {
+              "tackleA": "Croghan,Derek",
+              "tackleB": "Allen,Eugene"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 9,
+          "spot": "H36",
+          "clock": "11:50",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0061",
+        "sequenceKey": "2-7-2",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 9,
+          "spot": "H36",
+          "clock": "11:09",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "COMP",
+              "targetSpot": "H43"
+            },
+            "receive": {
+              "receiver": "Baker II,Malik",
+              "endSpot": "H43"
+            },
+            "tackle": {
+              "tackleA": "Blanding,Kaevon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 2,
+          "spot": "H43",
+          "clock": "11:09",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0062",
+        "sequenceKey": "2-7-3",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 2,
+          "spot": "H43",
+          "clock": "10:33",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "H47"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary",
+              "tackleB": "Grimball,Jamar"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "10:33",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0063",
+        "sequenceKey": "2-7-4",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "10:01",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "INC",
+              "targetSpot": "V02"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "10:01",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0064",
+        "sequenceKey": "2-7-5",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "09:56",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "V48"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 5,
+          "spot": "V48",
+          "clock": "09:56",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0065",
+        "sequenceKey": "2-7-6",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 5,
+          "spot": "V48",
+          "clock": "09:05",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Mosley,Adrien",
+              "result": "COMP",
+              "targetSpot": "V40"
+            },
+            "receive": {
+              "receiver": "Mosley,Adrien",
+              "endSpot": "V39"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V39",
+          "clock": "09:05",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0066",
+        "sequenceKey": "2-7-7",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V39",
+          "clock": "08:28",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "V37"
+            },
+            "tackle": {
+              "tackleA": "Boggs,Braden"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "V37",
+          "clock": "08:28",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0067",
+        "sequenceKey": "2-7-8",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "V37",
+          "clock": "07:50",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Hill,Nasean",
+              "result": "COMP",
+              "targetSpot": "V33"
+            },
+            "receive": {
+              "receiver": "Hill,Nasean",
+              "endSpot": "V17"
+            },
+            "tackle": {
+              "tackleA": "Blanding,Kaevon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V17",
+          "clock": "07:50",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0068",
+        "sequenceKey": "2-7-9",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V17",
+          "clock": "07:23",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Ary,Amare",
+              "result": "INC",
+              "targetSpot": "V00"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V17",
+          "clock": "07:23",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0069",
+        "sequenceKey": "2-7-10",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "V17",
+          "clock": "07:17",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Hill,Nasean",
+              "endSpot": "V16"
+            },
+            "tackle": {
+              "tackleA": "Lyes,Henry",
+              "tackleB": "Allen,Eugene"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 9,
+          "spot": "V16",
+          "clock": "07:17",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0070",
+        "sequenceKey": "2-7-11",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 9,
+          "spot": "V16",
+          "clock": "06:30",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Jackson,Kaleb",
+              "endSpot": "V09"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "failed",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 2,
+          "spot": "V09",
+          "clock": "06:30",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0071",
+        "sequenceKey": "2-7-12",
+        "context": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 2,
+          "spot": "V09",
+          "clock": "06:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "FS",
+              "foulOn": "McWhite,Sowande",
+              "enforcement": "Accepted",
+              "enforceFrom": "V09",
+              "enforceTo": "V14",
+              "isPlayNull": true,
+              "isFirstDown": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "nullified",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 7,
+          "spot": "V14",
+          "clock": "06:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0072",
+        "sequenceKey": "2-7-13",
+        "context": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 7,
+          "spot": "V14",
+          "clock": "05:38",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": "H",
+              "timeoutType": "Team",
+              "clock": "05:38",
+              "qtr": 2,
+              "instruction": "Timeout West Virginia St."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 7,
+          "spot": "V14",
+          "clock": "05:38",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0073",
+        "sequenceKey": "2-7-14",
+        "context": {
+          "hasBall": "H",
+          "down": 4,
+          "toGo": 7,
+          "spot": "V14",
+          "clock": "05:33",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "fieldgoal": {
+              "kicker": "Hornbuckle,Tony",
+              "spotOfKick": "V21",
+              "result": "blocked",
+              "clock": "05:33",
+              "qtr": 2
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "nullified",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V20",
+          "clock": "05:33",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0074",
+        "sequenceKey": "2-8-0",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V20",
+          "clock": "05:33",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "H",
+              "driveNumber": 7,
+              "spot": "V20",
+              "clock": "05:33",
+              "qtr": 2,
+              "howEnd": "Blocked Field Goal"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "V",
+              "driveNumber": 8,
+              "spot": "V20",
+              "clock": "05:33",
+              "qtr": 2,
+              "howStart": "Blocked Field Goal"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V20",
+          "clock": "05:33",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0075",
+        "sequenceKey": "2-8-1",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V20",
+          "clock": "05:23",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Holland,Graylan",
+              "endSpot": "V28"
+            },
+            "tackle": {
+              "tackleA": "Brown,Malik"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 2,
+          "spot": "V28",
+          "clock": "05:23",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0076",
+        "sequenceKey": "2-8-2",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 2,
+          "spot": "V28",
+          "clock": "05:03",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Holland,Graylan",
+              "endSpot": "V31"
+            },
+            "tackle": {
+              "tackleA": "Camacho,Jacob"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V31",
+          "clock": "05:03",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0077",
+        "sequenceKey": "2-8-3",
+        "context": {
+          "hasBall": "V",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V31",
+          "clock": "04:33",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "result": "SACK"
+            },
+            "sack": {
+              "sackerA": "Fialor,Dwight",
+              "endSpot": "V25"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 16,
+          "spot": "V25",
+          "clock": "04:33",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0078",
+        "sequenceKey": "2-8-4",
+        "context": {
+          "hasBall": "V",
+          "down": 2,
+          "toGo": 16,
+          "spot": "V25",
+          "clock": "03:51",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Lewis,Kordell",
+              "result": "DROP",
+              "targetSpot": "V32"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 16,
+          "spot": "V25",
+          "clock": "03:51",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0079",
+        "sequenceKey": "2-8-5",
+        "context": {
+          "hasBall": "V",
+          "down": 3,
+          "toGo": 16,
+          "spot": "V25",
+          "clock": "03:36",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Garrett,Anthony",
+              "target": "Colon-Brown,Amari",
+              "result": "COMP",
+              "targetSpot": "V29"
+            },
+            "receive": {
+              "receiver": "Colon-Brown,Amari",
+              "endSpot": "V38"
+            },
+            "tackle": {
+              "tackleA": "Daniels,Demarcus",
+              "tackleB": "Camacho,Jacob"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "failed",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "V",
+          "down": 4,
+          "toGo": 3,
+          "spot": "V38",
+          "clock": "03:36",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0080",
+        "sequenceKey": "2-8-6",
+        "context": {
+          "hasBall": "V",
+          "down": 4,
+          "toGo": 3,
+          "spot": "V38",
+          "clock": "03:03",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "punt": {
+              "punter": "Watson,Zander",
+              "kickedTo": "H25",
+              "isTouchback": false,
+              "isFairCatch": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "nullified",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "03:03",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0081",
+        "sequenceKey": "2-9-0",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "03:03",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "driveEnd",
+              "team": "V",
+              "driveNumber": 8,
+              "spot": "H25",
+              "clock": "03:03",
+              "qtr": 2,
+              "howEnd": "Punt"
+            }
+          },
+          {
+            "gameControl": {
+              "type": "driveStart",
+              "team": "H",
+              "driveNumber": 9,
+              "spot": "H25",
+              "clock": "03:03",
+              "qtr": 2,
+              "howStart": "Punt"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "03:03",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0082",
+        "sequenceKey": "2-9-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H25",
+          "clock": "02:56",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "H27"
+            },
+            "tackle": {
+              "tackleA": "Hamn,Kon'Trel"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "H27",
+          "clock": "02:56",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0083",
+        "sequenceKey": "2-9-2",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "H27",
+          "clock": "02:13",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "PF",
+              "foulOn": "Hutchison,Justice",
+              "enforcement": "Accepted",
+              "enforceFrom": "H27",
+              "enforceTo": "H14",
+              "isPlayNull": true,
+              "isFirstDown": false
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 21,
+          "spot": "H14",
+          "clock": "02:13",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0084",
+        "sequenceKey": "2-9-3",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 21,
+          "spot": "H14",
+          "clock": "02:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Ary,Amare",
+              "result": "COMP",
+              "targetSpot": "H14"
+            },
+            "receive": {
+              "receiver": "Ary,Amare",
+              "endSpot": "H22"
+            },
+            "tackle": {
+              "tackleA": "Scott,Sean"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 13,
+          "spot": "H22",
+          "clock": "02:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0085",
+        "sequenceKey": "2-9-4",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 13,
+          "spot": "H22",
+          "clock": "02:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": null,
+              "timeoutType": "Official",
+              "clock": "02:00",
+              "qtr": 2,
+              "instruction": "Timeout Other, clock 02:00."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 13,
+          "spot": "H22",
+          "clock": "02:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0086",
+        "sequenceKey": "2-9-5",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 13,
+          "spot": "H22",
+          "clock": "01:52",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "COMP",
+              "targetSpot": "H34"
+            },
+            "receive": {
+              "receiver": "Baker II,Malik",
+              "endSpot": "H35"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "01:52",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0087",
+        "sequenceKey": "2-9-6",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "01:46",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Mosley,Adrien",
+              "result": "INC",
+              "targetSpot": "H40"
+            },
+            "breakup": {
+              "defender": "Boggs,Braden"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "01:46",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0088",
+        "sequenceKey": "2-9-7",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "01:40",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Cox,Devin",
+              "endSpot": "H47"
+            },
+            "tackle": {
+              "tackleA": "Allen,Eugene",
+              "tackleB": "Penn,Brandon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "rush",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "01:40",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0089",
+        "sequenceKey": "2-9-8",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H47",
+          "clock": "01:03",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Smith,Marquevion",
+              "result": "COMP",
+              "targetSpot": "H49"
+            },
+            "receive": {
+              "receiver": "Smith,Marquevion",
+              "endSpot": "H49"
+            },
+            "tackle": {
+              "tackleA": "Jefferson,Shary"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "H49",
+          "clock": "01:03",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0090",
+        "sequenceKey": "2-9-9",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 8,
+          "spot": "H49",
+          "clock": "00:45",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Ary,Amare",
+              "result": "INC",
+              "targetSpot": "H46"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 8,
+          "spot": "H49",
+          "clock": "00:45",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0091",
+        "sequenceKey": "2-9-10",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 8,
+          "spot": "H49",
+          "clock": "00:38",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "COMP",
+              "targetSpot": "V42"
+            },
+            "receive": {
+              "receiver": "Baker II,Malik",
+              "endSpot": "V42"
+            },
+            "tackle": {
+              "tackleA": "Ofosu,Elia"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V42",
+          "clock": "00:38",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0092",
+        "sequenceKey": "2-9-11",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V42",
+          "clock": "00:31",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": "H",
+              "timeoutType": "Team",
+              "clock": "00:31",
+              "qtr": 2,
+              "instruction": "Timeout West Virginia St."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V42",
+          "clock": "00:31",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0093",
+        "sequenceKey": "2-9-12",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "V42",
+          "clock": "00:13",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Jones,Javian",
+              "result": "COMP",
+              "targetSpot": "V34"
+            },
+            "receive": {
+              "receiver": "Jones,Javian",
+              "endSpot": "V34"
+            },
+            "tackle": {
+              "tackleA": "Penn,Brandon"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 2,
+          "spot": "V34",
+          "clock": "00:13",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0094",
+        "sequenceKey": "2-9-13",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 2,
+          "spot": "V34",
+          "clock": "00:13",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "result": "INC",
+              "targetSpot": "V34"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 2,
+          "spot": "V34",
+          "clock": "00:13",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0095",
+        "sequenceKey": "2-9-14",
+        "context": {
+          "hasBall": "H",
+          "down": 3,
+          "toGo": 2,
+          "spot": "V34",
+          "clock": "00:06",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Baker II,Malik",
+              "result": "COMP",
+              "targetSpot": "V09"
+            },
+            "receive": {
+              "receiver": "Baker II,Malik",
+              "endSpot": "V09"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "converted",
+          "isFourthDown": "false",
+          "isFirstDown": "pass",
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 9,
+          "spot": "V09",
+          "clock": "00:06",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0096",
+        "sequenceKey": "2-9-15",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 9,
+          "spot": "V09",
+          "clock": "00:02",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "penalty": {
+              "code": "PI",
+              "foulOn": "Blanding,Kaevon",
+              "enforcement": "Accepted",
+              "enforceFrom": "V09",
+              "enforceTo": "V02",
+              "isPlayNull": true,
+              "isFirstDown": true
+            },
+            "pass": {
+              "passer": "Jackson,Kaleb",
+              "target": "Jones,Javian",
+              "result": "INC",
+              "targetSpot": "V00"
+            },
+            "pressure": {
+              "rusher": "Grimball,Jamar"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": "penalty",
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 2,
+          "spot": "V02",
+          "clock": "00:02",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0097",
+        "sequenceKey": "2-9-16",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 2,
+          "spot": "V02",
+          "clock": "00:02",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "timeout",
+              "team": "V",
+              "timeoutType": "Team",
+              "clock": "00:02",
+              "qtr": 2,
+              "instruction": "Timeout Glenville St."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 2,
+          "spot": "V02",
+          "clock": "00:02",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0098",
+        "sequenceKey": "2-9-17",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 2,
+          "spot": "V02",
+          "clock": "00:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "rush": {
+              "rusher": "Dailey,Joe",
+              "endSpot": "V01"
+            },
+            "tackle": {
+              "tackleA": "Scott,Sean"
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 1,
+          "spot": "V01",
+          "clock": "00:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0099",
+        "sequenceKey": "2-9-18",
+        "context": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 1,
+          "spot": "V01",
+          "clock": "00:00",
+          "qtr": 2
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "halfEnd",
+              "clock": "00:00",
+              "qtr": 2,
+              "instruction": "End of half."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": true
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 2,
+          "toGo": 1,
+          "spot": "V01",
+          "clock": "00:00",
+          "qtr": 2
+        }
+      },
+      {
+        "playId": "plays-sample-0100",
+        "sequenceKey": "3-0-1",
+        "context": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": null,
+          "qtr": 3
+        },
+        "events": [
+          {
+            "gameControl": {
+              "type": "comment",
+              "text": "GSU will receive; WVS will defend East end-zone."
+            }
+          },
+          {
+            "gameControl": {
+              "type": "quarterAdvance",
+              "clock": "15:00",
+              "qtr": 3,
+              "instruction": "Start of 3rd quarter, clock 15:00."
+            }
+          }
+        ],
+        "generated": {
+          "isThirdDown": "false",
+          "isFourthDown": "false",
+          "isFirstDown": null,
+          "isGoalToGo": false
+        },
+        "score": {
+          "isScoringPlay": false,
+          "homeScore": 14,
+          "awayScore": 7,
+          "teamScored": null,
+          "pointsAdded": 0
+        },
+        "newContext": {
+          "hasBall": "H",
+          "down": 1,
+          "toGo": 10,
+          "spot": "H35",
+          "clock": "15:00",
+          "qtr": 3
+        }
+      }
+    ]
+  }
+}

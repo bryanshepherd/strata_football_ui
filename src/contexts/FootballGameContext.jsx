@@ -1,18 +1,20 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import DownDistanceCalculator, { 
-  calculateNextDownDistance, 
-  applyPenaltyToDownDistance, 
-  shouldEndDrive, 
-  promptForGameTime 
+import DownDistanceCalculator, {
+  calculateNextDownDistance,
+  applyPenaltyToDownDistance,
+  shouldEndDrive,
+  promptForGameTime
 } from '../utils/DownDistanceCalculator';
 import { StandardizedAPIClient, DataTransformer } from '../utils/apiDataContract';
 import { apiGet, apiPost, footballAPI, getApiErrorMessage } from '../utils/apiClient';
-import { 
-  shouldStartNewDrive, 
-  shouldEndDrive as driveRulesShouldEndDrive, 
+import {
+  shouldStartNewDrive,
+  shouldEndDrive as driveRulesShouldEndDrive,
   analyzeDriveTransition,
-  calculateDriveStats 
+  calculateDriveStats
 } from '../utils/driveRules';
+import { analyzePenalties, applySuggestions } from '../utils/penaltyRules';
+import { SCORING_STRICTNESS } from '../config/ScoringPolicy';
 import debug from '../utils/debug';
 
 const FootballGameContext = createContext();
@@ -31,41 +33,41 @@ function reducer(state, action) {
     case 'FETCH_START':
       return { ...state, isSubmitting: true, error: null };
     case 'FETCH_SUCCESS':
-      return { 
-        ...state, 
-        gameData: action.payload, 
-        isSubmitting: false, 
+      return {
+        ...state,
+        gameData: action.payload,
+        isSubmitting: false,
         error: null,
         apiStatus: 'connected'
       };
     case 'FETCH_ERROR':
-      return { 
-        ...state, 
-        error: action.payload, 
+      return {
+        ...state,
+        error: action.payload,
         isSubmitting: false,
         apiStatus: 'error'
       };
     case 'SUBMIT_START':
       return { ...state, isSubmitting: true, error: null };
     case 'SUBMIT_SUCCESS':
-      return { 
-        ...state, 
-        gameData: action.payload, 
-        isSubmitting: false, 
+      return {
+        ...state,
+        gameData: action.payload,
+        isSubmitting: false,
         error: null,
         apiStatus: 'connected'
       };
     case 'SUBMIT_ERROR':
-      return { 
-        ...state, 
-        error: action.payload, 
+      return {
+        ...state,
+        error: action.payload,
         isSubmitting: false,
         apiStatus: 'error'
       };
     case 'SET_GAME_DATA':
-      return { 
-        ...state, 
-        gameData: action.payload, 
+      return {
+        ...state,
+        gameData: action.payload,
         error: null,
         apiStatus: 'connected'
       };
@@ -104,19 +106,19 @@ export function FootballGameProvider({ children }) {
   const fetchGameState = async (gameId) => {
     try {
       debug.log("🔄 [DATA CONTRACT] Loading game state for:", gameId);
-      
+
       // Use standardized client
       const gameState = await StandardizedAPIClient.loadGameState(gameId);
-      
+
       debug.log("✅ [DATA CONTRACT] Standardized game state:", gameState);
-      
+
       // Load rosters separately
       debug.log("🔄 [ROSTERS] Loading rosters for gameId:", gameId);
       let rostersData = { home: [], visitor: [] };
-      
+
       try {
         const rosterResult = await apiGet(`api/get_rosters.php?gameId=${gameId}`);
-        
+
         if (rosterResult.success && rosterResult.rosters) {
           rostersData = rosterResult.rosters;
           debug.log("✅ [ROSTERS] Loaded rosters:", {
@@ -129,9 +131,9 @@ export function FootballGameProvider({ children }) {
       } catch (rosterError) {
         debug.error("❌ [ROSTERS] Error loading rosters:", getApiErrorMessage(rosterError));
       }
-      
+
       const apiData = { gameState, success: true };
-      
+
       // Transform API data to match component expectations
       const transformedData = {
         game_info: {
@@ -146,6 +148,14 @@ export function FootballGameProvider({ children }) {
           visitor_team_id: gameState.gameInfo?.visitor_team_id || 2,
           game_date: gameState.gameInfo?.game_date || new Date().toISOString(),
           venue: gameState.gameInfo?.venue || 'Stadium'
+        },
+        // Multi-user lock information
+        lock_info: {
+          is_locked: Boolean(gameState.gameInfo?.locked_by),
+          locked_by: gameState.gameInfo?.locked_by || null,
+          locked_at: gameState.gameInfo?.locked_at || null,
+          locked_by_user: gameState.gameInfo?.locked_by_user || null,
+          can_edit: gameState.gameInfo?.can_edit !== false // Default to true if not specified
         },
         live_state: {
           game_status: gameState.status || 'in_progress',
@@ -175,17 +185,34 @@ export function FootballGameProvider({ children }) {
           visitor_timeouts: gameState.timeouts?.V || 3,
           play_clock: 40
         },
-        recent_plays: gameState.playLog || [],
+        recent_plays: (() => {
+          const apiPlays =
+            Array.isArray(gameState.recent_plays) ? gameState.recent_plays :
+            Array.isArray(gameState.plays)        ? gameState.plays        :
+            Array.isArray(gameState.playLog)      ? gameState.playLog      :
+            [];
+
+          // Map to UI using existing mapper (mapper handles the transformation)
+          const mapped = apiPlays.filter(Boolean);
+
+          // Dedupe by PlayID/PlayNumber, keep canonical order in state
+          const pid = (p) => p.playId ?? p.PlayID;
+          const pno = (p) => p.playNumber ?? p.PlayNumber ?? p.play_number ?? pid(p);
+          const byId = new Map(mapped.map(p => [pid(p), p]));
+          const playsAsc = [...byId.values()].sort((a,b) => pno(a) - pno(b));
+
+          return playsAsc;
+        })(),
         team_stats: gameState.stats?.teams || { home: {}, visitor: {} },
         player_stats: gameState.stats?.players || {},
         stats: gameState.stats || { teams: { home: {}, visitor: {} } },
         rosters: rostersData
       };
-      
+
       debug.log('API Response:', apiData);
       debug.log('Transformed Data:', transformedData);
       debug.log('Transformed live_state:', transformedData.live_state);
-      
+
       dispatch({ type: 'FETCH_SUCCESS', payload: transformedData });
       return transformedData;
     } catch (error) {
@@ -197,6 +224,14 @@ export function FootballGameProvider({ children }) {
   };
 
   const submitEvent = async (eventData) => {
+    // Multi-user safety check: prevent submission if user cannot edit
+    if (state.gameData?.lock_info?.can_edit === false) {
+      const errorMsg = `Cannot submit: Game is locked by ${state.gameData.lock_info.locked_by_user || 'another user'}`;
+      debug.error('[LOCK] Submission blocked:', errorMsg);
+      dispatch({ type: 'SET_ERROR', payload: errorMsg });
+      return { success: false, error: errorMsg };
+    }
+
     // [CTX IN] Enhanced entry logging with comprehensive state
     debug.log('[CTX IN] submitEvent entry - comprehensive state:', {
       play_type: eventData.play_type,
@@ -225,7 +260,7 @@ export function FootballGameProvider({ children }) {
     try {
       // Get current game state for down-distance calculation
       const currentGameState = state.gameData?.live_state || {};
-      
+
       // Calculate next down-distance if this is a play (not game control)
       let enhancedEventData = { ...eventData };
       // Hoist calculation outputs so we can safely reference them later
@@ -241,11 +276,11 @@ export function FootballGameProvider({ children }) {
       idFields.forEach((k) => {
         if (enhancedEventData[k] === '') enhancedEventData[k] = null;
       });
-      
+
       // DEBUG: Track end_yard_line field through enhancement process
       debug.log('🔍 [FIELD TRACKING] Original eventData end_yard_line:', eventData.end_yard_line);
       debug.log('🔍 [FIELD TRACKING] Initial enhancedEventData end_yard_line:', enhancedEventData.end_yard_line);
-      
+
       if (eventData.play_type && eventData.play_type !== 'GAME_CONTROL') {
         // Map possession to letter form for calculator
         const possessionLetter = (currentGameState.possession || 'home') === 'home' ? 'H' : 'V';
@@ -277,11 +312,11 @@ export function FootballGameProvider({ children }) {
 
         debug.log('🔍 [FINAL YARD LINE] Looking for:', {
           finalYardLine: eventData.finalYardLine,
-          endYardLine: eventData.endYardLine, 
+          endYardLine: eventData.endYardLine,
           end_yard_line: eventData.end_yard_line,
           resolved: eventData.finalYardLine || eventData.endYardLine || eventData.end_yard_line
         });
-        
+
         debug.log('🔍 [KICKOFF CHECK] Is this a kickoff?', {
           is_kickoff: eventData.is_kickoff,
           play_type: eventData.play_type,
@@ -291,7 +326,7 @@ export function FootballGameProvider({ children }) {
 
   // Calculate post-play state using new algorithm
         postPlayState = DownDistanceCalculator.calculatePostPlayState(
-          playDataForCalculation, 
+          playDataForCalculation,
           gameStateForCalculation
         );
 
@@ -311,27 +346,27 @@ export function FootballGameProvider({ children }) {
           postPlayState.postYardLine,
           gameStateForCalculation.Possession
         );
-        
+
         // Add calculated values to event data
         enhancedEventData = {
           ...enhancedEventData,
           // Current game state for starting position
           yard_line: currentGameState.yard_line || 'V28',  // Starting yard line position
-          
+
           // Post-play state for database storage
           post_down: postPlayState?.postDown ?? null,
           post_distance: postPlayState?.postDistance ?? null,
           post_yard_line: postPlayState?.postYardLine ?? null,
           line_to_gain: postPlayState.lineToGain,
-          
+
           // Calculated yards using possession-relative algorithm
           yards: netYards,
           net_yards: netYards,
-          
+
           // Drive management
           drive_ends: postPlayState.driveEnds || false,
           drive_result: postPlayState.driveResult || null,
-          
+
           // Game situation flags
           is_goal_to_go: postPlayState.isGoalToGo || false,
           is_red_zone: postPlayState.isRedZone || false
@@ -359,7 +394,7 @@ export function FootballGameProvider({ children }) {
         // Analyze drive transition using standardized rules
         const driveAnalysis = analyzeDriveTransition(enhancedEventData, currentGameState);
         debug.log('[DRIVE ANALYSIS]', driveAnalysis);
-        
+
         // Override drive management with standardized rules if different
         if (driveAnalysis.shouldEndCurrent !== postPlayState.driveEnds) {
           debug.log('[DRIVE RULES] Override drive end decision:', {
@@ -388,7 +423,7 @@ export function FootballGameProvider({ children }) {
       }
 
       // Add timestamp, session info, and possession data; ensure snake_case keys
-      const enrichedEvent = {
+      let enrichedEvent = {
         ...enhancedEventData,
         post_yard_line: enhancedEventData.post_yard_line || (postPlayState ? postPlayState.postYardLine : null),
         is_kickoff: !!(
@@ -415,7 +450,7 @@ export function FootballGameProvider({ children }) {
         throw new Error('Kickoff plays require end_yard_line (tackle spot)');
       }
 
-      // Temporary hard guard: Additional protection for kickoffs 
+      // Temporary hard guard: Additional protection for kickoffs
       if (enrichedEvent?.play_type === 'kick' && enrichedEvent?.sub_type === 'kickoff') {
         if (!enrichedEvent.end_yard_line) {
           debug.error('❌ [CTX GUARD TEMP] Temporary kickoff guard triggered - missing end_yard_line');
@@ -464,23 +499,46 @@ export function FootballGameProvider({ children }) {
       }
 
       debug.log("🔄 [DATA CONTRACT] Original play data:", enrichedEvent);
-      
+
+      // Handle penalty analysis and resolution if penalties are present
+      if (enrichedEvent.penalties && enrichedEvent.penalties.length > 0) {
+        const analysis = analyzePenalties(enrichedEvent, state.gameData?.live_state || {});
+
+        // In assisted mode, apply suggestions automatically unless user overrode
+        if (SCORING_STRICTNESS === 'assisted' && !enrichedEvent.userDidNotOverride) {
+          enrichedEvent = applySuggestions(enrichedEvent, analysis, state.gameData?.live_state || {});
+        }
+
+        // Attach penalty resolution metadata
+        enrichedEvent.penaltyResolution = {
+          mode: SCORING_STRICTNESS,
+          analysis,
+          userOverride: enrichedEvent.userOverride || { applied: false }
+        };
+
+        debug.log("⚠️ [PENALTY] Penalty analysis complete:", {
+          kind: analysis.kind,
+          messages: analysis.messages,
+          suggested: analysis.suggested
+        });
+      }
+
       // Ensure FE→BE transform is applied on submit
       const bePayload = DataTransformer.frontendToBackend(enrichedEvent);
       const result = await StandardizedAPIClient.submitPlay(
-        state.gameData?.game_info?.game_id || 1000, 
+        state.gameData?.game_info?.game_id || 1000,
         bePayload
       );
-      
+
       debug.log("✅ [DATA CONTRACT] Standardized result:", result);
-      
+
       // Notify listeners that a play was submitted successfully
       try {
         document.dispatchEvent(new CustomEvent('playSubmitted', { detail: { playData: result?.play || enrichedEvent } }));
       } catch (err) {
         debug.warn('[events] playSubmitted dispatch failed:', err);
       }
-      
+
       // Always refetch game state after submit
       try {
         await fetchGameState(state.gameData?.game_info?.game_id || getCurrentGameId());
@@ -491,7 +549,7 @@ export function FootballGameProvider({ children }) {
       // Track the last play for drive status bar
       if (eventData.play_type && eventData.play_type !== 'GAME_CONTROL') {
         dispatch({ type: 'SET_LAST_PLAY', payload: enhancedEventData });
-        
+
         // Update drive stats
         updateDriveStats(enhancedEventData);
       }
@@ -543,7 +601,7 @@ export function FootballGameProvider({ children }) {
       if (result.updated_game_state) {
         dispatch({ type: 'SET_GAME_DATA', payload: result.updated_game_state });
       }
-      
+
       return result;
     } catch (error) {
       debug.error('Error updating clock:', getApiErrorMessage(error));
@@ -555,18 +613,18 @@ export function FootballGameProvider({ children }) {
   const initializeRosters = async (gameId) => {
     try {
       dispatch({ type: 'SET_SUBMITTING', payload: true });
-      
+
       const result = await apiPost('api/initialize_rosters.php', {
         game_id: gameId || state.gameData?.game_info?.game_id || 1000
       });
-      
+
       // Refresh game state to get the updated rosters
       if (gameId || state.gameData?.game_info?.game_id) {
         await fetchGameState(gameId || state.gameData.game_info.game_id);
       }
-      
+
       dispatch({ type: 'SET_SUBMITTING', payload: false });
-      
+
       return result;
     } catch (error) {
       debug.error('Error initializing rosters:', getApiErrorMessage(error));
@@ -594,9 +652,9 @@ export function FootballGameProvider({ children }) {
       startTime: state.gameData?.live_state?.time_remaining || '15:00',
       possessionTeam: team
     };
-    
+
     dispatch({ type: 'SET_CURRENT_DRIVE', payload: newDrive });
-    
+
     return submitEvent({
       event_type: 'NEW_DRIVE',
       team: team,
@@ -678,7 +736,7 @@ export function FootballGameProvider({ children }) {
         // Get game ID from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const gameId = urlParams.get('game_id') || '999'; // Default to '999' if no game_id in URL
-        
+
         // Load game state from database API
         await fetchGameState(gameId);
       } catch (error) {
@@ -686,7 +744,7 @@ export function FootballGameProvider({ children }) {
         dispatch({ type: 'SET_ERROR', payload: 'Failed to load game data' });
       }
     };
-    
+
     if (!state.gameData) {
       loadGameData();
     }
@@ -696,7 +754,7 @@ export function FootballGameProvider({ children }) {
   const checkApiHealth = async () => {
     try {
       dispatch({ type: 'SET_API_STATUS', payload: 'connecting' });
-      
+
       await apiGet('/strata_football/health_check.php');
       dispatch({ type: 'SET_API_STATUS', payload: 'connected' });
       return true;
@@ -726,6 +784,7 @@ export function FootballGameProvider({ children }) {
     apiStatus: state.apiStatus, // Include API status in context
     currentGameId: getCurrentGameId(),  // Get game ID from URL
     isLoading: state.isSubmitting,  // Map isSubmitting to isLoading for components
+    canEdit: state.gameData?.lock_info?.can_edit !== false, // Multi-user safety flag
     fetchGameState,
     refetchGameState: () => fetchGameState(getCurrentGameId()), // Add refetch helper
     loadGameState: () => fetchGameState(getCurrentGameId()), // Add loadGameState helper

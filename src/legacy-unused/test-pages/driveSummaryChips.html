@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DriveSummaryChips Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        // Mock the drive model data with new Start Time and TOP fields
+        const mockDriveModel = {
+            possessionLabel: 'Home',
+            driveNumber: 2,
+            startSpot: 'V23',
+            yardsGained: 15,
+            howGained: 'Kickoff',
+            startTimeText: '15:00',  // Drive started at 15:00
+            topElapsedText: '2:35',  // 2:35 has elapsed (TOP)
+            playsRush: 3,
+            playsPass: 1,
+            totalPlays: 4,
+            penCount: 2,
+            penYards: -10
+        };
+
+        function fmtMMSS(totalSeconds) {
+            const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+            return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+        }
+
+        function DriveSummaryChips({ model, loading }) {
+            React.useEffect(() => {
+                console.log('[DriveSummaryChips] model=', model);
+            }, [model]);
+
+            if (loading || !model) return null;
+
+            return (
+                <div className="flex gap-2 flex-wrap items-center p-3 bg-slate-800 rounded-lg text-base md:text-lg">
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Possession: {model.possessionLabel} • Drive {model.driveNumber ?? '-'}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Start: {model.startSpot || '-'}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Yards: {typeof model.yardsGained === 'number' ? model.yardsGained : 0}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Start Time: {model.startTimeText ?? '15:00'}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        TOP: {model.topElapsedText ?? '0:00'}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        How Gained: {model.howGained || '-'}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Plays: Rush - {model.playsRush ?? 0} | Pass - {model.playsPass ?? 0} | Total - {model.totalPlays ?? 0}
+                    </span>
+                    <span className="bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium whitespace-nowrap" style={{padding: '0.25rem 0.6rem', borderRadius: '10px'}}>
+                        Penalties: {model.penCount ?? 0} for {model.penYards ?? 0} yards
+                    </span>
+                </div>
+            );
+        }
+
+        function TestApp() {
+            return (
+                <div>
+                    <h1 className="text-2xl font-bold mb-4">DriveSummaryChips Test</h1>
+                    
+                    <h2 className="text-lg font-semibold mb-2">Expected Output (as chips):</h2>
+                    <div className="bg-gray-100 p-3 mb-4 rounded">
+                        Possession: Home • Drive 2 | Start: V23 | Yards: 15 | Start Time: 15:00 | TOP: 2:35 | How Gained: Kickoff | Plays: Rush - 3 | Pass - 1 | Total - 4 | Penalties: 2 for -10 yards
+                    </div>
+                    
+                    <h2 className="text-lg font-semibold mb-2">Actual Output:</h2>
+                    <DriveSummaryChips model={mockDriveModel} />
+                    
+                    <div className="debug mt-4">
+                        <h3 className="font-semibold">Debug Data:</h3>
+                        <pre className="text-sm">{JSON.stringify(mockDriveModel, null, 2)}</pre>
+                    </div>
+                    
+                    <div className="mt-4 text-sm text-gray-600">
+                        <p>Check browser console for: <code>[DriveSummaryChips] model=</code></p>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TestApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

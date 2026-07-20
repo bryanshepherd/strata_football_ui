@@ -1,0 +1,74 @@
+# Submit Flow Wiring Checklist - Executable Commands
+
+# 1. Test API Connectivity
+curl -X GET "http://localhost/strata_football/api/get_games.php" | jq .
+
+# 2. Test Lock Status Endpoint (will fail - endpoint missing)
+curl -X GET "http://localhost/strata_football/api/football/get_lock_status.php?game_id=1000" | jq .
+
+# 3. Test Play Submission Payload Structure
+cat > test_payload.json << 'EOF'
+{
+  "game_id": 1000,
+  "play_data": {
+    "play_type": "rush",
+    "yard_line": "H25",
+    "end_yard_line": "H28",
+    "post_down": 2,
+    "post_distance": 7,
+    "possession": "home"
+  }
+}
+EOF
+
+# 4. Test Submit Play Endpoint
+curl -X POST "http://localhost/strata_football/api/submit_play_enhanced.php" \
+  -H "Content-Type: application/json" \
+  -d @test_payload.json | jq .
+
+# 5. Verify Yardline Normalization (should normalize to H25, H28)
+echo '{"game_id":1000,"play_data":{"yard_line":"H025","end_yard_line":"H028"}}' | \
+curl -X POST "http://localhost/strata_football/api/submit_play_enhanced.php" \
+  -H "Content-Type: application/json" -d @- | jq .
+
+# 6. Test Kickoff Validation (should fail without end_yard_line)
+echo '{"game_id":1000,"play_data":{"play_type":"kick","sub_type":"kickoff","is_kickoff":true}}' | \
+curl -X POST "http://localhost/strata_football/api/submit_play_enhanced.php" \
+  -H "Content-Type: application/json" -d @- | jq .
+
+# 7. Check Database for PostDown/PostDistance writes
+mysql -u root -e "USE strata_football; SELECT PlayID, PostDown, PostDistance, PostYardLinePosition FROM plays ORDER BY PlayID DESC LIMIT 5;"
+
+# 8. Check Game State Updates
+mysql -u root -e "USE strata_football; SELECT GameID, CurrentDown, YardsToGo, YardLinePosition FROM game_state WHERE GameID = 1000;"
+
+# 9. Verify Frontend API Client URL Normalization
+grep -n "normalizeUrl" /Users/bryanshepherd/strata-football-ui-new/src/utils/apiClient.js
+
+# 10. Check Frontend DownDistanceCalculator Usage
+grep -n "calculateDownDistance" /Users/bryanshepherd/strata-football-ui-new/src/contexts/FootballGameContext.jsx
+
+# 11. Test Lock Status Component Mount (check browser console)
+echo "Open browser dev console and navigate to /game/1000 to check LockStatus component"
+
+# 12. Verify Yardline Normalization Frontend Helper
+cd /Users/bryanshepherd/strata-football-ui-new && npm test -- --testPathPattern=yardline
+
+# 13. Test API Response Format Consistency  
+curl -X GET "http://localhost/strata_football/api/get_rosters.php?game_id=1000" | jq 'keys'
+
+# 14. Check Error Logs for API Issues
+tail -f /Applications/XAMPP/xamppfiles/logs/php_error_log | grep -i "submit_play"
+
+# 15. Test Vite Proxy Configuration
+curl -X GET "http://localhost:5173/strata_football/api/get_games.php" | jq .
+
+# Results Expected:
+# ✅ Commands 1,4,5,7,8,9,10,12,13,15 should work
+# ❌ Command 2 will fail (404 - endpoint missing)  
+# ❌ Command 6 should fail with validation error
+# 📊 Commands 11,14 require manual observation
+# 🔧 Apply minipatches to fix failing commands
+
+# Clean up test files
+rm -f test_payload.json

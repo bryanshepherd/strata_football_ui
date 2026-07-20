@@ -1,94 +1,136 @@
-import React, { useEffect, useState } from 'react';
-import debug from '../utils/debug';
+// src/components/DriveStatusBar.jsx
+import React from 'react';
 import PropTypes from 'prop-types';
 import { toPossessionRelative } from '../utils/DownDistanceCalculator';
-import { useGameState } from '../contexts/FootballGameContext';
 
-export default function DriveStatusBar({ gameId: propGameId, currentDriveId: propDriveId, lastPlayNumber: propLastPlayNumber }) {
-  const { gameState } = useGameState();
-  const currentDrive = gameState?.current_drive || null;
-  const gameId = propGameId || gameState?.game_info?.game_id;
-  const currentDriveId = propDriveId || gameState?.current_drive?.DriveID;
-  const lastPlayNumber = propLastPlayNumber || gameState?.recent_plays?.[0]?.OverallPlayNum;
+export default function DriveStatusBar({ model }) {
+  if (!model) return null;
+  
+  const pct = (pos) => Math.max(0, Math.min(100, toPossessionRelative(pos, model.offense)));
 
-  const [driveStats, setDriveStats] = useState(null);
-  const [playerStats, setPlayerStats] = useState([]);
-debug.log("DriveStatusBar rendering...");
-  useEffect(() => {
-    if (!currentDriveId) {
-      setDriveStats(null);
-      return;
-    }
+  const startPct = pct(model.start);
+  const currPct  = pct(model.current);
+  const left     = Math.min(startPct, currPct);
+  const width    = Math.abs(currPct - startPct);
 
-    fetch(`/php/load_drive_stats.php?drive_id=${currentDriveId}`)
-      .then(res => res.json())
-      .then(data => setDriveStats(data))
-      .catch(err => {
-        console.error('Drive stats error:', err);
-        setDriveStats(null);
-      });
-  }, [currentDriveId]);
-
-  useEffect(() => {
-    if (!lastPlayNumber || !gameId) {
-      setPlayerStats([]);
-      return;
-    }
-
-    fetch(`/php/load_play_participants.php?game_id=${gameId}&play_number=${lastPlayNumber}`)
-      .then(res => res.json())
-      .then(data => setPlayerStats(Array.isArray(data) ? data : []))
-      .catch(err => {
-        console.error('Player stats error:', err);
-        setPlayerStats([]);
-      });
-  }, [lastPlayNumber, gameId]);
-
-  if (!driveStats) {
-    debug.log("No driveStats");
-    return (
-      <div style={{ backgroundColor: 'orange', color: 'black', padding: '10px' }}>
-        No drive data available.
-      </div>
-    );
-  }
-
-  const {
-    StartYardLine = null,
-    EndYardLine = null,
-    StartTime = null,
-    EndTime = null,
-    PlayCount = 0
-  } = driveStats;
-
-  const yards = toPossessionRelative(StartYardLine, EndYardLine);
-  const playCount = PlayCount || 0;
+  const formatBreakdown = (breakdown) => {
+    if (!breakdown) return '';
+    const { rush, pass, pen, fdRush, fdPass, fdPen } = breakdown;
+    const parts = [];
+    if (rush !== 0 || fdRush > 0) parts.push(`R:${rush >= 0 ? '+' : ''}${rush} (${fdRush})`);
+    if (pass !== 0 || fdPass > 0) parts.push(`P:${pass >= 0 ? '+' : ''}${pass} (${fdPass})`);
+    if (pen !== 0 || fdPen > 0) parts.push(`⚑:${pen >= 0 ? '+' : ''}${pen} (${fdPen})`);
+    return parts.join(' · ');
+  };
 
   return (
-    <div className="bg-gray-100 border-t border-b border-gray-300 py-2 px-4 text-sm flex justify-between items-center">
-      <div className="font-semibold">
-        Drive Summary: {yards} yards on {playCount} plays
-        {StartTime && <span className="ml-3 text-gray-600">Start: {StartTime}</span>}
-        {EndTime && <span className="ml-2 text-gray-600">End: {EndTime}</span>}
-      </div>
-      <div className="text-right">
-        <div className="font-semibold mb-1">Players in Last Play:</div>
-        {playerStats.length === 0 ? (
-          <div className="text-gray-500">None</div>
-        ) : (
-          playerStats.map((p, i) => (
-            <div key={i} className="text-xs">
-              #{p.Jersey} {p.Name} — {p.StatLine}
-            </div>
-          ))
+    <div className="bg-slate-800 rounded-lg p-3 my-2 font-sans">
+      <div className="flex gap-2 mb-2 flex-wrap">
+        <span className="bg-slate-700 text-slate-200 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+          {model.offense === 'H' ? 'Home' : 'Visitor'}
+        </span>
+        {model.number != null && (
+          <span className="bg-slate-700 text-slate-200 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+            Drive {model.number}
+          </span>
         )}
+        {(model.down && model.distance) ? (
+          <span className="bg-slate-700 text-slate-200 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+            {model.down}&{model.distance}
+          </span>
+        ) : (
+          <span className="bg-amber-500 text-slate-900 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+            D&D n/a
+          </span>
+        )}
+        <span className="bg-slate-700 text-slate-200 px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+          {model.start} → {model.current}
+        </span>
+        <span className="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium whitespace-nowrap">
+          {model.yardsSoFar >= 0 ? '+' : ''}{model.yardsSoFar} yds
+        </span>
+        {model.breakdown && (
+          <span 
+            className="bg-indigo-600 text-white px-2 py-1 rounded text-xs font-mono whitespace-nowrap"
+            title="Rush:yards(1stDowns) · Pass:yards(1stDowns) · Penalty:yards(1stDowns)"
+          >
+            {formatBreakdown(model.breakdown)}
+          </span>
+        )}
+      </div>
+
+      <div 
+        className="relative h-5 bg-gradient-to-r from-red-600 via-green-600 to-red-600 rounded-full border border-slate-600"
+        role="progressbar" 
+        aria-valuemin={0} 
+        aria-valuemax={100} 
+        aria-valuenow={currPct}
+      >
+        {/* Start marker */}
+        <div 
+          className="absolute -top-0.5 w-0.5 h-6 bg-amber-400 rounded-sm"
+          style={{ left: `${startPct}%`, transform: 'translateX(-1px)' }}
+          title={`Start ${model.start}`}
+        />
+        
+        {/* Progress fill */}
+        <div 
+          className="absolute top-0 h-full bg-blue-500 bg-opacity-60 rounded-full border border-blue-500"
+          style={{ left: `${left}%`, width: `${width}%` }}
+        />
+        
+        {/* Midfield marker */}
+        <div 
+          className="absolute top-0 w-0.5 h-full bg-slate-100"
+          style={{ left: '50%', transform: 'translateX(-1px)' }}
+          title="Midfield"
+        />
+        
+        {/* Event markers */}
+        {model.events.map((e, i) => (
+          <div
+            key={i}
+            className={`absolute top-0.5 w-1.5 h-4 rounded-sm ${
+              e.t === 'fd' ? 'bg-green-500' :
+              e.t === 'flag' ? 'bg-amber-500' :
+              'bg-red-500 border border-white'
+            }`}
+            style={{ left: `${e.atPct}%`, transform: 'translateX(-3px)' }}
+            title={`${e.t} at ${e.atPct.toFixed(0)}%`}
+          />
+        ))}
+        
+        {/* Ball position */}
+        <div 
+          className="absolute -top-0.5 w-3 h-3 bg-slate-100 border-2 border-slate-900 rounded-full z-10"
+          style={{ left: `${currPct}%`, transform: 'translateX(-6px)' }}
+          title={`Ball on ${model.current}`}
+        />
       </div>
     </div>
   );
 }
 
 DriveStatusBar.propTypes = {
-  gameId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-  currentDriveId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-  lastPlayNumber: PropTypes.oneOfType([PropTypes.number, PropTypes.string])
+  model: PropTypes.shape({
+    offense: PropTypes.oneOf(['H', 'V']).isRequired,
+    number: PropTypes.number,
+    start: PropTypes.string.isRequired,
+    current: PropTypes.string.isRequired,
+    down: PropTypes.number,
+    distance: PropTypes.number,
+    yardsSoFar: PropTypes.number.isRequired,
+    events: PropTypes.arrayOf(PropTypes.shape({
+      t: PropTypes.oneOf(['fd', 'flag', 'score']).isRequired,
+      atPct: PropTypes.number.isRequired
+    })).isRequired,
+    breakdown: PropTypes.shape({
+      rush: PropTypes.number,
+      pass: PropTypes.number,
+      pen: PropTypes.number,
+      fdRush: PropTypes.number,
+      fdPass: PropTypes.number,
+      fdPen: PropTypes.number
+    })
+  })
 };

@@ -30,6 +30,14 @@ const initialState = {
       game_date: null,
       venue: ''
     },
+    // Multi-user safety lock information
+    lock_info: {
+      is_locked: false,
+      locked_by: null,
+      locked_at: null,
+      locked_by_user: null,
+      can_edit: true
+    },
     live_state: {
       game_status: 'pregame',
       quarter: 1,
@@ -42,7 +50,8 @@ const initialState = {
       visitor_score: 0,
       home_timeouts: 3,
       visitor_timeouts: 3,
-      play_clock: 40
+      play_clock: 40,
+      drive_number: 1
     },
     recent_plays: [],
     team_stats: {},
@@ -157,10 +166,11 @@ export const useGameState = () => {
     error: context.state.error,
     apiStatus: context.state.apiStatus,
     currentDrive: context.state.currentDrive,
+    canEdit: context.canEdit, // Multi-user safety flag
     
     // Actions
     loadGameState: context.loadGameState,
-    submitPlay: context.submitPlay,
+    submitEvent: context.submitEvent, // Enhanced with drive rules
     updateGameClock: context.updateGameClock,
     deletePlay: context.deletePlay,
     insertPlay: context.insertPlay,
@@ -570,6 +580,210 @@ const executeTransaction = async () => {
 2. **Run Clock**: In-bounds tackle
 3. **Quarter End**: Clock stops at 0:00
 
+## Phase 2 Enhancements
+
+### Multi-User Safety Features
+
+#### Lock Status Integration
+Added to FootballGameContext state structure:
+```javascript
+lock_info: {
+  is_locked: Boolean(gameState.gameInfo?.locked_by),
+  locked_by: gameState.gameInfo?.locked_by || null,
+  locked_at: gameState.gameInfo?.locked_at || null,
+  locked_by_user: gameState.gameInfo?.locked_by_user || null,
+  can_edit: gameState.gameInfo?.can_edit !== false
+}
+```
+
+#### Submission Protection
+```javascript
+const submitEvent = async (eventData) => {
+  // Multi-user safety check
+  if (state.gameData?.lock_info?.can_edit === false) {
+    const errorMsg = `Cannot submit: Game is locked by ${state.gameData.lock_info.locked_by_user}`;
+    return { success: false, error: errorMsg };
+  }
+  
+  // Proceed with submission...
+};
+```
+
+#### Public Interface Updates
+Enhanced `useGameState` hook with lock awareness:
+```javascript
+export const useGameState = () => {
+  const context = useContext(FootballGameContext);
+  
+  return {
+    // Enhanced state
+    gameData: context.state.gameData,
+    canEdit: context.state.gameData?.lock_info?.can_edit !== false, // NEW
+    lockInfo: context.state.gameData?.lock_info, // NEW
+    
+    // Existing state
+    isSubmitting: context.state.isSubmitting,
+    error: context.state.error,
+    apiStatus: context.state.apiStatus,
+    currentDrive: context.state.currentDrive,
+    
+    // Actions remain unchanged
+    loadGameState: context.loadGameState,
+    submitEvent: context.submitEvent,
+    // ... other actions
+  };
+};
+```
+
+### Performance Optimizations
+
+#### Play Log Pagination
+**File**: `src/components/GameLog.jsx`  
+**Purpose**: Efficient rendering of large play logs
+
+```javascript
+const PLAYS_PER_PAGE = 25;
+const PERFORMANCE_THRESHOLD = 75;
+
+const playMetrics = useMemo(() => ({
+  totalPlays: recent_plays.length,
+  shouldPaginate: recent_plays.length > PERFORMANCE_THRESHOLD,
+  visiblePlays: recent_plays.slice(0, Math.min(visiblePlayCount, recent_plays.length)),
+  hasMorePlays: visiblePlayCount < recent_plays.length
+}), [recent_plays.length, visiblePlayCount]);
+```
+
+**Performance Rules**:
+- Games ≤75 plays: Show all plays
+- Games >75 plays: Paginate with 25 plays per page
+- Load more button shows remaining count
+- "Show All" option for complete view
+
+#### Component Memoization
+**File**: `src/components/PlayRow.jsx`  
+**Purpose**: Prevent unnecessary re-renders of individual plays
+
+```javascript
+export default React.memo(function PlayRow({ 
+  play, 
+  index, 
+  onEdit, 
+  onDelete, 
+  showEdit,
+  gameState 
+}) {
+  // Memoized rendering logic
+});
+```
+
+### Drive Rules Engine Integration
+
+#### Automatic Drive Transitions
+Enhanced `submitEvent` with drive awareness:
+```javascript
+const submitEvent = async (eventData) => {
+  // ... safety checks
+  
+  try {
+    const transformedData = DataTransformer.frontendToBackend(eventData);
+    
+    // Drive rules applied server-side
+    const response = await StandardizedAPIClient.submitPlay(gameId, transformedData);
+    
+    if (response.success) {
+      // Update with server-calculated drive state
+      dispatch({ type: 'UPDATE_LIVE_STATE', payload: response.gameState });
+      dispatch({ type: 'SET_CURRENT_DRIVE', payload: response.currentDrive });
+      
+      await loadGameState(); // Full refresh for consistency
+    }
+    
+    return response;
+  } catch (error) {
+    // ... error handling
+  }
+};
+```
+
+#### Drive State Management
+```javascript
+const initialState = {
+  // ... existing state
+  currentDrive: {
+    drive_number: null,
+    possession: null,
+    start_yard_line: null,
+    start_quarter: null,
+    start_time: null,
+    plays: [],
+    result: null // 'touchdown' | 'field_goal' | 'punt' | 'turnover' | 'safety'
+  }
+};
+```
+
+### Real-Time Lock Status Updates
+
+#### Lock Status Polling
+**File**: `src/components/LockStatus.jsx`  
+**Purpose**: Real-time awareness of concurrent users
+
+```javascript
+export default function LockStatus() {
+  const { gameState, currentGameId } = useGameState();
+  const [lockStatus, setLockStatus] = useState(null);
+  
+  useEffect(() => {
+    const pollLockStatus = async () => {
+      try {
+        const response = await StandardizedAPIClient.checkLockStatus(currentGameId);
+        if (response.success) {
+          setLockStatus(response.lockInfo);
+        }
+      } catch (error) {
+        console.error('Lock status check failed:', error);
+      }
+    };
+    
+    if (currentGameId) {
+      // Initial check
+      pollLockStatus();
+      
+      // Poll every 30 seconds
+      const interval = setInterval(pollLockStatus, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [currentGameId]);
+  
+  // Visual status indicators
+  const getStatusColor = () => {
+    if (!lockStatus?.is_locked) return 'text-green-600'; // Available
+    if (lockStatus.can_edit) return 'text-blue-600';     // Current user
+    return 'text-red-600';                               // Locked by other
+  };
+}
+```
+
+### Enhanced Error Handling
+
+#### Lock-Aware Error Messages
+```javascript
+const handleSubmissionError = (error) => {
+  if (error.message?.includes('locked')) {
+    return {
+      type: 'LOCK_ERROR',
+      message: `Game is locked by ${error.locked_by_user || 'another user'}`,
+      action: 'SHOW_LOCK_STATUS'
+    };
+  }
+  
+  return {
+    type: 'GENERAL_ERROR',
+    message: error.message,
+    action: 'RETRY'
+  };
+};
+```
+
 ## Performance Considerations
 
 ### Context Split Benefits
@@ -577,7 +791,13 @@ const executeTransaction = async () => {
 - **Render Optimization**: Components only re-render for relevant changes
 - **Memory Efficiency**: State split prevents large object updates
 
-### Potential Optimizations
-1. **Memoization**: Add React.memo to frequently rendered components
-2. **Selector Pattern**: Implement state selectors for derived data
-3. **Lazy Context**: Split rarely-changed data into separate context
+### Phase 2 Optimizations
+1. **Play Log Virtualization**: Pagination for games >75 plays
+2. **Memoized Components**: `React.memo` on PlayRow and other frequently rendered components
+3. **Lock Status Caching**: 30-second poll intervals reduce API load
+4. **Selective State Updates**: Granular context updates minimize re-renders
+
+### Memory Management
+1. **Bounded Play History**: Only recent plays kept in memory
+2. **Drive State Separation**: Current drive tracked separately from history
+3. **Lock Status Persistence**: Lock info cached to prevent redundant checks

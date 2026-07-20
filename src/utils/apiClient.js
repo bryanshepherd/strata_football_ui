@@ -5,7 +5,32 @@
  * debugging capabilities for all API calls.
  */
 
-import { debug } from './debug.js';
+import debug from './debug.js';
+
+/**
+ * API Base URL - points to XAMPP backend through Vite proxy
+ */
+const API_BASE = '/strata_football/api/';
+
+/**
+ * Normalize URL to ensure it uses the correct base path
+ * @param {string} url - Raw URL or endpoint
+ * @returns {string} - Normalized URL
+ */
+export function normalizeUrl(url) {
+  // If URL already starts with /strata_football or is absolute, use as-is
+  if (url.startsWith('/strata_football') || url.startsWith('http')) {
+    return url;
+  }
+  
+  // If URL starts with 'api/', strip it since we're adding the base
+  if (url.startsWith('api/')) {
+    return API_BASE + url.substring(4);
+  }
+  
+  // Otherwise, prepend the base
+  return API_BASE + url;
+}
 
 /**
  * Standardized fetch wrapper with consistent response handling
@@ -14,10 +39,11 @@ import { debug } from './debug.js';
  * @returns {Promise} - Normalized response data
  */
 export async function apiFetch(url, options = {}) {
-  debug.api('API Request:', { url, options });
+  const normalizedUrl = normalizeUrl(url);
+  debug.log('[API] Request:', { originalUrl: url, normalizedUrl, options });
   
   try {
-    const res = await fetch(url, {
+    const res = await fetch(normalizedUrl, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers
@@ -30,7 +56,7 @@ export async function apiFetch(url, options = {}) {
       ? await res.json() 
       : await res.text();
     
-    debug.api('API Response:', { url, status: res.status, body });
+    debug.log('[API] Response:', { originalUrl: url, normalizedUrl, status: res.status, body });
     
     // Normalize to a common shape
     if (typeof body === 'object' && body && 'success' in body) {
@@ -39,7 +65,9 @@ export async function apiFetch(url, options = {}) {
         error.apiResponse = body;
         throw error;
       }
-      return body.data ?? null;
+      // Return the full body for successful responses, not just body.data
+      // Many endpoints return data directly in the response body
+      return body.data ?? body;
     }
     
     // Fallback: wrap raw responses
@@ -55,7 +83,7 @@ export async function apiFetch(url, options = {}) {
     return body;
     
   } catch (error) {
-    debug.api('API Error:', { url, error: error.message });
+    debug.error('[API] Error:', { url, error: error.message });
     throw error;
   }
 }
@@ -152,6 +180,23 @@ export const footballAPI = {
     return apiGet('api/get_games.php');
   }
 };
+
+/**
+ * Stats API helpers
+ */
+export async function getTeamTotals(gameId){
+  const r = await fetch(`/strata_football/api/stats/get_team_totals.php?game_id=${gameId}`);
+  const j = await r.json();
+  if (!j.success) throw new Error(j.error||'team totals failed');
+  return j.teams || [];
+}
+
+export async function getPlayerTotals(gameId){
+  const r = await fetch(`/strata_football/api/stats/get_player_totals.php?game_id=${gameId}`);
+  const j = await r.json();
+  if (!j.success) throw new Error(j.error||'player totals failed');
+  return j;
+}
 
 /**
  * Error handler for API calls with user-friendly messages

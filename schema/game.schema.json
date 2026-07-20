@@ -1,0 +1,432 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://strata-football.local/schema/game.schema.json",
+  "title": "Strata Football Game Envelope",
+  "description": "Canonical game envelope as described in DATA_STRUCTURE_REWRITE_NOTES.md",
+  "type": "object",
+  "required": ["game"],
+  "additionalProperties": true,
+  "properties": {
+    "game": {
+      "type": "object",
+      "required": ["venue", "officials", "rules", "plays"],
+      "properties": {
+        "venue": {"$ref": "#/definitions/venue"},
+        "liveController": {"$ref": "#/definitions/liveController"},
+        "officials": {"$ref": "#/definitions/officials"},
+        "rules": {"$ref": "#/definitions/rules"},
+        "plays": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/play"}
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "definitions": {
+    "teamCode": {
+      "type": "string",
+      "enum": ["H", "V"]
+    },
+    "teamCodeNullable": {
+      "type": ["string", "null"],
+      "enum": ["H", "V", null]
+    },
+    "spotString": {
+      "type": "string",
+      "pattern": "^[HV][0-9]{1,2}$"
+    },
+    "spot": {
+      "type": ["string", "null"],
+      "pattern": "^[HV][0-9]{1,2}$"
+    },
+    "clock": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{1,2}:[0-9]{2}$"
+    },
+    "venue": {
+      "type": "object",
+      "required": ["gameId", "visId", "homeId", "visName", "homeName"],
+      "properties": {
+        "gameId": {"type": "string"},
+        "visId": {"type": "string"},
+        "homeId": {"type": "string"},
+        "visName": {"type": "string"},
+        "homeName": {"type": "string"},
+        "date": {"type": ["string", "null"], "format": "date"},
+        "location": {"type": ["string", "null"]},
+        "stadium": {"type": ["string", "null"]},
+        "start": {"type": ["string", "null"], "format": "date-time"},
+        "end": {"type": ["string", "null"], "format": "date-time"},
+        "isLeagueGame": {"type": ["boolean", "null"]},
+        "duration": {"type": ["integer", "null"], "minimum": 0},
+        "attendance": {"type": ["integer", "null"], "minimum": 0},
+        "temperature": {"type": ["integer", "null"]},
+        "wind": {"type": ["string", "null"]},
+        "weather": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "liveController": {
+      "type": "object",
+      "properties": {
+        "hasball": {"$ref": "#/definitions/teamCodeNullable"},
+        "id": {"type": ["string", "null"]},
+        "down": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+        "togo": {"type": ["integer", "null"], "minimum": 0},
+        "spot": {"$ref": "#/definitions/spot"},
+        "context": {"type": ["string", "null"], "pattern": "^[HV],[0-9]+,[0-9]+,[HV][0-9]{1,2}$"},
+        "qtr": {"type": ["integer", "null"], "minimum": 1},
+        "clock": {"$ref": "#/definitions/clock"},
+        "vtoh": {"type": ["integer", "null"], "minimum": 0, "maximum": 3},
+        "htoh": {"type": ["integer", "null"], "minimum": 0, "maximum": 3},
+        "lastplay": {"type": ["string", "null"]},
+        "status": {
+          "type": ["string", "null"],
+          "enum": ["pregame", "active", "halftime", "final", "suspended", null]
+        },
+        "flag": {"type": ["string", "null"], "enum": ["N", "Y", null]},
+        "review": {"type": ["string", "null"], "enum": ["N", "Y", null]},
+        "drivenum": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "officials": {
+      "type": "object",
+      "properties": {
+        "ref": {"type": ["string", "null"]},
+        "ump": {"type": ["string", "null"]},
+        "headLinesman": {"type": ["string", "null"]},
+        "lineJudge": {"type": ["string", "null"]},
+        "backJudge": {"type": ["string", "null"]},
+        "fieldJudge": {"type": ["string", "null"]},
+        "sideJudge": {"type": ["string", "null"]},
+        "centerJudge": {"type": ["string", "null"]},
+        "replay": {"type": ["string", "null"]},
+        "scorer": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "quarters": {"type": "integer", "minimum": 1},
+        "minutesPerQuarter": {"type": "integer", "minimum": 1},
+        "downs": {"type": "integer", "minimum": 1},
+        "yardsToFirstDown": {"type": "integer", "minimum": 1},
+        "koSpot": {"type": "integer", "minimum": 0},
+        "tbSpot": {"type": "integer", "minimum": 0},
+        "koTbSpot": {"type": "integer", "minimum": 0},
+        "patSpot": {"type": "integer", "minimum": 0},
+        "safetySpot": {"type": "integer", "minimum": 0},
+        "touchdownPoints": {"type": "integer"},
+        "fieldGoalPoints": {"type": "integer"},
+        "patKickPoints": {"type": "integer"},
+        "patConversionPoints": {"type": "integer"},
+        "safetyPoints": {"type": "integer"},
+        "defensivePatPoints": {"type": "integer"},
+        "rougePoints": {"type": "integer"},
+        "fieldLength": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "context": {
+      "type": "object",
+      "required": ["hasBall", "down", "toGo", "spot", "qtr"],
+      "properties": {
+        "hasBall": {"$ref": "#/definitions/teamCode"},
+        "down": {"type": "integer", "minimum": 1, "maximum": 4},
+        "toGo": {"type": "integer", "minimum": 0},
+        "spot": {"$ref": "#/definitions/spotString"},
+        "clock": {"$ref": "#/definitions/clock"},
+        "qtr": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "score": {
+      "type": "object",
+      "required": ["isScoringPlay", "homeScore", "awayScore", "teamScored", "pointsAdded"],
+      "properties": {
+        "isScoringPlay": {"type": "boolean"},
+        "homeScore": {"type": "integer", "minimum": 0},
+        "awayScore": {"type": "integer", "minimum": 0},
+        "teamScored": {"$ref": "#/definitions/teamCodeNullable"},
+        "pointsAdded": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "generated": {
+      "type": "object",
+      "properties": {
+        "isThirdDown": {
+          "type": ["string", "boolean"],
+          "enum": ["false", "failed", "converted", "nullified", false]
+        },
+        "isFourthDown": {
+          "type": ["string", "boolean"],
+          "enum": ["false", "failed", "converted", "nullified", false]
+        },
+        "isFirstDown": {
+          "type": ["string", "null"],
+          "enum": ["rush", "pass", "penalty", null]
+        },
+        "isGoalToGo": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "gameControl": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "timeout",
+            "driveStart",
+            "driveEnd",
+            "comment",
+            "possessionChange",
+            "contextEdit",
+            "quarterAdvance",
+            "review",
+            "delay",
+            "uniformChange",
+            "halfEnd"
+          ]
+        },
+        "team": {"$ref": "#/definitions/teamCodeNullable"},
+        "driveNumber": {"type": ["integer", "null"], "minimum": 0},
+        "spot": {"$ref": "#/definitions/spot"},
+        "clock": {"$ref": "#/definitions/clock"},
+        "qtr": {"type": ["integer", "null"], "minimum": 1},
+        "howStart": {
+          "type": ["string", "null"],
+          "enum": [
+            "Kickoff",
+            "Punt",
+            "Fumble",
+            "Interception",
+            "Downs",
+            "Safety",
+            "Possession",
+            "Blocked Field Goal",
+            null
+          ]
+        },
+        "howEnd": {
+          "type": ["string", "null"],
+          "enum": [
+            "Touchdown",
+            "Field Goal",
+            "Punt",
+            "Downs",
+            "Fumble",
+            "Interception",
+            "Safety",
+            "Blocked Field Goal",
+            "End of Half",
+            "End of Game",
+            null
+          ]
+        },
+        "timeoutType": {"type": ["string", "null"]},
+        "instruction": {"type": ["string", "null"]},
+        "isManual": {"type": ["boolean", "null"]},
+        "down": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+        "toGo": {"type": ["integer", "null"], "minimum": 0},
+        "reviewType": {"type": ["string", "null"], "enum": ["Home", "Away", "Official", null]},
+        "result": {"type": ["string", "null"], "enum": ["Confirmed", "Upheld", "Overturned", null]},
+        "reason": {"type": ["string", "null"]},
+        "correctedPlay": {"type": ["array", "null"], "items": {"type": "string"}},
+        "delayType": {"type": ["string", "null"]},
+        "timeStarted": {"type": ["string", "null"], "format": "date-time"},
+        "timeEnded": {"type": ["string", "null"], "format": "date-time"},
+        "playerId": {"type": ["string", "null"]},
+        "oldNumber": {"type": ["string", "null"]},
+        "newNumber": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "rushEvent": {
+      "type": "object",
+      "properties": {
+        "rusher": {"type": ["string", "null"]},
+        "endSpot": {"$ref": "#/definitions/spot"}
+      },
+      "additionalProperties": true
+    },
+    "passEvent": {
+      "type": "object",
+      "properties": {
+        "passer": {"type": ["string", "null"]},
+        "target": {"type": ["string", "null"]},
+        "result": {"type": ["string", "null"]},
+        "targetSpot": {"$ref": "#/definitions/spot"},
+        "passBreak": {"type": ["string", "null"]},
+        "qbHurry": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "receiveEvent": {
+      "type": "object",
+      "properties": {
+        "receiver": {"type": ["string", "null"]},
+        "receiveSpot": {"$ref": "#/definitions/spot"},
+        "endSpot": {"$ref": "#/definitions/spot"}
+      },
+      "additionalProperties": true
+    },
+    "returnEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": ["string", "null"],
+          "enum": ["Fumble", "Interception", "Field Goal", "Kick", "Punt", null]
+        },
+        "returner": {"type": ["string", "null"]},
+        "fromSpot": {"$ref": "#/definitions/spot"},
+        "toSpot": {"$ref": "#/definitions/spot"}
+      },
+      "additionalProperties": true
+    },
+    "penaltyEvent": {
+      "type": "object",
+      "properties": {
+        "code": {"type": "string"},
+        "foulOn": {"type": ["string", "null"]},
+        "enforcement": {
+          "type": ["string", "null"],
+          "enum": ["Accepted", "Declined", "Offsetting", null]
+        },
+        "enforceFrom": {"$ref": "#/definitions/spot"},
+        "enforceTo": {"$ref": "#/definitions/spot"},
+        "ejectPlayer": {"type": ["boolean", "null"]},
+        "isPlayNull": {"type": ["boolean", "null"]},
+        "isFirstDown": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "freekickEvent": {
+      "type": "object",
+      "properties": {
+        "kicker": {"type": ["string", "null"]},
+        "kickedTo": {"$ref": "#/definitions/spot"},
+        "isTouchback": {"type": ["boolean", "null"]},
+        "isOB": {"type": ["boolean", "null"]},
+        "isOnside": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "puntEvent": {
+      "type": "object",
+      "properties": {
+        "punter": {"type": ["string", "null"]},
+        "kickedTo": {"$ref": "#/definitions/spot"},
+        "isTouchback": {"type": ["boolean", "null"]},
+        "isFairCatch": {"type": ["boolean", "null"]},
+        "fairCatchBy": {"type": ["string", "null"]},
+        "isOB": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "fieldGoalEvent": {
+      "type": "object",
+      "properties": {
+        "kicker": {"type": ["string", "null"]},
+        "spotOfKick": {"$ref": "#/definitions/spot"},
+        "result": {
+          "type": ["string", "null"],
+          "enum": ["good", "missed", "blocked", "noGood", null]
+        },
+        "clock": {"$ref": "#/definitions/clock"},
+        "qtr": {"type": ["integer", "null"], "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "patEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": ["string", "null"],
+          "enum": ["kick", "rush", "pass", "def", null]
+        },
+        "playerId": {"type": ["string", "null"]},
+        "result": {
+          "type": ["string", "null"],
+          "enum": ["good", "missed", "blocked", "fumbled", "intercepted", null]
+        }
+      },
+      "additionalProperties": true
+    },
+    "tackleEvent": {
+      "type": "object",
+      "properties": {
+        "tackleA": {"type": ["string", "null"]},
+        "tackleB": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "fumbleEvent": {
+      "type": "object",
+      "properties": {
+        "forcedBy": {"type": ["string", "null"]},
+        "recoverTeam": {"$ref": "#/definitions/teamCodeNullable"},
+        "recoverPlayer": {"type": ["string", "null"]},
+        "recoverSpot": {"$ref": "#/definitions/spot"}
+      },
+      "additionalProperties": true
+    },
+    "sackEvent": {
+      "type": "object",
+      "properties": {
+        "sackerA": {"type": ["string", "null"]},
+        "sackerB": {"type": ["string", "null"]},
+        "endSpot": {"$ref": "#/definitions/spot"}
+      },
+      "additionalProperties": true
+    },
+    "event": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "rush": {"$ref": "#/definitions/rushEvent"},
+        "pass": {"$ref": "#/definitions/passEvent"},
+        "receive": {"$ref": "#/definitions/receiveEvent"},
+        "return": {"$ref": "#/definitions/returnEvent"},
+        "penalty": {"$ref": "#/definitions/penaltyEvent"},
+        "freekick": {"$ref": "#/definitions/freekickEvent"},
+        "punt": {"$ref": "#/definitions/puntEvent"},
+        "fieldgoal": {"$ref": "#/definitions/fieldGoalEvent"},
+        "pat": {"$ref": "#/definitions/patEvent"},
+        "tackle": {"$ref": "#/definitions/tackleEvent"},
+        "fumble": {"$ref": "#/definitions/fumbleEvent"},
+        "sack": {"$ref": "#/definitions/sackEvent"},
+        "gameControl": {"$ref": "#/definitions/gameControl"}
+      },
+      "additionalProperties": true
+    },
+    "play": {
+      "type": "object",
+      "required": ["playId", "context", "events", "score", "newContext"],
+      "properties": {
+        "playId": {"type": "string"},
+        "sequenceKey": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]+-[0-9]+-[0-9-]+$"
+        },
+        "context": {"$ref": "#/definitions/context"},
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/event"}
+        },
+        "generated": {"$ref": "#/definitions/generated"},
+        "expansions": {"type": "object"},
+        "score": {"$ref": "#/definitions/score"},
+        "newContext": {"$ref": "#/definitions/context"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

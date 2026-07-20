@@ -43,19 +43,13 @@ const PenaltyInputFlow = ({ onComplete, onCancel, gameState }) => {
       // Convert penalty data to event format for submission
       const eventData = {
         event_type: 'penalty',
-        penalty_type: penaltyData.penalty.PenaltyName,
-        penalty_code: penaltyData.penalty.PenaltyCode,
+        play_type: 'penalty',
+        penalty_type: penaltyData.penalty?.PenaltyName || '',
+        penalty_code: penaltyData.penalty?.PenaltyCode || '',
         penalty_team: penaltyData.team,
         penalty_player: penaltyData.playerNumber,
         penalty_result: penaltyData.result,
-        penalty_yards: penaltyData.result === 'A' ? 
-          (penaltyData.penalty.YardsNCAA || penaltyData.penalty.YardsHS) : 0,
-        enforcement_mode: penaltyData.enforcement?.enforcementMode,
-        enforced_from: penaltyData.enforcement?.enforcedFrom,
-        final_spot: penaltyData.enforcement?.finalSpot,
-        first_down_mode: penaltyData.enforcement?.firstDownMode,
-        ejected: penaltyData.enforcement?.ejected || false,
-        has_penalty: true
+        enforcement: penaltyData.enforcement
       };
 
       debug.log('Submitting penalty event:', eventData);
