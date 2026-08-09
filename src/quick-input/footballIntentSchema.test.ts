@@ -4,10 +4,15 @@ import {
   type DraftParticipantRole,
   type FootballDraftIntent,
   type FootballIntentValidationErrorCode,
+  isCanonicalSpot,
   validateFootballDraftIntent,
 } from './footballIntentSchema';
 
 describe('footballIntentSchema', () => {
+  it.each(['H00', 'V00'])('accepts %s as a canonical end-zone spot', (spot) => {
+    expect(isCanonicalSpot(spot)).toBe(true);
+  });
+
   it('accepts a valid rush intent', () => {
     expect(validateFootballDraftIntent(makeRushIntent()).ok).toBe(true);
   });

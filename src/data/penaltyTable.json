@@ -1,5 +1,16 @@
 [
   {
+    "code": "FKI",
+    "name": "Free Kick Infraction",
+    "liveBall": true,
+    "yards": 5,
+    "requiresYards": true,
+    "requiresSpot": false,
+    "defaultEnforcement": "PREVIOUS",
+    "automaticFirstDown": false,
+    "lossOfDown": false
+  },
+  {
     "code": "HOLD",
     "name": "Holding",
     "liveBall": true,
@@ -69,6 +80,8 @@
     "code": "PF",
     "name": "Personal Foul",
     "liveBall": true,
+    "deadBall": true,
+    "ejectionable": true,
     "yards": 15,
     "requiresYards": true,
     "requiresSpot": true,
@@ -135,6 +148,7 @@
     "code": "TH",
     "name": "Targeting",
     "liveBall": true,
+    "ejectionable": true,
     "yards": 15,
     "requiresYards": true,
     "requiresSpot": true,
@@ -145,7 +159,9 @@
   {
     "code": "UC",
     "name": "Unsportsmanlike Conduct",
-    "liveBall": false,
+    "liveBall": true,
+    "deadBall": true,
+    "ejectionable": true,
     "yards": 15,
     "requiresYards": true,
     "requiresSpot": false,

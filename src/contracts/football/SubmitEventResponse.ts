@@ -237,11 +237,13 @@ export interface Rules {
    * via the `definition` "spot".
    */
   touchbackSpot?: string;
+  nonKickTouchbackSpot?: string;
   /**
    * This interface was referenced by `GameEnvelope`'s JSON-Schema
    * via the `definition` "spot".
    */
   patSpot?: string;
+  safetyKickSpot?: string;
   overtimeEnabled?: boolean;
 }
 /**
@@ -275,6 +277,8 @@ export interface LiveState {
   driveId: string | null;
   driveNumber: number;
   nextPlayContext?: string;
+  pendingTryTeam?: 'H' | 'V';
+  kickoffTeam?: 'H' | 'V';
 }
 export interface RosterEnvelope {
   schemaVersion: 'football.rosterEnvelope.v1';

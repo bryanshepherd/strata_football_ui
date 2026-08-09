@@ -1,7 +1,9 @@
 import React from 'react';
 
 const formatStatus = (status) =>
-  String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
+  String(status || 'unknown')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const formatDownDistance = (liveState) => {
   if (!liveState.down || !liveState.distance) {
@@ -44,6 +46,8 @@ const resolveChallengeLimit = (envelope) => {
 
 export default function FootballScoreboard({ envelope }) {
   const liveState = envelope.liveState;
+  const currentDrive = envelope.drives?.current;
+  const driveTeam = currentDrive?.team ? envelope.game.teams[currentDrive.team] : null;
   // `game.status` remains "pregame" until a kickoff is accepted. The explicit
   // pregame lifecycle is the authoritative display state in that interval.
   const displayStatus = envelope.pregame?.gamePhase || envelope.game.status;
@@ -66,10 +70,18 @@ export default function FootballScoreboard({ envelope }) {
         <TeamScoreCard envelope={envelope} teamCode="H" align="right" />
       </section>
 
-      <section className="grid gap-px overflow-hidden rounded border border-zinc-300 bg-zinc-300 text-sm md:grid-cols-3">
+      <section className="grid grid-cols-2 gap-px overflow-hidden rounded border border-zinc-300 bg-zinc-300 text-sm sm:grid-cols-4 xl:grid-cols-8">
         <StripCell label="Down/Distance" value={formatDownDistance(liveState)} />
         <StripCell label="Spot" value={formatSpot(liveState)} />
         <StripCell label="Line To Gain" value={liveState.lineToGain || 'None'} />
+        <StripCell
+          label="Drive"
+          value={currentDrive ? `${currentDrive.driveId} · ${currentDrive.result || 'Active'}` : 'None'}
+        />
+        <StripCell label="Team" value={driveTeam?.abbr || 'None'} />
+        <StripCell label="Start" value={currentDrive?.startYardLine || 'None'} />
+        <StripCell label="Plays" value={String(currentDrive?.plays ?? 0)} />
+        <StripCell label="Yards" value={String(currentDrive?.yards ?? 0)} />
       </section>
     </div>
   );
@@ -129,18 +141,17 @@ const TeamStatusChips = ({
   timeoutLimit,
 }) => {
   const timeoutChips = (
-    <div className="flex items-center gap-1" aria-label={`${side} timeouts`}>
+    <div className="flex items-center gap-1.5" aria-label={`${side} timeouts`}>
       {Array.from({ length: timeoutLimit }, (_, index) => (
         <span
+          aria-label={`${side} timeout ${index + 1} ${index < timeoutCount ? 'available' : 'used'}`}
           key={`timeout-${index}`}
-          className={`h-4 w-6 rounded-sm border text-[10px] font-bold leading-4 ${
+          className={`inline-block h-4 w-8 rounded-full border-2 ${
             index < timeoutCount
-              ? 'border-emerald-500 bg-emerald-500 text-white'
-              : 'border-zinc-300 bg-zinc-200 text-zinc-400'
+              ? 'border-emerald-600 bg-emerald-500'
+              : 'border-emerald-600 bg-white'
           }`}
-        >
-          T
-        </span>
+        />
       ))}
     </div>
   );
@@ -148,15 +159,14 @@ const TeamStatusChips = ({
     <div className="flex items-center gap-1" aria-label={`${side} challenges`}>
       {Array.from({ length: challengeLimit }, (_, index) => (
         <span
+          aria-label={`${side} challenge ${index + 1} ${index < challengeCount ? 'available' : 'unavailable'}`}
           key={`challenge-${index}`}
-          className={`h-4 w-6 rounded-sm border text-[10px] font-bold leading-4 ${
+          className={`inline-block h-4 w-4 rounded-full border-2 ${
             index < challengeCount
-              ? 'border-red-500 bg-red-500 text-white'
-              : 'border-zinc-300 bg-zinc-200 text-zinc-400'
+              ? 'border-red-600 bg-red-500'
+              : 'border-red-600 bg-white'
           }`}
-        >
-          C
-        </span>
+        />
       ))}
     </div>
   );

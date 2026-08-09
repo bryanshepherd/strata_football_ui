@@ -5,8 +5,13 @@ import FootballConfirmedQuickInput, {
   getFootballFcqiAssistantMessage,
 } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballScoreboard from '../components/scorer/FootballScoreboard';
+import FootballDriveSummaryModal from '../components/scorer/FootballDriveSummaryModal';
+import FootballPossessionClockModal from '../components/scorer/FootballPossessionClockModal';
+import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
 import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
+import FootballRosterEditorModal from '../components/pregame/FootballRosterEditorModal';
+import FootballStartersModal from '../components/pregame/FootballStartersModal';
 import ScorerLayoutShell from '../components/scorer/ScorerLayoutShell';
 import {
   defaultFixtureKey,
@@ -14,15 +19,29 @@ import {
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
+import { pregameForEnvelope } from '../pregame/footballPregame';
 import {
+  buildFootballDriveSummary,
+  isFootballDriveSummaryTerminalEvent,
+} from '../scoring/footballDriveSummary';
+import {
+  enqueueFootballServerSync,
   fetchFootballEnvelope,
+  flushFootballServerSync,
   getDashboardSeededFootballEnvelopeRecord,
+  getPendingFootballSyncCount,
+  normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
+  saveDashboardSeededFootballEnvelope,
+  submitFootballEventLocally,
+  recordFootballPossessionClock,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 
 const formatStatus = (status) =>
-  String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
+  String(status || 'unknown')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const getTeam = (envelope, code) => envelope.game.teams[code];
 
@@ -45,12 +64,20 @@ const formatDownDistance = (liveState) => {
 
 const formatSpot = (liveState) => liveState.yardLine || 'Not set';
 
-const formatDriveResult = (drive) => drive?.result || 'Active';
+const rosterPlayersForEnvelope = (envelope) => ['V', 'H'].flatMap((team) => (
+  Object.values(envelope?.rosters?.teams?.[team]?.players || {})
+));
 
 const isDebugEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 
 const getRequestedGameId = (searchParams) =>
-  searchParams.get('gameId') || searchParams.get('game_id') || searchParams.get('id') || '';
+  searchParams.get('envelopeGameId')
+  || searchParams.get('gameId')
+  || searchParams.get('game_id')
+  || searchParams.get('id')
+  || '';
+
+const getDashboardGameId = (searchParams) => searchParams.get('dashboardGameId') || '';
 
 const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
   const next = {};
@@ -66,6 +93,7 @@ const setScorerSearchParams = (setSearchParams, { fixture, debug }) => {
 export default function FootballScorerShell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGameId = getRequestedGameId(searchParams);
+  const dashboardGameId = getDashboardGameId(searchParams);
   const requestedFixture = searchParams.get('fixture') || defaultFixtureKey;
   const debugMode = isDebugEnabled(searchParams.get('debug'));
   const fixtureEnvelope = getGameEnvelopeFixture(requestedFixture);
@@ -76,7 +104,17 @@ export default function FootballScorerShell() {
     error: '',
   }));
   const [fcqiState, setFcqiState] = useState(() => createInitialFootballQuickInputState());
+  const [fcqiResetKey, setFcqiResetKey] = useState(0);
   const [acceptedScorerState, setAcceptedScorerState] = useState(() => createEmptyAcceptedScorerState());
+  const [localUndoStack, setLocalUndoStack] = useState([]);
+  const [rosterEditorOpen, setRosterEditorOpen] = useState(false);
+  const [startersEditorOpen, setStartersEditorOpen] = useState(false);
+  const [starterTeam, setStarterTeam] = useState(null);
+  const [pregameEditorError, setPregameEditorError] = useState('');
+  const [possessionClockChange, setPossessionClockChange] = useState(null);
+  const [driveSummary, setDriveSummary] = useState(null);
+  const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
+  const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
   const envelope = useMemo(
     () => buildActiveScorerEnvelope(baseEnvelope, acceptedScorerState),
@@ -86,10 +124,22 @@ export default function FootballScorerShell() {
     () => (debugMode && envelope ? buildFootballFixtureDebugTrace(envelope) : []),
     [debugMode, envelope],
   );
+  const editorRoster = useMemo(() => rosterPlayersForEnvelope(envelope), [envelope]);
+  const editorPregame = useMemo(() => pregameForEnvelope(envelope), [envelope]);
 
   useEffect(() => {
     setAcceptedScorerState(createEmptyAcceptedScorerState());
+    setLocalUndoStack([]);
     setFcqiState(createInitialFootballQuickInputState());
+    setFcqiResetKey((current) => current + 1);
+    setRosterEditorOpen(false);
+    setStartersEditorOpen(false);
+    setStarterTeam(null);
+    setPregameEditorError('');
+    setPossessionClockChange(null);
+    setDriveSummary(null);
+    setPenaltyCodeEditorOpen(false);
+    setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
   }, [requestedFixture, requestedGameId]);
 
   useEffect(() => {
@@ -111,12 +161,14 @@ export default function FootballScorerShell() {
 
     const controller = new AbortController();
     setLoadedGameState({ status: 'loading', envelope: null, source: 'server', error: '' });
-    fetchFootballEnvelope(requestedGameId, { signal: controller.signal })
+    fetchFootballEnvelope(requestedGameId, { dashboardGameId, signal: controller.signal })
       .then((loadedEnvelope) => {
+        const localEnvelope = saveDashboardSeededFootballEnvelope(loadedEnvelope.gameId || requestedGameId, loadedEnvelope)
+          || loadedEnvelope;
         setLoadedGameState({
           status: 'ready',
-          envelope: loadedEnvelope,
-          source: 'server',
+          envelope: localEnvelope,
+          source: 'server-seed',
           error: '',
         });
       })
@@ -131,11 +183,118 @@ export default function FootballScorerShell() {
       });
 
     return () => controller.abort();
-  }, [requestedGameId]);
+  }, [dashboardGameId, requestedGameId]);
+
+  const flushServerSync = useCallback(async () => {
+    if (!requestedGameId || !dashboardGameId) return;
+    const result = await flushFootballServerSync();
+    setSyncState({
+      pending: getPendingFootballSyncCount(requestedGameId),
+      error: result.error || '',
+    });
+  }, [dashboardGameId, requestedGameId]);
+
+  useEffect(() => {
+    if (!requestedGameId || !dashboardGameId) return undefined;
+    setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+    void flushServerSync();
+    const retry = window.setInterval(() => void flushServerSync(), 15_000);
+    const onOnline = () => void flushServerSync();
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.clearInterval(retry);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [dashboardGameId, flushServerSync, requestedGameId]);
 
   const handleSubmitAccepted = useCallback((result) => {
     setAcceptedScorerState((current) => reduceAcceptedScorerState(current, result));
-  }, []);
+    const acceptedEnvelope = result?.gameEnvelope ?? result?.envelope ?? (
+      result?.projection ? applyProjectionToEnvelope(envelope, result.projection) : null
+    );
+    const previousPossession = envelope?.liveState?.possession ?? null;
+    const nextPossession = acceptedEnvelope?.liveState && Object.prototype.hasOwnProperty.call(acceptedEnvelope.liveState, 'possession')
+      ? acceptedEnvelope.liveState.possession
+      : previousPossession;
+    const responseEvent = result?.acceptedEvent || null;
+    const acceptedEvent = acceptedEnvelope?.events?.find((event) => (
+      (responseEvent?.eventId && event.eventId === responseEvent.eventId)
+      || (responseEvent?.clientEventId && event.clientEventId === responseEvent.clientEventId)
+    )) || acceptedEnvelope?.events?.[acceptedEnvelope.events.length - 1] || responseEvent;
+    const driveSummaryEvent = result?.status !== 'duplicateAccepted'
+      && isFootballDriveSummaryTerminalEvent(acceptedEvent)
+      ? acceptedEvent
+      : null;
+    if (acceptedEnvelope && previousPossession !== nextPossession && (previousPossession || nextPossession)) {
+      setPossessionClockChange({
+        previousPossession,
+        nextPossession,
+        period: acceptedEnvelope.clock?.period || acceptedEnvelope.game?.period || 1,
+        defaultClock: acceptedEnvelope.clock?.clock || envelope.clock?.clock || '',
+        envelope: acceptedEnvelope,
+        driveSummaryEvent,
+      });
+    } else if (acceptedEnvelope && driveSummaryEvent) {
+      setDriveSummary(buildFootballDriveSummary(acceptedEnvelope, driveSummaryEvent));
+    }
+  }, [envelope]);
+
+  const forceLocalTestGame = searchParams.get('local') === '1';
+  const useLocalTestGame = import.meta.env.MODE !== 'test' || forceLocalTestGame || Boolean(requestedGameId);
+  const localSubmitAdapter = useCallback(async (submitRequest) => {
+    const previousEnvelope = envelope;
+    const result = await submitFootballEventLocally(envelope, submitRequest);
+    if (result?.ok && result?.status !== 'duplicateAccepted') {
+      setLocalUndoStack((current) => [...current, previousEnvelope]);
+      if (requestedGameId && dashboardGameId) {
+        enqueueFootballServerSync({
+          gameId: requestedGameId,
+          dashboardGameId,
+          kind: 'event',
+          payload: submitRequest,
+        });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    }
+    return result;
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
+  const undoLastLocalEvent = useCallback(() => {
+    const previousEnvelope = localUndoStack[localUndoStack.length - 1];
+    if (!previousEnvelope) return;
+    setLocalUndoStack((current) => current.slice(0, -1));
+    setAcceptedScorerState({ gameEnvelope: previousEnvelope, projection: null, acceptedEvents: [] });
+    setPossessionClockChange(null);
+    setDriveSummary(null);
+    setFcqiState(createInitialFootballQuickInputState());
+    setFcqiResetKey((current) => current + 1);
+    if (requestedGameId) {
+      saveDashboardSeededFootballEnvelope(requestedGameId, previousEnvelope);
+    }
+  }, [localUndoStack, requestedGameId]);
+
+  const recordPossessionClock = useCallback((clock) => {
+    if (!possessionClockChange) return;
+    let updatedEnvelope = recordFootballPossessionClock(possessionClockChange.envelope, {
+      previousPossession: possessionClockChange.previousPossession,
+      nextPossession: possessionClockChange.nextPossession,
+      period: possessionClockChange.period,
+      clock,
+    });
+    if (requestedGameId) {
+      updatedEnvelope = saveDashboardSeededFootballEnvelope(requestedGameId, updatedEnvelope) || updatedEnvelope;
+    }
+    setAcceptedScorerState({ gameEnvelope: updatedEnvelope, projection: null, acceptedEvents: [] });
+    if (possessionClockChange.driveSummaryEvent) {
+      setDriveSummary(buildFootballDriveSummary(updatedEnvelope, possessionClockChange.driveSummaryEvent));
+    }
+    setPossessionClockChange(null);
+  }, [possessionClockChange, requestedGameId]);
+
+  const closeDriveSummary = useCallback(() => setDriveSummary(null), []);
+  const openPenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(true), []);
+  const closePenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(false), []);
 
   const handlePregameEnvelopeChange = useCallback(async (nextEnvelope) => {
     // Optimistically keep the current workspace responsive; the canonical
@@ -143,14 +302,92 @@ export default function FootballScorerShell() {
     setAcceptedScorerState({ gameEnvelope: nextEnvelope, projection: null, acceptedEvents: [] });
     if (!requestedGameId) return;
     try {
-      const persisted = await persistFootballPregameEnvelope(requestedGameId, nextEnvelope);
+      const persisted = await persistFootballPregameEnvelope(requestedGameId, nextEnvelope, { dashboardGameId });
       setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
     } catch (error) {
       // The workspace remains editable, but callers receive the failure so the
       // operator is never told that an unsaved pregame change is durable.
       throw error;
     }
-  }, [requestedGameId]);
+  }, [dashboardGameId, flushServerSync, requestedGameId]);
+
+  const openRosterEditor = useCallback(() => {
+    setPregameEditorError('');
+    setRosterEditorOpen(true);
+  }, []);
+
+  const closeRosterEditor = useCallback(() => {
+    setRosterEditorOpen(false);
+    setPregameEditorError('');
+  }, []);
+
+  const openStartersEditor = useCallback(() => {
+    setPregameEditorError('');
+    setStarterTeam(null);
+    setStartersEditorOpen(true);
+  }, []);
+
+  const closeStartersEditor = useCallback(() => {
+    setStartersEditorOpen(false);
+    setStarterTeam(null);
+    setPregameEditorError('');
+  }, []);
+
+  const saveRosterEditor = useCallback(async (rosters) => {
+    if (!envelope) return;
+    setPregameEditorError('');
+    try {
+      await handlePregameEnvelopeChange({
+        ...envelope,
+        pregame: pregameForEnvelope(envelope),
+        rosters,
+      });
+      closeRosterEditor();
+    } catch (error) {
+      setPregameEditorError(error instanceof Error
+        ? `Roster changes were not saved: ${error.message}`
+        : 'Roster changes were not saved.');
+    }
+  }, [closeRosterEditor, envelope, handlePregameEnvelopeChange]);
+
+  const saveStartersEditor = useCallback(async ({ positionUpdates, starters, team }) => {
+    if (!envelope) return;
+    const players = { ...envelope.rosters.teams[team].players };
+    positionUpdates.forEach(({ playerId, position }) => {
+      if (players[playerId]) players[playerId] = { ...players[playerId], position };
+    });
+    const pregame = pregameForEnvelope(envelope);
+    const nextEnvelope = {
+      ...envelope,
+      pregame: {
+        ...pregame,
+        starters: {
+          ...pregame.starters,
+          offense: { ...pregame.starters.offense, [team]: starters.offense },
+          defense: { ...pregame.starters.defense, [team]: starters.defense },
+        },
+      },
+      rosters: {
+        ...envelope.rosters,
+        teams: {
+          ...envelope.rosters.teams,
+          [team]: { ...envelope.rosters.teams[team], players },
+        },
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    setPregameEditorError('');
+    try {
+      await handlePregameEnvelopeChange(nextEnvelope);
+      closeStartersEditor();
+    } catch (error) {
+      setPregameEditorError(error instanceof Error
+        ? `Starter changes were not saved: ${error.message}`
+        : 'Starter changes were not saved.');
+    }
+  }, [closeStartersEditor, envelope, handlePregameEnvelopeChange]);
 
   if (requestedGameId && loadedGameState.status === 'loading') {
     return (
@@ -188,7 +425,8 @@ export default function FootballScorerShell() {
 
   const onDebugToggle = () => {
     if (requestedGameId) {
-      const next = { gameId: requestedGameId };
+      const next = { envelopeGameId: requestedGameId };
+      if (dashboardGameId) next.dashboardGameId = dashboardGameId;
       if (!debugMode) {
         next.debug = '1';
       }
@@ -212,6 +450,8 @@ export default function FootballScorerShell() {
         loadSource={loadedGameState.source}
         onDebugToggle={onDebugToggle}
         onFixtureChange={onFixtureChange}
+        onRosterOpen={openRosterEditor}
+        syncState={syncState}
       />
 
       <ScorerLayoutShell
@@ -221,14 +461,58 @@ export default function FootballScorerShell() {
           <FootballInputSlot
             debugMode={debugMode}
             envelope={envelope}
+            fcqiResetKey={fcqiResetKey}
             fcqiState={fcqiState}
             onFcqiStateChange={setFcqiState}
+            onOpenPenaltyEditor={openPenaltyCodeEditor}
+            onOpenStarters={openStartersEditor}
             onSubmitAccepted={handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
+            submitAdapter={useLocalTestGame ? localSubmitAdapter : undefined}
           />
         )}
-        eventLog={<FootballEventLogSlot envelope={envelope} />}
+        eventLog={(
+          <FootballEventLogSlot
+            canUndo={localUndoStack.length > 0}
+            envelope={envelope}
+            onUndoLastEvent={useLocalTestGame ? undoLastLocalEvent : undefined}
+          />
+        )}
         inputAssistant={<FootballInputAssistantSlot envelope={envelope} fcqiState={fcqiState} />}
+      />
+
+      <FootballRosterEditorModal
+        envelope={envelope}
+        onClose={closeRosterEditor}
+        onSave={saveRosterEditor}
+        open={rosterEditorOpen}
+        saveError={pregameEditorError}
+      />
+      <FootballStartersModal
+        onChooseTeam={(team) => {
+          setPregameEditorError('');
+          setStarterTeam(team);
+        }}
+        onClose={closeStartersEditor}
+        onSave={saveStartersEditor}
+        open={startersEditorOpen}
+        pregame={editorPregame}
+        roster={editorRoster}
+        saveError={pregameEditorError}
+        team={starterTeam}
+      />
+      <FootballPossessionClockModal
+        change={possessionClockChange}
+        envelope={possessionClockChange?.envelope || envelope}
+        onSave={recordPossessionClock}
+      />
+      <FootballDriveSummaryModal
+        onClose={closeDriveSummary}
+        summary={driveSummary}
+      />
+      <FootballPenaltyCodeEditorModal
+        onClose={closePenaltyCodeEditor}
+        open={penaltyCodeEditorOpen}
       />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
@@ -265,6 +549,8 @@ const ScorerHeader = ({
   loadSource,
   onDebugToggle,
   onFixtureChange,
+  onRosterOpen,
+  syncState,
 }) => {
   const teams = envelope.game.teams;
   const isGameRoute = Boolean(gameId);
@@ -287,16 +573,32 @@ const ScorerHeader = ({
         </div>
 
         <nav className="flex flex-wrap items-center gap-2">
+          <button
+            className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+            onClick={onRosterOpen}
+            type="button"
+          >
+            Roster
+          </button>
           <Link
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            to="/dashboard"
+            to={isGameRoute ? '/sports/football' : '/dashboard'}
           >
             Dashboard
           </Link>
           {isGameRoute ? (
-            <span className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
-              Game {gameId} · {loadSource || 'loaded'}
-            </span>
+            <>
+              <span className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+                Game {gameId} · Local envelope
+              </span>
+              <span className={`rounded border px-3 py-2 text-sm font-semibold ${
+                syncState?.pending
+                  ? 'border-amber-300 bg-amber-50 text-amber-900'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              }`} title={syncState?.error || loadSource || 'loaded'}>
+                {syncState?.pending ? `Server sync pending: ${syncState.pending}` : 'Server mirror current'}
+              </span>
+            </>
           ) : (
             <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
               Dev fixture
@@ -349,27 +651,51 @@ export const FootballStatsSlot = ({ envelope }) => (
 export const FootballInputSlot = ({
   debugMode = false,
   envelope,
+  fcqiResetKey,
   fcqiState,
   onFcqiStateChange,
+  onOpenPenaltyEditor,
+  onOpenStarters,
   onPregameEnvelopeChange,
   onSubmitAccepted,
-}) => (
-  <div className="space-y-4 p-4">
-    <DriveStatusBand envelope={envelope} />
-    <FootballPregameWorkspace envelope={envelope} onEnvelopeChange={onPregameEnvelopeChange} />
-    <FootballConfirmedQuickInput
-      debug={debugMode}
-      envelope={envelope}
-      onSubmitAccepted={onSubmitAccepted}
-      onStateChange={onFcqiStateChange}
-      state={fcqiState}
-    />
-  </div>
-);
+  submitAdapter,
+}) => {
+  const showPregameWorkspace = envelope.game.status === 'pregame';
+  const [teamAliases, setTeamAliases] = useState(() => envelope.operatorTeamAliases || null);
 
-export const FootballEventLogSlot = ({ envelope }) => (
+  useEffect(() => {
+    setTeamAliases(envelope.operatorTeamAliases || null);
+  }, [envelope.gameId, envelope.operatorTeamAliases?.H, envelope.operatorTeamAliases?.V]);
+
+  return (
+    <div className="space-y-4 p-4">
+      {showPregameWorkspace && (
+        <FootballPregameWorkspace
+          envelope={envelope}
+          onEnvelopeChange={onPregameEnvelopeChange}
+          onTeamAliasesChange={setTeamAliases}
+          teamAliases={teamAliases}
+        />
+      )}
+      <FootballConfirmedQuickInput
+        debug={debugMode}
+        envelope={envelope}
+        key={fcqiResetKey}
+        onOpenPenaltyEditor={onOpenPenaltyEditor}
+        onOpenStarters={onOpenStarters}
+        onSubmitAccepted={onSubmitAccepted}
+        onStateChange={onFcqiStateChange}
+        state={fcqiState}
+        submitAdapter={submitAdapter}
+        teamAliases={teamAliases}
+      />
+    </div>
+  );
+};
+
+export const FootballEventLogSlot = ({ canUndo = false, envelope, onUndoLastEvent }) => (
   <div className="h-full p-4">
-    <GameLogColumn envelope={envelope} />
+    <GameLogColumn canUndo={canUndo} envelope={envelope} onUndoLastEvent={onUndoLastEvent} />
   </div>
 );
 
@@ -412,38 +738,6 @@ export const FootballInputAssistantSlot = ({ envelope, fcqiState }) => {
     </section>
   );
 };
-
-const DriveStatusBand = ({ envelope }) => {
-  const currentDrive = envelope.drives.current;
-  const team = currentDrive?.team ? getTeam(envelope, currentDrive.team) : null;
-
-  return (
-    <section className="rounded border border-zinc-300 bg-white">
-      <div className="grid gap-px overflow-hidden rounded bg-zinc-200 text-sm md:grid-cols-5">
-        <DriveMetric label="Drive" value={currentDrive?.driveId || 'None'} />
-        <DriveMetric label="Team" value={team?.abbr || 'None'} />
-        <DriveMetric label="Start" value={currentDrive?.startYardLine || 'None'} />
-        <DriveMetric label="Plays" value={String(currentDrive?.plays ?? 0)} />
-        <DriveMetric label="Yards" value={String(currentDrive?.yards ?? 0)} />
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 px-4 py-3 text-sm">
-        <span className="font-medium text-zinc-700">
-          Drive {envelope.liveState.driveNumber || '-'} · {formatDriveResult(currentDrive)}
-        </span>
-        <span className="text-zinc-500">{envelope.liveState.nextPlayContext || envelope.gameId}</span>
-      </div>
-    </section>
-  );
-};
-
-const DriveMetric = ({ label, value }) => (
-  <div className="bg-white p-3">
-    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-      {label}
-    </div>
-    <div className="mt-1 text-lg font-semibold">{value}</div>
-  </div>
-);
 
 const PlayEntryWorkspace = ({ envelope }) => {
   const playButtons = ['Rush', 'Pass', 'Punt', 'Kick', 'Penalty', 'Game Control'];
@@ -504,45 +798,123 @@ const EnvelopeRow = ({ label, value }) => (
   </div>
 );
 
-const GameLogColumn = ({ envelope }) => (
-  <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
-    <div className="border-b border-zinc-200 px-4 py-3">
+const GameLogColumn = ({ canUndo, envelope, onUndoLastEvent }) => {
+  const logItems = buildGameLogItems(envelope);
+  return (
+    <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
+    <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
       <h2 className="text-base font-semibold">Game Log</h2>
+      {onUndoLastEvent && (
+        <button
+          className="rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={!canUndo}
+          onClick={onUndoLastEvent}
+          title="Restore the local test game to its state before the most recent submitted event"
+          type="button"
+        >
+          Undo Last Test Event
+        </button>
+      )}
     </div>
     <div className="min-h-0 flex-1 overflow-auto">
-      {envelope.events.length === 0 ? (
+      {logItems.length === 0 ? (
         <div className="p-4 text-sm text-zinc-600">No accepted events.</div>
       ) : (
         <ol className="divide-y divide-zinc-200">
-          {envelope.events
-            .slice()
-            .reverse()
-            .map((event, index) => (
-              <li key={event.eventId || event.clientEventId || `event-${index}`} className="p-4">
+          {logItems.map((item, index) => (
+            item.kind === 'driveStart' ? (
+              <li
+                aria-label={`Drive Start - ${item.team}`}
+                className="border-y border-sky-200 bg-sky-50 px-4 py-3 text-sky-950"
+                key={`drive-start-${item.driveId}`}
+                role="separator"
+              >
+                <div className="text-sm font-black">Drive Start - {item.team}</div>
+                <div className="mt-0.5 text-xs font-semibold">
+                  {item.time} at {item.yardLine} by {item.howGained}
+                </div>
+              </li>
+            ) : (
+              <li key={item.event.eventId || item.event.clientEventId || `event-${index}`} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold capitalize">
-                      {event.type}
-                      {event.subtype ? ` · ${event.subtype}` : ''}
+                      {item.event.type}
+                      {item.event.subtype ? ` · ${item.event.subtype}` : ''}
                     </div>
                     <p className="mt-1 text-sm text-zinc-700">
-                      {event.description || event.result?.code || 'Accepted event'}
+                      {item.event.description || item.event.result?.code || 'Accepted event'}
                     </p>
                   </div>
                   <span className="shrink-0 rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
-                    #{event.sequence ?? '-'}
+                    #{item.event.sequence ?? '-'}
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
-                  Q{event.period || '-'} {event.clock || '--:--'} · {event.possession || '-'}
+                  Q{item.event.period || '-'} {item.event.clock || '--:--'} · {item.event.possession || '-'}
                 </div>
               </li>
-            ))}
+            )
+          ))}
         </ol>
       )}
     </div>
-  </section>
-);
+    </section>
+  );
+};
+
+const buildGameLogItems = (envelope) => {
+  const events = envelope.events || [];
+  const drives = [...(envelope.drives?.completed || []), envelope.drives?.current].filter(Boolean);
+  const driveById = new Map(drives.map((drive) => [drive.driveId, drive]));
+  const hasExplicitDriveIds = events.some((event) => event.preState?.driveId || event.postState?.driveId);
+  const driveIdForEvent = (event) => (
+    event.preState?.driveId
+    || (!hasExplicitDriveIds ? envelope.liveState?.driveId : null)
+  );
+  const firstEventByDrive = new Map();
+  events.forEach((event) => {
+    const driveId = driveIdForEvent(event);
+    if (driveId && !firstEventByDrive.has(driveId)) firstEventByDrive.set(driveId, event);
+  });
+
+  const makeDriveStartItem = (driveId) => {
+    const drive = driveById.get(driveId) || {};
+    const firstEvent = firstEventByDrive.get(driveId);
+    const teamCode = drive.team || firstEvent?.preState?.possession || firstEvent?.possession;
+    const team = envelope.game?.teams?.[teamCode]?.name || envelope.game?.teams?.[teamCode]?.abbr || teamCode || 'Unknown Team';
+    return {
+      kind: 'driveStart',
+      driveId,
+      team,
+      time: drive.startClock || firstEvent?.clock || '--:--',
+      yardLine: drive.startYardLine || firstEvent?.preState?.yardLine || 'Unknown Spot',
+      howGained: humanizeDriveReason(drive.startReason || 'possession'),
+    };
+  };
+
+  const items = [];
+  const currentDriveId = envelope.drives?.current?.driveId;
+  if (currentDriveId && !firstEventByDrive.has(currentDriveId)) {
+    items.push(makeDriveStartItem(currentDriveId));
+  }
+  const newestFirstEvents = events.slice().reverse();
+  newestFirstEvents.forEach((event, index) => {
+    const driveId = driveIdForEvent(event);
+    items.push({ kind: 'event', event });
+    const nextOlderEvent = newestFirstEvents[index + 1];
+    const nextOlderDriveId = nextOlderEvent ? driveIdForEvent(nextOlderEvent) : null;
+    if (driveId && driveId !== nextOlderDriveId) {
+      items.push(makeDriveStartItem(driveId));
+    }
+  });
+  return items;
+};
+
+const humanizeDriveReason = (reason) => String(reason || 'possession')
+  .replace(/([a-z])([A-Z])/g, '$1 $2')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const RosterLookup = ({ envelope }) => {
   const teams = envelope.rosters.teams;
@@ -627,7 +999,9 @@ function buildActiveScorerEnvelope(fixtureEnvelope, acceptedState) {
   if (!fixtureEnvelope) return null;
 
   const submittedEnvelope = acceptedState.gameEnvelope || fixtureEnvelope;
-  const projectedEnvelope = applyProjectionToEnvelope(submittedEnvelope, acceptedState.projection);
+  const projectedEnvelope = normalizeFootballScoringSetupEnvelope(
+    applyProjectionToEnvelope(submittedEnvelope, acceptedState.projection),
+  );
   if (acceptedState.acceptedEvents.length === 0) return projectedEnvelope;
 
   const existingClientIds = new Set(projectedEnvelope.events.map((event) => event.clientEventId).filter(Boolean));

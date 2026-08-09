@@ -39,6 +39,9 @@ export type FootballPlaySubtype =
   | 'offsetting'
   | 'startQuarter'
   | 'endQuarter'
+  | 'setClock'
+  | 'timeout'
+  | 'challenge'
   | 'setBallContext'
   | 'startDrive'
   | 'setPossession'
@@ -79,7 +82,9 @@ export type DraftRulesSnapshot = {
   yardsToFirstDown?: number;
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
+  nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
+  safetyKickSpot?: Spot;
   fgReturn?: boolean;
   patReturns?: boolean;
 };
@@ -187,10 +192,15 @@ export type DraftResult = {
   pass?: DraftPassResult;
   kick?: DraftKickResult;
   return?: DraftReturnResult;
+  laterals?: DraftLateralResult[];
   fumble?: DraftFumbleResult;
   turnover?: DraftTurnoverResult;
   scoring?: DraftScoringResult;
   gameControl?: DraftGameControlResult;
+  clock?: ClockText;
+  clockTenths?: number;
+  isRunning?: boolean;
+  period?: number;
 };
 
 export type DraftResultCode =
@@ -216,6 +226,8 @@ export type DraftResultCode =
   | 'accepted'
   | 'declined'
   | 'offsetting'
+  | 'clockUpdate'
+  | 'periodUpdate'
   | 'noPlay';
 
 export type DraftPassResult = {
@@ -239,6 +251,7 @@ export type DraftPassResult = {
 export type DraftKickResult = {
   kickYards?: number;
   catchYardLine?: Spot;
+  outOfBoundsYardLine?: Spot;
   kickSpot?: Spot;
   attemptYards?: number;
   blockedByPlayerId?: string;
@@ -254,6 +267,12 @@ export type DraftReturnResult = {
   returnEndYardLine?: Spot;
   resultCode?: 'T' | 'O' | 'F' | 'C' | '.';
   tackledByPlayerIds?: string[];
+};
+
+export type DraftLateralResult = {
+  fromPlayerId?: string;
+  toPlayerId: string;
+  spot: Spot;
 };
 
 export type DraftFumbleResult = {
@@ -288,6 +307,9 @@ export type DraftGameControlResult = {
   action:
     | 'startQuarter'
     | 'endQuarter'
+    | 'setClock'
+    | 'timeout'
+    | 'challenge'
     | 'setBallContext'
     | 'startDrive'
     | 'setPossession'
@@ -296,6 +318,11 @@ export type DraftGameControlResult = {
     | 'rosterFunction';
   period?: number;
   clock?: ClockText | null;
+  isRunning?: boolean;
+  teamSide?: TeamCode;
+  teamId?: string;
+  timeoutType?: 'officials' | 'media';
+  challengeStatus?: 'initiated' | 'successful' | 'unsuccessful' | 'callStands' | 'callConfirmed' | 'callOverturned';
   down?: number;
   distance?: number;
   spot?: Spot;
@@ -328,6 +355,10 @@ export type DraftPenalty = {
   lossOfDown?: boolean;
   replayDown?: boolean;
   liveBall?: boolean;
+  deadBall?: boolean;
+  ejectionable?: boolean;
+  ejected?: boolean;
+  ejectedPlayerId?: string;
   safetyByRule?: boolean;
   carryOverToKO?: boolean;
   offsetting?: DraftPenaltyOffsetting;
@@ -481,6 +512,9 @@ const PLAY_SUBTYPES = new Set<Exclude<FootballPlaySubtype, null>>([
   'offsetting',
   'startQuarter',
   'endQuarter',
+  'setClock',
+  'timeout',
+  'challenge',
   'setBallContext',
   'startDrive',
   'setPossession',
@@ -557,6 +591,8 @@ const RESULT_CODES = new Set<DraftResultCode>([
   'accepted',
   'declined',
   'offsetting',
+  'clockUpdate',
+  'periodUpdate',
   'noPlay',
 ]);
 
@@ -622,7 +658,7 @@ export function isCanonicalSpot(value: unknown): value is Spot {
   const match = value.match(/^([HV])(\d{2})$/);
   if (!match) return false;
   const yard = Number(match[2]);
-  return yard >= 1 && yard <= 49;
+  return yard >= 0 && yard <= 49;
 }
 
 function validateTopLevel(intent: Record<string, unknown>, errors: FootballIntentValidationError[]) {
@@ -704,7 +740,7 @@ function validateGameContext(game: Record<string, unknown>, errors: FootballInte
   }
 
   if (isRecord(game.rules)) {
-    for (const field of ['kickoffSpot', 'touchbackSpot', 'patSpot']) {
+    for (const field of ['kickoffSpot', 'touchbackSpot', 'nonKickTouchbackSpot', 'patSpot', 'safetyKickSpot']) {
       if (game.rules[field] !== undefined && !isCanonicalSpot(game.rules[field])) {
         errors.push(error('INVALID_SPOT', `${field} must use canonical spot format`, `game.rules.${field}`));
       }
@@ -880,6 +916,7 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
   }
 
   validateNestedSpot(result.kick, 'result.kick.catchYardLine', 'catchYardLine', errors);
+  validateNestedSpot(result.kick, 'result.kick.outOfBoundsYardLine', 'outOfBoundsYardLine', errors);
   validateNestedSpot(result.kick, 'result.kick.kickSpot', 'kickSpot', errors);
   validateNestedSpot(result.pass, 'result.pass.caughtAtYardLine', 'caughtAtYardLine', errors);
   validateNestedSpot(result.pass, 'result.pass.intendedYardLine', 'intendedYardLine', errors);
@@ -892,6 +929,21 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
   validateNestedSpot(result.turnover, 'result.turnover.returnEndYardLine', 'returnEndYardLine', errors);
   validateNestedSpot(result.gameControl, 'result.gameControl.spot', 'spot', errors);
   validateNestedSpot(result.gameControl, 'result.gameControl.lineToGain', 'lineToGain', errors);
+
+  if (result.laterals !== undefined) {
+    if (!Array.isArray(result.laterals)) {
+      errors.push(error('INVALID_RESULT', 'result.laterals must be an array', 'result.laterals'));
+    } else {
+      result.laterals.forEach((lateral, index) => {
+        if (!isRecord(lateral) || typeof lateral.toPlayerId !== 'string' || !lateral.toPlayerId.trim()) {
+          errors.push(error('INVALID_RESULT', 'Each lateral requires a receiving player', `result.laterals.${index}.toPlayerId`));
+        }
+        if (!isRecord(lateral) || !isCanonicalSpot(lateral.spot)) {
+          errors.push(error('INVALID_SPOT', 'Each lateral requires a canonical spot', `result.laterals.${index}.spot`));
+        }
+      });
+    }
+  }
 
   if (isRecord(result.fumble) && result.fumble.recoveredByTeam !== undefined && !isTeamCode(result.fumble.recoveredByTeam)) {
     errors.push(error('INVALID_TEAM_CODE', 'result.fumble.recoveredByTeam must be H or V', 'result.fumble.recoveredByTeam'));
@@ -922,6 +974,9 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
     if (![
       'startQuarter',
       'endQuarter',
+      'setClock',
+      'timeout',
+      'challenge',
       'setBallContext',
       'startDrive',
       'setPossession',
@@ -933,6 +988,21 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
     }
     if (result.gameControl.possession !== undefined && !isTeamCode(result.gameControl.possession)) {
       errors.push(error('INVALID_TEAM_CODE', 'result.gameControl.possession must be H or V', 'result.gameControl.possession'));
+    }
+    if (result.gameControl.teamSide !== undefined && !isTeamCode(result.gameControl.teamSide)) {
+      errors.push(error('INVALID_TEAM_CODE', 'result.gameControl.teamSide must be H or V', 'result.gameControl.teamSide'));
+    }
+    if (
+      result.gameControl.timeoutType !== undefined
+      && !['officials', 'media'].includes(String(result.gameControl.timeoutType))
+    ) {
+      errors.push(error('INVALID_RESULT', 'result.gameControl.timeoutType must be officials or media', 'result.gameControl.timeoutType'));
+    }
+    if (
+      result.gameControl.challengeStatus !== undefined
+      && !['initiated', 'successful', 'unsuccessful', 'callStands', 'callConfirmed', 'callOverturned'].includes(String(result.gameControl.challengeStatus))
+    ) {
+      errors.push(error('INVALID_RESULT', 'result.gameControl.challengeStatus is invalid', 'result.gameControl.challengeStatus'));
     }
   }
 }
@@ -983,6 +1053,13 @@ function validatePenalties(
       errors.push(error('INVALID_PENALTY', `${field}.accepted must be boolean`, `${field}.accepted`));
     } else if ((penalty.status === 'accepted') !== penalty.accepted) {
       errors.push(error('INVALID_PENALTY', `${field}.accepted must mirror accepted status`, `${field}.accepted`));
+    }
+
+    if (penalty.ejected !== undefined && typeof penalty.ejected !== 'boolean') {
+      errors.push(error('INVALID_PENALTY', `${field}.ejected must be boolean`, `${field}.ejected`));
+    }
+    if (penalty.ejected === true && penalty.ejectionable !== true) {
+      errors.push(error('INVALID_PENALTY', `${field}.ejected requires an ejectionable penalty definition`, `${field}.ejected`));
     }
 
     if (penalty.spot !== undefined && !isCanonicalSpot(penalty.spot)) {

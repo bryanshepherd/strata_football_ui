@@ -171,18 +171,24 @@ export function validateCoinToss(record: CoinTossRecord, roster: readonly Player
 export function awaitingKickoffState(rules: { minutesPerPeriod?: number; kickoffSpot?: string }, toss: CoinTossRecord) {
   if (!toss.firstHalfKickingTeam || !toss.firstHalfReceivingTeam) throw new Error('Completed toss is required to initialize awaiting kickoff.');
   const seconds = Math.max(1, Number(rules.minutesPerPeriod || 0)) * 60;
+  const configuredKickoffSpot = String(rules.kickoffSpot || '');
+  const kickoffYard = configuredKickoffSpot.match(/^[HV](\d{1,2})$/i)?.[1];
+  const kickoffSpot = kickoffYard
+    ? `${toss.firstHalfKickingTeam}${kickoffYard.padStart(2, '0')}`
+    : rules.kickoffSpot || null;
   return {
     gamePhase: 'awaitingKickoff' as const,
     game: { status: 'pregame', period: 1 },
     clock: { period: 1, clock: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:00`, clockTenths: seconds * 10, isRunning: false, playClock: null, lastStartedAt: null },
-    liveState: { possession: null, down: null, distance: null, yardLine: rules.kickoffSpot || null, lineToGain: null, goalToGo: false, redZone: false, driveId: null, driveNumber: 0, nextPlayContext: 'awaitingKickoff' },
+    liveState: { possession: null, down: null, distance: null, yardLine: kickoffSpot, lineToGain: null, goalToGo: false, redZone: false, driveId: null, driveNumber: 0, nextPlayContext: 'awaitingKickoff' },
     kickingTeam: toss.firstHalfKickingTeam,
     receivingTeam: toss.firstHalfReceivingTeam,
   };
 }
 
 export function availablePlayFamilies(phase: FootballGamePhase): readonly string[] {
-  if (phase === 'awaitingKickoff') return ['kickoff', 'penalty'];
+  if (phase === 'pregame') return ['gameControl'];
+  if (phase === 'awaitingKickoff') return ['kickoff', 'penalty', 'gameControl'];
   if (phase === 'live') return ['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty', 'gameControl'];
   return [];
 }

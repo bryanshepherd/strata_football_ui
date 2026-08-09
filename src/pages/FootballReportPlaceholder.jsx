@@ -9,6 +9,30 @@ import {
 const formatStatus = (status) =>
   String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
 
+export const buildEjectionReportNotes = (gameEnvelope) => {
+  const events = Array.isArray(gameEnvelope?.events) ? gameEnvelope.events : [];
+  return events.flatMap((event) => {
+    const penalties = Array.isArray(event?.penalties) ? event.penalties : [];
+    return penalties.flatMap((penalty) => {
+      if (!/\bEJECTION:/i.test(String(penalty?.notes || '').trim())) return [];
+      const team = penalty.team;
+      const teamRecord = gameEnvelope?.game?.teams?.[team];
+      const player = penalty.playerId
+        ? gameEnvelope?.rosters?.teams?.[team]?.players?.[penalty.playerId]
+        : null;
+      const person = player
+        ? `#${player.jersey} ${player.displayName}`
+        : penalty.playerId || 'Penalized person';
+      const period = event.period ? `Q${event.period}` : 'Period not recorded';
+      const clock = event.clock || 'Clock not recorded';
+      return [{
+        id: `${event.eventId || event.clientEventId || event.sequence || 'event'}-${penalty.penaltyId || penalty.code}`,
+        text: `${teamRecord?.name || team || 'Team'} ${person} was ejected from the game (${penalty.code || 'penalty'}, ${period} ${clock}).`,
+      }];
+    });
+  });
+};
+
 export default function FootballReportPlaceholder() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedFixture = searchParams.get('fixture') || defaultFixtureKey;
@@ -16,6 +40,7 @@ export default function FootballReportPlaceholder() {
   const fixtureKey = envelope ? requestedFixture : defaultFixtureKey;
   const gameEnvelope = envelope || getGameEnvelopeFixture(defaultFixtureKey);
   const teams = gameEnvelope.game.teams;
+  const ejectionNotes = buildEjectionReportNotes(gameEnvelope);
 
   const onFixtureChange = (event) => {
     setSearchParams({ fixture: event.target.value });
@@ -82,6 +107,18 @@ export default function FootballReportPlaceholder() {
               <ReportMetric label={teams.H.abbr} value={String(teams.H.score)} />
               <ReportMetric label="Events" value={String(gameEnvelope.events.length)} />
             </div>
+            {ejectionNotes.length > 0 && (
+              <section className="mt-4 border-t border-zinc-200 pt-4" aria-label="Ejection notes">
+                <h4 className="text-sm font-bold uppercase tracking-wide text-red-800">Ejection Notes</h4>
+                <ul className="mt-2 space-y-2 text-sm text-zinc-900">
+                  {ejectionNotes.map((note) => (
+                    <li className="rounded border border-red-200 bg-red-50 px-3 py-2" key={note.id}>
+                      {note.text}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </section>
 
           <aside className="rounded border border-zinc-300 bg-white p-4">

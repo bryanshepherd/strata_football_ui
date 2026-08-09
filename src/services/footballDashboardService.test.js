@@ -1,0 +1,1065 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
+import {
+  enqueueFootballServerSync,
+  fetchFootballEnvelope,
+  flushFootballServerSync,
+  FOOTBALL_DASHBOARD_STORAGE_KEY,
+  FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
+  getDashboardSeededFootballEnvelopeRecord,
+  getPendingFootballSyncCount,
+  normalizeFootballScoringSetupEnvelope,
+  persistFootballPregameEnvelope,
+  recordFootballPossessionClock,
+  saveDashboardSeededFootballEnvelope,
+  submitFootballEventLocally,
+} from './footballDashboardService';
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const gameControlRequest = (eventId, action, fields = {}) => ({
+  event: {
+    schemaVersion: 'football.scoringEvent.v1',
+    eventId,
+    clientEventId: eventId,
+    type: 'gameControl',
+    subtype: action,
+    period: 1,
+    clock: '08:42',
+    possession: 'H',
+    result: {
+      code: action === 'setClock' ? 'clockUpdate' : 'noPlay',
+      gameControl: { action, ...fields },
+    },
+  },
+  clientContext: { submittedAt: '2026-08-07T12:00:00.000Z' },
+});
+
+const playRequest = (envelope, clientEventId, event) => {
+  const { nextPlayContext: _ignored, ...preState } = envelope.liveState;
+  return {
+    event: {
+      clientEventId,
+      period: envelope.clock.period,
+      clock: envelope.clock.clock,
+      possession: envelope.liveState.possession,
+      preState,
+      participants: { primary: null, secondary: null, defenders: [] },
+      penalties: [],
+      ...event,
+    },
+    clientContext: { submittedAt: '2026-08-07T12:00:00.000Z' },
+  };
+};
+
+describe('local-first football persistence', () => {
+  beforeEach(() => {
+    window.localStorage.removeItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+    window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
+  });
+
+  it('creates a durable browser record when the initial envelope came from the server', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-SERVER-SEED-001';
+    envelope.rosters.gameId = envelope.gameId;
+
+    const stored = saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    const record = getDashboardSeededFootballEnvelopeRecord(envelope.gameId);
+
+    expect(stored.gameId).toBe(envelope.gameId);
+    expect(record.envelope.gameId).toBe(envelope.gameId);
+    expect(record.envelope.game.teams.H.name).toBe(envelope.game.teams.H.name);
+  });
+
+  it('hydrates through the authenticated dashboard proxy and never from it again once local data exists', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-ENVELOPE-001';
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => envelope,
+    });
+
+    const loaded = await fetchFootballEnvelope(envelope.gameId, {
+      dashboardGameId: 'DASH-GAME-001',
+      fetchImpl,
+    });
+    saveDashboardSeededFootballEnvelope(loaded.gameId, loaded);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/football/games/DASH-GAME-001/envelope',
+      expect.objectContaining({ method: 'GET', credentials: 'same-origin' }),
+    );
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.gameId).toBe(envelope.gameId);
+  });
+
+  it('saves pregame locally and queues the mirror without waiting for a server response', async () => {
+    const envelope = clone(getGameEnvelopeFixture('pregame'));
+    envelope.gameId = 'FB-PREGAME-LOCAL-001';
+
+    const persisted = await persistFootballPregameEnvelope(envelope.gameId, envelope, {
+      dashboardGameId: 'DASH-PREGAME-001',
+    });
+
+    expect(persisted.gameId).toBe(envelope.gameId);
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.pregame).toEqual(envelope.pregame);
+  });
+
+  it('treats a server response as acknowledgment only and keeps the local envelope authoritative', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-LOCAL-AUTHORITY-001';
+    envelope.game.teams.H.score = 21;
+    saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    enqueueFootballServerSync({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-LOCAL-AUTHORITY-001',
+      kind: 'event',
+      payload: playRequest(envelope, 'LOCAL-AUTHORITY-EVENT-1', {
+        type: 'rush',
+        result: { code: 'tackle', yards: 1, endYardLine: 'H45' },
+      }),
+    });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ gameEnvelope: { ...envelope, game: { ...envelope.game, teams: {} } } }),
+    });
+
+    const result = await flushFootballServerSync({ fetchImpl });
+    const local = getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope;
+
+    expect(result).toMatchObject({ pendingCount: 0, syncedCount: 1, error: '' });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/football/games/DASH-LOCAL-AUTHORITY-001/events',
+      expect.objectContaining({ method: 'POST', credentials: 'same-origin' }),
+    );
+    expect(local.game.teams.H.score).toBe(21);
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(0);
+  });
+
+  it('keeps a failed mirror request queued without changing the local envelope', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-OFFLINE-001';
+    saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    enqueueFootballServerSync({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-OFFLINE-001',
+      kind: 'event',
+      payload: playRequest(envelope, 'OFFLINE-EVENT-1', {
+        type: 'rush',
+        result: { code: 'tackle', yards: 2, endYardLine: 'H46' },
+      }),
+    });
+
+    const result = await flushFootballServerSync({
+      fetchImpl: vi.fn().mockRejectedValue(new Error('offline')),
+    });
+
+    expect(result).toMatchObject({ pendingCount: 1, syncedCount: 0, error: 'offline' });
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.liveState.yardLine).toBe(envelope.liveState.yardLine);
+  });
+});
+
+describe('local football test-game projection', () => {
+  it('rebuilds time of possession from all timed drives instead of retaining a partial imported total', () => {
+    const envelope = clone(getGameEnvelopeFixture('secondQuarterRecovery'));
+    envelope.stats.teams = {
+      H: { timeOfPossession: 0 },
+      V: { timeOfPossession: '01:36' },
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.stats.teams.H.timeOfPossession).toBe(491);
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(394);
+    expect(normalized.stats.teams.H.possessionSegments).toHaveLength(4);
+    expect(normalized.stats.teams.V.possessionSegments).toHaveLength(3);
+    expect(normalized.stats.teams.H.possessionSegments.at(-1)).toEqual({
+      startPeriod: 1,
+      startClock: '00:35',
+    });
+  });
+
+  it('accepts an exact retry but rejects a reused client event ID for a different play', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const firstRequest = playRequest(envelope, 'fcqi-rush-10-client', {
+      type: 'rush',
+      result: { code: 'tackle', yards: 3, endYardLine: 'H47' },
+      description: 'First rush.',
+    });
+    const first = await submitFootballEventLocally(envelope, firstRequest);
+    const retry = await submitFootballEventLocally(first.gameEnvelope, firstRequest);
+    const conflictingRequest = playRequest(first.gameEnvelope, 'fcqi-rush-10-client', {
+      type: 'rush',
+      result: { code: 'touchdown', yards: 56, endYardLine: 'V00' },
+      description: 'Different touchdown rush.',
+    });
+    const conflict = await submitFootballEventLocally(first.gameEnvelope, conflictingRequest);
+
+    expect(first).toMatchObject({ ok: true, status: 'accepted' });
+    expect(retry).toMatchObject({ ok: true, status: 'duplicateAccepted' });
+    expect(retry.gameEnvelope.events).toHaveLength(first.gameEnvelope.events.length);
+    expect(conflict).toMatchObject({
+      ok: false,
+      status: 'rejected',
+      errors: [expect.objectContaining({ code: 'CLIENT_EVENT_ID_CONFLICT' })],
+    });
+    expect(conflict.gameEnvelope.events).toHaveLength(first.gameEnvelope.events.length);
+  });
+
+  it('accepts a clock correction and advances the event sequence', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const response = await submitFootballEventLocally(
+      envelope,
+      gameControlRequest('LOCAL-CLOCK-1', 'setClock', { clock: '05:17', isRunning: false }),
+    );
+
+    expect(response.ok).toBe(true);
+    expect(response.gameEnvelope.clock).toMatchObject({ clock: '05:17', clockTenths: 3170, isRunning: false });
+    expect(response.acceptedEvent.status).toBe('accepted');
+    expect(response.gameEnvelope.events.at(-1).eventId).toBe('LOCAL-CLOCK-1');
+    expect(response.gameEnvelope.stats.sourceEventSequence).toBe(response.acceptedEvent.sequence);
+  });
+
+  it('records a timeout without losing it during a later possession correction', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const timeout = await submitFootballEventLocally(
+      envelope,
+      gameControlRequest('LOCAL-TIMEOUT-1', 'timeout', { teamSide: 'H' }),
+    );
+    const possession = await submitFootballEventLocally(
+      timeout.gameEnvelope,
+      gameControlRequest('LOCAL-POSSESSION-1', 'setPossession', { possession: 'V' }),
+    );
+
+    expect(timeout.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
+    expect(possession.gameEnvelope.liveState.possession).toBe('V');
+    expect(possession.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
+  });
+
+  it('sets an explicit down, distance, spot, and line to gain', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const response = await submitFootballEventLocally(
+      envelope,
+      gameControlRequest('LOCAL-CONTEXT-1', 'setBallContext', {
+        possession: 'H',
+        down: 2,
+        distance: 5,
+        spot: 'H44',
+        lineToGain: 'H49',
+      }),
+    );
+
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'H',
+      down: 2,
+      distance: 5,
+      yardLine: 'H44',
+      lineToGain: 'H49',
+      nextPlayContext: 'H,2,5,H44',
+    });
+  });
+
+  it('applies an accepted queued penalty final spot and repeats the down', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const preState = { ...envelope.liveState };
+    delete preState.nextPlayContext;
+    const response = await submitFootballEventLocally(envelope, {
+      event: {
+        clientEventId: 'LOCAL-RUSH-PENALTY-1',
+        type: 'rush',
+        period: envelope.game.period,
+        clock: envelope.clock.clock,
+        possession: envelope.liveState.possession,
+        preState,
+        participants: { primary: { playerId: 'H-22', team: 'H', role: 'rusher' }, secondary: null, defenders: [] },
+        result: { code: 'tackle', yards: 7, endYardLine: 'V49' },
+        penalties: [{
+          penaltyId: 'LOCAL-PENALTY-1',
+          code: 'HOLD',
+          team: 'H',
+          status: 'accepted',
+          yards: 10,
+          enforcedFrom: 'spotOfFoul',
+          spotOfFoul: 'V45',
+          finalSpot: 'H45',
+          replayDown: true,
+        }],
+      },
+      clientContext: { submittedAt: '2026-08-07T12:00:00.000Z' },
+    });
+
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: envelope.liveState.possession,
+      down: envelope.liveState.down,
+      yardLine: 'H45',
+      lineToGain: envelope.liveState.lineToGain,
+    });
+  });
+
+  it('credits a spot-of-foul rush only through the foul spot while preserving its description', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 3,
+      distance: 9,
+      yardLine: 'H27',
+      lineToGain: 'H36',
+    };
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      team: 'H',
+      startYardLine: 'H27',
+      plays: 0,
+      yards: 0,
+    };
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-SPOT-FOUL-RUSH-1', {
+      type: 'rush',
+      subtype: null,
+      participants: {
+        primary: { playerId: 'H-10', team: 'H', role: 'rusher' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'tackle', yards: 8, endYardLine: 'H35' },
+      penalties: [{
+        penaltyId: 'LOCAL-SPOT-FOUL-PENALTY-1',
+        code: 'IBB',
+        team: 'H',
+        status: 'accepted',
+        yards: -10,
+        enforcedFrom: 'spotOfFoul',
+        spotOfFoul: 'H24',
+        finalSpot: 'H14',
+        replayDown: true,
+      }],
+      description: 'WVSU #10 Kaleb Jackson rush for 8 yards to the H35, PENALTY Illegal Block in the Back, enforced 10 yards from the H24 to the H14, replay down.',
+    }));
+
+    expect(response.acceptedEvent.result).toMatchObject({ yards: 8, endYardLine: 'H35' });
+    expect(response.acceptedEvent.description).toContain('rush for 8 yards to the H35');
+    expect(response.projection.yardsGained).toBe(-3);
+    expect(response.gameEnvelope.liveState).toMatchObject({ down: 3, yardLine: 'H14', lineToGain: 'H36' });
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      rushAttempts: 1,
+      rushYards: -3,
+      plays: 1,
+      yards: -3,
+      penalties: { num: 1, yds: 10 },
+    });
+    expect(response.gameEnvelope.stats.players['H-10']).toMatchObject({ rushAttempts: 1, rushYards: -3 });
+    expect(response.gameEnvelope.stats.teams.H.thirdDown).toBeUndefined();
+    expect(response.gameEnvelope.drives.current).toMatchObject({ plays: 1, yards: -13 });
+  });
+
+  it('erases play stats at the previous spot but still credits an automatic first down', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 3,
+      distance: 16,
+      yardLine: 'V41',
+      lineToGain: 'H43',
+    };
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      team: 'V',
+      startYardLine: 'V47',
+      plays: 8,
+      yards: -6,
+    };
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PREVIOUS-SPOT-PASS-1', {
+      type: 'pass',
+      subtype: 'incomplete',
+      participants: {
+        primary: { playerId: 'V-11', team: 'V', role: 'passer' },
+        secondary: { playerId: 'V-5', team: 'V', role: 'intendedReceiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'incomplete',
+        pass: { outcome: 'incomplete', targetPlayerId: 'V-5' },
+      },
+      penalties: [{
+        penaltyId: 'LOCAL-PREVIOUS-SPOT-PENALTY-1',
+        code: 'DH',
+        team: 'H',
+        status: 'accepted',
+        yards: 10,
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'H49',
+        automaticFirstDown: true,
+      }],
+    }));
+
+    expect(response.projection).toMatchObject({ yardsGained: 0, firstDown: true });
+    expect(response.gameEnvelope.liveState).toMatchObject({ possession: 'V', down: 1, yardLine: 'H49' });
+    expect(response.gameEnvelope.stats.teams.V).toMatchObject({ firstDowns: 1 });
+    expect(response.gameEnvelope.stats.teams.V.plays).toBeUndefined();
+    expect(response.gameEnvelope.stats.teams.V.pass).toBeUndefined();
+    expect(response.gameEnvelope.stats.teams.V.thirdDown).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['V-11']).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['V-5']).toBeUndefined();
+    expect(response.gameEnvelope.stats.teams.H.penalties).toEqual({ num: 1, yds: 10 });
+    expect(response.gameEnvelope.drives.current).toMatchObject({ plays: 8, yards: 4 });
+
+    const touchdown = await submitFootballEventLocally(response.gameEnvelope, playRequest(
+      response.gameEnvelope,
+      'LOCAL-PREVIOUS-SPOT-DRIVE-TD-1',
+      {
+        type: 'rush',
+        subtype: null,
+        participants: {
+          primary: { playerId: 'V-2', team: 'V', role: 'rusher' },
+          secondary: null,
+          defenders: [],
+        },
+        result: { code: 'tackle', yards: 49, endYardLine: 'H00' },
+      },
+    ));
+    expect(touchdown.gameEnvelope.drives.completed.at(-1)).toMatchObject({
+      team: 'V',
+      result: 'touchdown',
+      yards: 53,
+    });
+  });
+
+  it('credits a succeeding-spot pass in full while enforcing the penalty afterward', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-SUCCEEDING-SPOT-PASS-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'passer' },
+        secondary: { playerId: 'H-88', team: 'H', role: 'receiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 8,
+        endYardLine: 'V48',
+        pass: { outcome: 'complete', passingYards: 8, receivingYards: 8, terminalYardLine: 'V48' },
+      },
+      penalties: [{
+        penaltyId: 'LOCAL-SUCCEEDING-SPOT-PENALTY-1',
+        code: 'DPI',
+        team: 'V',
+        status: 'accepted',
+        yards: 15,
+        enforcedFrom: 'succeedingSpot',
+        finalSpot: 'V33',
+        automaticFirstDown: true,
+      }],
+    }));
+
+    expect(response.projection.yardsGained).toBe(8);
+    expect(response.gameEnvelope.liveState.yardLine).toBe('V33');
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      firstDowns: 2,
+      pass: { att: 1, cmp: 1, yds: 8 },
+      plays: 1,
+      yards: 8,
+    });
+    expect(response.gameEnvelope.stats.players['H-12']).toMatchObject({ passAttempts: 1, passCompletions: 1, passYards: 8 });
+    expect(response.gameEnvelope.drives.current.yards).toBe(42);
+  });
+
+  it('credits only the automatic first down when a succeeding-spot play finishes short of the line to gain', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-SUCCEEDING-SPOT-AUTO-FIRST-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'passer' },
+        secondary: { playerId: 'H-88', team: 'H', role: 'receiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 3,
+        endYardLine: 'H47',
+        pass: { outcome: 'complete', passingYards: 3, receivingYards: 3, terminalYardLine: 'H47' },
+      },
+      penalties: [{
+        penaltyId: 'LOCAL-SUCCEEDING-SPOT-AUTO-FIRST-PENALTY-1',
+        code: 'DPI',
+        team: 'V',
+        status: 'accepted',
+        yards: 15,
+        enforcedFrom: 'succeedingSpot',
+        finalSpot: 'V38',
+        automaticFirstDown: true,
+      }],
+    }));
+
+    expect(response.projection).toMatchObject({ yardsGained: 3, firstDown: true });
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      firstDowns: 1,
+      pass: { att: 1, cmp: 1, yds: 3 },
+      plays: 1,
+      yards: 3,
+    });
+  });
+
+  it('classifies a rush to the opponent goal line, scores it, and sets up the PAT and kickoff', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.teams.H.score = 0;
+    envelope.game.teams.V.score = 0;
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 1,
+      distance: 5,
+      yardLine: 'H05',
+      lineToGain: 'goal',
+      goalToGo: true,
+    };
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      team: 'V',
+      startYardLine: 'H05',
+      plays: 0,
+      yards: 0,
+    };
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const touchdown = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-GOAL-LINE-RUSH-1', {
+      type: 'rush',
+      subtype: null,
+      participants: { primary: { playerId: 'V-10', team: 'V', role: 'rusher' }, secondary: null, defenders: [] },
+      result: { code: 'tackle', yards: 5, endYardLine: 'H00' },
+      description: 'WVSU #10 Kaleb Jackson rush for 5 yards to the H goal line.',
+    }));
+
+    expect(touchdown.projection).toMatchObject({
+      yardsGained: 5,
+      scoringUpdate: { team: 'V', points: 6, type: 'touchdown' },
+    });
+    expect(touchdown.gameEnvelope.game.teams.V.score).toBe(6);
+    expect(touchdown.gameEnvelope.liveState).toMatchObject({
+      possession: null,
+      yardLine: 'H03',
+      pendingTryTeam: 'V',
+      nextPlayContext: 'awaitingTry',
+    });
+    expect(touchdown.gameEnvelope.stats.teams.V).toMatchObject({ rushAttempts: 1, rushYards: 5, plays: 1, yards: 5 });
+    expect(touchdown.gameEnvelope.stats.players['V-10']).toMatchObject({ rushAttempts: 1, rushYards: 5 });
+    expect(touchdown.gameEnvelope.drives.completed.at(-1)).toMatchObject({ team: 'V', plays: 1, yards: 5, result: 'touchdown' });
+
+    for (const [code, scoring, expectedScore] of [
+      ['made', { team: 'V', points: 1, type: 'patKick' }, 7],
+      ['missed', undefined, 6],
+    ]) {
+      const tryEnvelope = clone(touchdown.gameEnvelope);
+      const pat = await submitFootballEventLocally(tryEnvelope, playRequest(tryEnvelope, `LOCAL-PAT-${code}`, {
+        type: 'try',
+        subtype: 'kick',
+        participants: { primary: { playerId: 'V-30', team: 'V', role: 'kicker' }, secondary: null, defenders: [] },
+        result: { code, ...(scoring ? { scoring } : {}) },
+      }));
+      expect(pat.gameEnvelope.game.teams.V.score).toBe(expectedScore);
+      expect(pat.gameEnvelope.liveState).toMatchObject({
+        possession: null,
+        yardLine: 'V35',
+        kickoffTeam: 'V',
+        nextPlayContext: 'awaitingKickoff',
+      });
+    }
+  });
+
+  it('advances the live state from the canonical endpoint of a complete pass', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 2,
+      distance: 7,
+      yardLine: 'H46',
+      lineToGain: 'H39',
+    };
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      team: 'V',
+      startYardLine: 'V25',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-COMPLETE-PASS-ENDPOINT-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'V-10', team: 'V', role: 'passer' },
+        secondary: { playerId: 'V-3', team: 'V', role: 'intendedReceiver' },
+        receiver: { playerId: 'V-3', team: 'V', role: 'receiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 11,
+        endYardLine: 'H35',
+        pass: {
+          outcome: 'complete',
+          terminalYardLine: 'H35',
+          passingYards: 11,
+          receivingYards: 11,
+        },
+      },
+    }));
+
+    expect(response.projection).toMatchObject({ yardsGained: 11, firstDown: true });
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'H35',
+      lineToGain: 'H25',
+    });
+  });
+
+  it('projects rush, pass, player, penalty, and drive totals into the local test envelope', async () => {
+    let envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const rushOne = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-RUSH-STAT-1', {
+      type: 'rush',
+      subtype: null,
+      participants: {
+        primary: { playerId: 'H-22', team: 'H', role: 'rusher' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'tackle', yards: 3, endYardLine: 'H47' },
+    }));
+    envelope = rushOne.gameEnvelope;
+
+    const rushTwo = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-RUSH-STAT-2', {
+      type: 'rush',
+      subtype: null,
+      participants: {
+        primary: { playerId: 'H-22', team: 'H', role: 'rusher' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'tackle', yards: 2, endYardLine: 'H49' },
+    }));
+    envelope = rushTwo.gameEnvelope;
+
+    const pass = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PASS-STAT-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'passer' },
+        secondary: { playerId: 'H-88', team: 'H', role: 'intendedReceiver' },
+        receiver: { playerId: 'H-88', team: 'H', role: 'receiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        endYardLine: 'V43',
+        pass: { outcome: 'complete', passingYards: 8, receivingYards: 8, terminalYardLine: 'V43' },
+      },
+    }));
+    envelope = pass.gameEnvelope;
+
+    const penalty = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PENALTY-STAT-1', {
+      type: 'penalty',
+      subtype: 'accepted',
+      result: { code: 'accepted', endYardLine: 'H47' },
+      penalties: [{
+        penaltyId: 'PEN-1',
+        code: 'HOLD',
+        team: 'H',
+        status: 'accepted',
+        yards: 10,
+        finalSpot: 'H47',
+        replayDown: true,
+      }],
+    }));
+
+    expect(penalty.gameEnvelope.stats.teams.H).toMatchObject({
+      rushAttempts: 2,
+      rushYards: 5,
+      pass: { att: 1, cmp: 1, int: 0, yds: 8 },
+      plays: 3,
+      yards: 13,
+      penalties: { num: 1, yds: 10 },
+    });
+    expect(penalty.gameEnvelope.stats.players['H-22']).toMatchObject({ rushAttempts: 2, rushYards: 5 });
+    expect(penalty.gameEnvelope.stats.players['H-12']).toMatchObject({ passAttempts: 1, passCompletions: 1, passYards: 8 });
+    expect(penalty.gameEnvelope.stats.players['H-88']).toMatchObject({ targets: 1, receptions: 1, receivingYards: 8 });
+    expect(penalty.gameEnvelope.drives.current).toMatchObject({ plays: 7, yards: 22 });
+  });
+
+  it('credits sacks as team and quarterback rushes without double-counting total plays', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 2,
+      distance: 8,
+      yardLine: 'H44',
+      lineToGain: 'V48',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-SACK-STAT-1', {
+      type: 'pass',
+      subtype: 'sack',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'sackVictim' },
+        secondary: null,
+        defenders: [{ playerId: 'V-44', team: 'V', role: 'sacker' }],
+      },
+      result: { code: 'sack', yards: -9, endYardLine: 'H35', pass: { outcome: 'sack' } },
+    }));
+
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      rushAttempts: 1,
+      rushYards: -9,
+      plays: 1,
+      yards: -9,
+      pass: { att: 0, cmp: 0, int: 0, yds: 0 },
+    });
+    expect(response.gameEnvelope.stats.players['H-12']).toMatchObject({
+      rushAttempts: 1,
+      rushYards: -9,
+      passAttempts: 0,
+    });
+  });
+
+  it('projects kickoff returns, punts, and punt returns into team and player totals', async () => {
+    let envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H35',
+      lineToGain: null,
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    const kickoff = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-KICK-RETURN-STAT-1', {
+      type: 'kickoff',
+      subtype: 'returned',
+      possession: 'H',
+      participants: {
+        primary: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-3', team: 'V', role: 'returner' },
+        defenders: [],
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V26',
+        nextPossession: 'V',
+        driveEnds: true,
+        kick: { kickYards: 65 },
+        return: { type: 'Kickoff', returnerPlayerId: 'V-3', returnYards: 26 },
+      },
+    }));
+    envelope = kickoff.gameEnvelope;
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 4,
+      distance: 8,
+      yardLine: 'V40',
+      lineToGain: 'V48',
+    };
+
+    const punt = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PUNT-RETURN-STAT-1', {
+      type: 'punt',
+      subtype: 'returned',
+      participants: {
+        primary: { playerId: 'V-9', team: 'V', role: 'punter' },
+        punter: { playerId: 'V-9', team: 'V', role: 'punter' },
+        returner: { playerId: 'H-31', team: 'H', role: 'returner' },
+        defenders: [],
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'H21',
+        nextPossession: 'H',
+        driveEnds: true,
+        kick: { kickYards: 39 },
+        return: { type: 'Punt', returnerPlayerId: 'H-31', returnYards: 10 },
+      },
+    }));
+
+    expect(punt.gameEnvelope.stats.teams.V.punts).toEqual({ num: 1, yds: 39, avg: 39 });
+    expect(punt.gameEnvelope.stats.players['V-9']).toMatchObject({ punts: 1, puntYards: 39 });
+    expect(punt.gameEnvelope.stats.teams.V.fourthDown).toBeUndefined();
+    expect(punt.gameEnvelope.stats.teams.V.thirdDown).toBeUndefined();
+    expect(punt.gameEnvelope.stats.teams.V).not.toHaveProperty('plays');
+    expect(punt.gameEnvelope.stats.teams.H.puntReturns).toEqual({ num: 1, yds: 10 });
+    expect(punt.gameEnvelope.stats.players['H-31']).toMatchObject({ puntReturns: 1, puntReturnYards: 10 });
+    expect(punt.gameEnvelope.stats.teams.V.kickReturns).toEqual({ num: 1, yds: 26 });
+    expect(punt.gameEnvelope.stats.players['V-3']).toMatchObject({ kickReturns: 1, kickReturnYards: 26 });
+  });
+
+  it('counts a kickoff-return fumble and lost fumble for the receiving team', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H35',
+      lineToGain: null,
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-KICK-FUMBLE-STAT-1', {
+      type: 'kickoff',
+      subtype: 'returned',
+      possession: 'H',
+      participants: {
+        primary: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-3', team: 'V', role: 'returner' },
+        defenders: [{ playerId: 'H-31', team: 'H', role: 'recoverer' }],
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V28',
+        nextPossession: 'H',
+        driveEnds: true,
+        kick: { kickYards: 57, catchYardLine: 'V08' },
+        return: { type: 'Kickoff', returnerPlayerId: 'V-3', returnYards: 20, returnEndYardLine: 'V28' },
+        fumble: {
+          fumblerPlayerId: 'V-3',
+          forcedByPlayerId: 'H-31',
+          spot: 'V26',
+          recoveredByPlayerId: 'H-31',
+          recoveredByTeam: 'H',
+          recoverySpot: 'V28',
+          turnover: true,
+        },
+        turnover: { type: 'fumble', team: 'H', spot: 'V28' },
+      },
+    }));
+
+    expect(response.gameEnvelope.stats.teams.V.fumbles).toEqual({ num: 1, lost: 1 });
+    expect(response.gameEnvelope.stats.players['V-3']).toMatchObject({ fumbles: 1, fumblesLost: 1 });
+  });
+
+  it('counts third- and fourth-down attempts only on scrimmage conversion tries', async () => {
+    let envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 3,
+      distance: 5,
+      yardLine: 'H40',
+      lineToGain: 'H45',
+    };
+
+    const thirdDown = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-THIRD-DOWN-1', {
+      type: 'rush',
+      participants: { primary: { playerId: 'H-22', team: 'H', role: 'rusher' }, defenders: [] },
+      result: { code: 'tackle', yards: 6, endYardLine: 'H46' },
+    }));
+    envelope = thirdDown.gameEnvelope;
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 4,
+      distance: 2,
+      yardLine: 'V40',
+      lineToGain: 'V38',
+    };
+
+    const fourthDown = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-FOURTH-DOWN-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'passer' },
+        receiver: { playerId: 'H-88', team: 'H', role: 'receiver' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 3,
+        endYardLine: 'V37',
+        pass: { outcome: 'complete', passingYards: 3, receivingYards: 3, terminalYardLine: 'V37' },
+      },
+    }));
+
+    expect(fourthDown.gameEnvelope.stats.teams.H.thirdDown).toEqual({ att: 1, made: 1 });
+    expect(fourthDown.gameEnvelope.stats.teams.H.fourthDown).toEqual({ att: 1, made: 1 });
+  });
+
+  it('repairs stale team totals by replaying a complete accepted event log', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats = { ...envelope.stats, sourceEventSequence: 2, teams: {}, players: {} };
+    envelope.events = [
+      {
+        eventId: 'REPLAY-KICKOFF-1',
+        sequence: 1,
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        possession: 'H',
+        preState: { possession: null, down: null, distance: null, yardLine: 'H35', lineToGain: null },
+        participants: {
+          primary: { playerId: 'H-9', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-3', team: 'V', role: 'returner' },
+          defenders: [],
+        },
+        result: {
+          code: 'returned',
+          endYardLine: 'V26',
+          nextPossession: 'V',
+          kick: { catchYardLine: 'V00', kickYards: 65 },
+          return: { type: 'Kickoff', returnerPlayerId: 'V-3', returnYards: 26, returnEndYardLine: 'V26' },
+        },
+        penalties: [],
+      },
+      {
+        eventId: 'REPLAY-PUNT-2',
+        sequence: 2,
+        status: 'accepted',
+        type: 'punt',
+        subtype: 'fairCatch',
+        possession: 'V',
+        preState: { possession: 'V', down: 4, distance: 8, yardLine: 'V40', lineToGain: 'V48' },
+        participants: {
+          primary: { playerId: 'V-9', team: 'V', role: 'punter' },
+          punter: { playerId: 'V-9', team: 'V', role: 'punter' },
+          defenders: [],
+        },
+        result: {
+          code: 'fairCatch',
+          endYardLine: 'H21',
+          nextPossession: 'H',
+          kick: { catchYardLine: 'H21', kickYards: 39 },
+        },
+        penalties: [],
+      },
+    ];
+
+    const repaired = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(repaired.stats.teams.V.kickReturns).toEqual({ num: 1, yds: 26 });
+    expect(repaired.stats.teams.V.punts).toEqual({ num: 1, yds: 39, avg: 39 });
+    expect(repaired.stats.teams.V.fourthDown).toBeUndefined();
+    expect(repaired.stats.players['V-3']).toMatchObject({ kickReturns: 1, kickReturnYards: 26 });
+    expect(repaired.stats.players['V-9']).toMatchObject({ punts: 1, puntYards: 39 });
+  });
+
+  it('repairs a stale made-field-goal setup to the scoring team kickoff spot', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules.kickoffSpot = 'H35';
+    envelope.events = [{
+      eventId: 'FIELD-GOAL-35',
+      sequence: 35,
+      status: 'accepted',
+      type: 'fieldGoal',
+      subtype: 'made',
+      possession: 'H',
+      participants: { primary: { playerId: 'H-36', team: 'H', role: 'kicker' } },
+      result: { code: 'made', scoring: { team: 'H', points: 3, type: 'fieldGoal' } },
+    }];
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V20',
+      lineToGain: null,
+      pendingTryTeam: 'V',
+      kickoffTeam: 'V',
+      nextPlayContext: null,
+    };
+
+    expect(normalizeFootballScoringSetupEnvelope(envelope).liveState).toMatchObject({
+      possession: null,
+      yardLine: 'H35',
+      pendingTryTeam: null,
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    });
+  });
+
+  it('records the old possession end and new possession start from one clock prompt', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    const punt = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PUNT-CLOCK-1', {
+      type: 'punt',
+      subtype: 'downed',
+      result: { code: 'downed', endYardLine: 'V30', nextPossession: 'V', driveEnds: true },
+    }));
+
+    expect(punt.gameEnvelope.drives.completed.at(-1)).toMatchObject({
+      team: 'H',
+      endPeriod: 1,
+      endClock: '08:42',
+    });
+
+    const recorded = recordFootballPossessionClock(punt.gameEnvelope, {
+      previousPossession: 'H',
+      nextPossession: 'V',
+      period: 1,
+      clock: '07:30',
+    });
+
+    expect(recorded.clock).toMatchObject({ clock: '07:30', clockTenths: 4500, isRunning: false });
+    expect(recorded.stats.teams.H).toMatchObject({
+      timeOfPossession: 270,
+      possessionSegments: [{ startPeriod: 1, startClock: '12:00', endPeriod: 1, endClock: '07:30' }],
+    });
+    expect(recorded.stats.teams.V.possessionSegments).toEqual([{ startPeriod: 1, startClock: '07:30' }]);
+    expect(recorded.drives.completed.at(-1)).toMatchObject({
+      team: 'H',
+      endPeriod: 1,
+      endClock: '07:30',
+    });
+    expect(recorded.drives.current).toMatchObject({ team: 'V', startPeriod: 1, startClock: '07:30' });
+  });
+
+  it('uses the active drive start clock when possession is changed manually', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    const changed = {
+      ...envelope,
+      liveState: { ...envelope.liveState, possession: 'V' },
+    };
+
+    const recorded = recordFootballPossessionClock(changed, {
+      previousPossession: 'H',
+      nextPossession: 'V',
+      period: 1,
+      clock: '07:30',
+    });
+
+    expect(recorded.stats.teams.H.timeOfPossession).toBe(270);
+    expect(recorded.stats.teams.H.possessionSegments[0]).toMatchObject({
+      startClock: '12:00',
+      endClock: '07:30',
+    });
+  });
+});

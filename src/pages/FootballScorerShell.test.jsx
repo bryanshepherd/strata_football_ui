@@ -6,11 +6,13 @@ import { gameEnvelopeFixtures } from '../data/footballGameEnvelopeFixtures';
 import {
   createFootballDashboardGame,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
+  FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
+import { getHighestFootballFcqiSeedCounter } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballDashboard from './FootballDashboard';
 import FootballReportPlaceholder from './FootballReportPlaceholder';
-import FootballScorerShell from './FootballScorerShell';
+import FootballScorerShell, { FootballEventLogSlot } from './FootballScorerShell';
 
 const renderScorer = (initialEntry = '/scorer') =>
   render(
@@ -198,22 +200,97 @@ function makeReturnedEnvelope(request) {
 describe('FootballScorerShell', () => {
   beforeEach(() => {
     window.localStorage.removeItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+    window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
   });
 
   it('renders the main scorer route from the default fixture envelope', () => {
     renderScorer();
 
     expect(screen.getByRole('heading', { name: /visitor tech at home state/i })).toBeInTheDocument();
-    expect(screen.getByText('Football Confirmed Quick Input')).toBeInTheDocument();
+    expect(screen.queryByText('Football Confirmed Quick Input')).not.toBeInTheDocument();
     expect(screen.getAllByText('2 and 6').length).toBeGreaterThan(0);
     expect(screen.getByText('H44')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /play entry/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /game log/i })).toBeInTheDocument();
+    const driveStart = screen.getByRole('separator', { name: 'Drive Start - Home State' });
+    expect(driveStart).toHaveTextContent('Drive Start - Home State');
+    expect(driveStart).toHaveTextContent('12:00 at H25 by Possession');
     expect(screen.getByRole('heading', { name: /team stats/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /roster lookup/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /pregame workspace/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText(/scorer layout/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/input assistant/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/football debug trace/i)).not.toBeInTheDocument();
+  });
+
+  it('continues submission IDs above an imported envelope instead of reusing an old play ID', async () => {
+    const importedEnvelope = gameEnvelopeFixtures.secondQuarterRecovery;
+    expect(getHighestFootballFcqiSeedCounter(importedEnvelope)).toBe(52);
+    const submitMock = mockSubmitSuccess();
+
+    try {
+      renderScorer('/scorer?fixture=secondQuarterRecovery');
+      fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+      const rusherInput = screen.getByLabelText(/rusher jersey/i);
+      fireEvent.change(rusherInput, { target: { value: '10' } });
+      fireEvent.submit(rusherInput.closest('form'));
+      fireEvent.click(screen.getByRole('button', { name: /^end of play/i }));
+      const spotInput = screen.getByLabelText(/final ball spot/i);
+      fireEvent.change(spotInput, { target: { value: 'H28' } });
+      fireEvent.submit(spotInput.closest('form'));
+
+      const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+      fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
+      expect(submittedRequest(submitMock.fetchSpy).event.clientEventId).toBe('fcqi-rush-53-client');
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('places a drive-start separator between the drive plays and the event that created the drive', () => {
+    const envelope = JSON.parse(JSON.stringify(gameEnvelopeFixtures.kickoffDrive));
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      startClock: '14:54',
+      startReason: 'kickoff',
+      plays: 2,
+    };
+    envelope.events = [
+      envelope.events[0],
+      {
+        eventId: 'EVT-000002',
+        sequence: 2,
+        type: 'pass',
+        subtype: 'incomplete',
+        period: 1,
+        clock: '14:54',
+        possession: 'V',
+        preState: { possession: 'V', driveId: 'DRV-0001', yardLine: 'V25' },
+        result: { code: 'incomplete' },
+        description: 'Pass incomplete.',
+      },
+      {
+        eventId: 'EVT-000003',
+        sequence: 3,
+        type: 'rush',
+        period: 1,
+        clock: '14:40',
+        possession: 'V',
+        preState: { possession: 'V', driveId: 'DRV-0001', yardLine: 'V25' },
+        result: { code: 'tackle', yards: 1, endYardLine: 'V26' },
+        description: 'Rush for 1 yard.',
+      },
+    ];
+
+    const { container } = render(<FootballEventLogSlot envelope={envelope} />);
+    const logItems = Array.from(container.querySelector('ol').children).map((item) => item.textContent);
+
+    expect(logItems[0]).toContain('#3');
+    expect(logItems[1]).toContain('#2');
+    expect(logItems[2]).toContain('Drive Start - Visitor Tech');
+    expect(logItems[3]).toContain('#1');
   });
 
   it('uses the fixture fallback only when no gameId is provided', () => {
@@ -237,7 +314,7 @@ describe('FootballScorerShell', () => {
     renderScorer('/scorer?gameId=FB-DASH-LOAD');
 
     expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
-    expect(screen.getByText('Game FB-DASH-LOAD · dashboard-seed')).toBeInTheDocument();
+    expect(screen.getByText('Game FB-DASH-LOAD · Local envelope')).toBeInTheDocument();
     expect(screen.queryByLabelText(/dev fixture/i)).not.toBeInTheDocument();
     expect(screen.getAllByText('MTN').length).toBeGreaterThan(0);
   });
@@ -254,7 +331,7 @@ describe('FootballScorerShell', () => {
     });
 
     try {
-      renderScorer('/scorer?gameId=FB-DASH-FCQI');
+      renderScorer('/scorer?dashboardGameId=DASH-FCQI&envelopeGameId=FB-DASH-FCQI');
       expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
 
       completeRushFlowInputs();
@@ -263,8 +340,39 @@ describe('FootballScorerShell', () => {
 
       await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
       expect(submittedRequest(submitMock.fetchSpy).gameId).toBe('FB-DASH-FCQI');
+      expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FCQI/events');
+      expect(screen.getByText('Server mirror current')).toBeInTheDocument();
     } finally {
       submitMock.restore();
+    }
+  });
+
+  it('hydrates a dashboard launch once, then reloads only from the local envelope', async () => {
+    const originalFetch = globalThis.fetch;
+    const envelope = cloneNormalEnvelope();
+    envelope.gameId = 'FB-PROD-HYDRATE';
+    envelope.rosters.gameId = envelope.gameId;
+    envelope.game.teams.H.name = 'Hydrated Home';
+    envelope.game.teams.V.name = 'Hydrated Visitor';
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => envelope,
+    });
+    globalThis.fetch = fetchSpy;
+
+    try {
+      const first = renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
+      expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-PROD/envelope');
+
+      first.unmount();
+      renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
+      expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   });
 
@@ -364,7 +472,7 @@ describe('FootballScorerShell', () => {
     renderScorer('/scorer');
 
     expect(screen.getByRole('heading', { name: /play entry/i })).toBeInTheDocument();
-    expect(screen.getByText('Football Confirmed Quick Input')).toBeInTheDocument();
+    expect(screen.queryByText('Football Confirmed Quick Input')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /rush/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /pass/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /punt/i })).toBeEnabled();
@@ -582,7 +690,7 @@ describe('FootballScorerShell', () => {
     expect(screen.getByRole('button', { name: /micah smith/i })).toBeInTheDocument();
     expect(screen.getByText('Default')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /taylor jones/i }));
+    fireEvent.keyDown(window, { key: 'Enter', code: 'Enter' });
     expect(screen.getByRole('dialog', { name: /rush result/i })).toBeInTheDocument();
   });
 
@@ -591,7 +699,7 @@ describe('FootballScorerShell', () => {
       ['T', /tackler jersey/i],
       ['O', /tackler jersey/i],
       ['F', /forced by jersey/i],
-      ['C', /lateral flow not implemented yet/i],
+      ['C', /lateral to jersey/i],
       ['.', /final ball spot/i],
     ];
 
@@ -601,11 +709,7 @@ describe('FootballScorerShell', () => {
 
       fireEvent.keyDown(window, { key, code: key === '.' ? 'Period' : `Key${key}` });
 
-      if (key === 'C') {
-        expect(screen.getByText(expected)).toBeInTheDocument();
-      } else {
-        expect(screen.getByLabelText(expected)).toBeInTheDocument();
-      }
+      expect(screen.getByLabelText(expected)).toBeInTheDocument();
       unmount();
     });
   });
@@ -672,7 +776,7 @@ describe('FootballScorerShell', () => {
     const penaltyNameInput = screen.getByPlaceholderText(/hold or holding/i);
     fireEvent.change(penaltyNameInput, { target: { value: 'Holding' } });
     fireEvent.submit(penaltyNameInput.closest('form'));
-    fireEvent.click(screen.getByRole('button', { name: /^home h$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
 
     dialog = screen.getByRole('dialog', { name: /penalty resolution/i });
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
@@ -692,7 +796,36 @@ describe('FootballScorerShell', () => {
     assertGameControlMenu();
   });
 
-  it('game control emergency and roster functions safe-block without submitting', () => {
+  it('opens the roster workspace from the scorer header', () => {
+    renderScorer('/scorer?fixture=pregame');
+
+    expect(screen.getByRole('button', { name: /^game control/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /edit home starters/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Roster' }));
+
+    expect(screen.getByRole('dialog', { name: 'Football roster editor' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Home H-12 jersey')).toHaveValue('12');
+    expect(screen.queryByRole('button', { name: 'Open roster editor' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the coin toss moving after operator team aliases are accepted', () => {
+    renderScorer('/scorer?fixture=pregame');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Coin Toss' }));
+
+    expect(screen.getByLabelText('West Virginia St. abbreviation')).toHaveValue('W');
+    expect(screen.getByLabelText('Fairmont St. abbreviation')).toHaveValue('F');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByRole('heading', { name: 'Team Captains' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Team Abbreviations' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'West Virginia St.', exact: true }));
+    fireEvent.keyDown(window, { key: 'k', code: 'KeyK' });
+    expect(screen.getByRole('heading', { name: 'Away Chooses Direction' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /kick type/i })).not.toBeInTheDocument();
+  });
+
+  it('game control emergency builds a clock-stop summary and starters opens the optional team flow', () => {
     const originalFetch = globalThis.fetch;
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy;
@@ -700,22 +833,37 @@ describe('FootballScorerShell', () => {
     try {
       renderScorer();
       fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
-      fireEvent.click(screen.getByRole('button', { name: /^emergency e$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^emergency clock stop e$/i }));
 
-      expect(screen.getByText('Emergency controls not implemented yet')).toBeInTheDocument();
+      expect(screen.getByText(/emergency clock stop at/i)).toBeInTheDocument();
       expect(fetchSpy).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: /cancel play/i }));
 
       fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
-      fireEvent.click(screen.getByRole('button', { name: /^roster functions r$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^starters r$/i }));
 
-      expect(screen.getByText('Roster functions not implemented yet')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Choose starters team' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Home starters' }));
+      expect(screen.getByRole('dialog', { name: 'Home starters editor' })).toBeInTheDocument();
+      expect(screen.getAllByLabelText(/^Home offense starter \d+ jersey$/)).toHaveLength(11);
+      expect(screen.getAllByLabelText(/^Home defense starter \d+ jersey$/)).toHaveLength(11);
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it('game control quarter functions submenu safe-blocks controls', () => {
+  it('opens the penalty-code editor from Game Control with the F hotkey', () => {
+    renderScorer();
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    fireEvent.keyDown(window, { key: 'f', code: 'KeyF' });
+
+    expect(screen.getByRole('dialog', { name: 'Edit penalty codes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Penalty Type' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /^game control$/i })).not.toBeInTheDocument();
+  });
+
+  it('game control quarter functions build a reviewable period update', () => {
     renderScorer();
     fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
     fireEvent.click(screen.getByRole('button', { name: /^quarter functions q$/i }));
@@ -728,7 +876,7 @@ describe('FootballScorerShell', () => {
 
     fireEvent.click(within(quarterDialog).getByRole('button', { name: /^start quarter s$/i }));
 
-    expect(screen.getByText('Start quarter control submit not implemented yet')).toBeInTheDocument();
+    expect(screen.getByText(/start quarter 2/i)).toBeInTheDocument();
   });
 
   it('game control ball context collects values and calculates line to gain', () => {
@@ -753,22 +901,25 @@ describe('FootballScorerShell', () => {
       fireEvent.change(spotInput, { target: { value: 'H44' } });
       fireEvent.submit(spotInput.closest('form'));
 
-      expect(screen.getByText('Ball context control submit not implemented yet. Line to gain: H49')).toBeInTheDocument();
+      expect(screen.getByText((text) => (
+        /ball context set to 2 and 5/i.test(text)
+        && /line to gain/i.test(text)
+      ))).toBeInTheDocument();
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it('game control set possession collects H/V and safe-blocks submit', () => {
+  it('game control set possession collects H/V and builds a reviewable update', () => {
     renderScorer();
     fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
     fireEvent.click(screen.getByRole('button', { name: /^set possession p$/i }));
 
-    const possessionDialog = screen.getByRole('dialog', { name: /set possession/i });
-    fireEvent.click(within(possessionDialog).getByRole('button', { name: /^visitor v$/i }));
+    const possessionDialog = screen.getByRole('dialog', { name: /select team/i });
+    fireEvent.click(within(possessionDialog).getByRole('button', { name: /^visitor tech v$/i }));
 
-    expect(screen.getByText('Set possession control submit not implemented yet')).toBeInTheDocument();
+    expect(screen.getByText(/possession set to VIS/i)).toBeInTheDocument();
   });
 
   it('field goal good flow shows summary immediately and submits through the adapter', async () => {
@@ -896,6 +1047,19 @@ describe('FootballScorerShell', () => {
     expect(screen.getByText(/T means Touchback and C means Fair Catch here/i)).toBeInTheDocument();
   });
 
+  it('collects a punt blocker and removes Blocked from the second result screen', () => {
+    renderScorer();
+    startPuntReceiveResultSelection();
+    fireEvent.click(screen.getByRole('button', { name: /^blocked b$/i }));
+    const blockerInput = screen.getByLabelText(/blocked by jersey/i);
+    fireEvent.change(blockerInput, { target: { value: '44' } });
+    fireEvent.submit(blockerInput.closest('form'));
+
+    expect(screen.getByRole('dialog', { name: /kick receive result/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^blocked b$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^return r$/i })).toBeInTheDocument();
+  });
+
   it('punt return tackle flow shows summary immediately and submits through the adapter', async () => {
     const submitMock = mockSubmitSuccess();
 
@@ -921,6 +1085,87 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('asks for the clock after a local punt changes possession and records both possession timestamps', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    completePuntReturnFlowInputs('T');
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const clockDialog = await screen.findByRole('dialog', { name: /change of possession clock/i });
+    expect(clockDialog).not.toHaveTextContent(/home state.*visitor tech/i);
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    fireEvent.change(clockInput, { target: { value: '0801' } });
+    expect(clockInput).toHaveValue('08:01');
+    fireEvent.submit(clockInput.closest('form'));
+
+    const shell = screen.getByTestId('scorer-layout-shell');
+    const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
+    const statsSlot = shell.querySelector('[data-scorer-slot="stats"]');
+    const eventLogSlot = shell.querySelector('[data-scorer-slot="event-log"]');
+    await waitFor(() => expect(within(scoreboardSlot).getByText('08:01')).toBeInTheDocument());
+    expect(within(statsSlot).getByText('03:59')).toBeInTheDocument();
+    const driveStart = within(eventLogSlot).getByRole('separator', { name: 'Drive Start - Visitor Tech' });
+    expect(driveStart).toHaveTextContent('08:01 at V31 by Punt');
+    expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
+  });
+
+  it('prompts for a preselected clock after a touchdown, then runs the PAT from the try spot and respots for kickoff', async () => {
+    renderScorer('/scorer?fixture=goalToGo&local=1');
+
+    fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+    const rusherInput = screen.getByLabelText(/rusher jersey/i);
+    fireEvent.change(rusherInput, { target: { value: '31' } });
+    fireEvent.submit(rusherInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^end of play/i }));
+    const spotInput = screen.getByLabelText(/final ball spot/i);
+    fireEvent.change(spotInput, { target: { value: 'H00' } });
+    fireEvent.submit(spotInput.closest('form'));
+
+    let summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(summaryDialog).toHaveTextContent(/to the H goal line for a touchdown/i);
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+    expect(screen.queryByRole('dialog', { name: /drive summary/i })).not.toBeInTheDocument();
+
+    const clockDialog = await screen.findByRole('dialog', { name: /change of possession clock/i });
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    expect(clockInput).toHaveValue('01:32');
+    await waitFor(() => {
+      expect(clockInput.selectionStart).toBe(0);
+      expect(clockInput.selectionEnd).toBe(5);
+    });
+    fireEvent.submit(clockInput.closest('form'));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: /drive summary/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('H03').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Point After Try' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Assistant: Press A to enter PAT Try.')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'a', code: 'KeyA' });
+    expect(screen.queryByRole('button', { name: 'Point After Try' })).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('dialog', { name: /pat type/i })).getByRole('button', { name: /^kick k$/i }));
+    const kickerInput = screen.getByLabelText(/kicker jersey/i);
+    fireEvent.change(kickerInput, { target: { value: '31' } });
+    fireEvent.submit(kickerInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^good/i }));
+    summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const driveSummary = await screen.findByRole('dialog', { name: /drive summary/i });
+    expect(screen.queryByRole('button', { name: 'Point After Try' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Assistant: Press A to enter PAT Try.')).not.toBeInTheDocument();
+    expect(driveSummary).toHaveTextContent('Price 5 yard rush (Price Kick)');
+    expect(driveSummary).toHaveTextContent('Start: 03:08 at V35 by Punt');
+    expect(within(driveSummary).getByText('10')).toBeInTheDocument();
+    expect(within(driveSummary).getByText('65')).toBeInTheDocument();
+    expect(within(driveSummary).getByText('01:36')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('V35').length).toBeGreaterThan(0));
+    expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(screen.queryByRole('dialog', { name: /drive summary/i })).not.toBeInTheDocument();
+  });
+
   it('punt touchback and fair catch use kick receive meanings for T and C', async () => {
     const { unmount } = renderScorer();
 
@@ -935,20 +1180,18 @@ describe('FootballScorerShell', () => {
     expect(within(summaryDialog).getByText(/fair catch by #31 noah price/i)).toBeInTheDocument();
   });
 
-  it('punt return fumble and lateral are safe blocked', () => {
+  it('punt return fumble and lateral continue to their detail prompts', () => {
     const { unmount } = renderScorer();
 
     startPuntReturnTerminalSelection();
     fireEvent.click(screen.getByRole('button', { name: /^fumble/i }));
-    expect(screen.getByText('Fumble return not implemented yet')).toBeInTheDocument();
-    expect(screen.queryByText(/built event — not submitted/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /final spot/i })).toBeInTheDocument();
     unmount();
 
     renderScorer();
     startPuntReturnTerminalSelection();
     fireEvent.click(screen.getByRole('button', { name: /^lateral/i }));
-    expect(screen.getByText('Lateral flow not implemented yet')).toBeInTheDocument();
-    expect(screen.queryByText(/built event — not submitted/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/lateral to jersey/i)).toBeInTheDocument();
   });
 
   it('kickoff return tackle flow shows summary immediately and submits through the adapter', async () => {
@@ -990,44 +1233,42 @@ describe('FootballScorerShell', () => {
     expect(within(summaryDialog).getByText(/fair catch by #31 noah price/i)).toBeInTheDocument();
   });
 
-  it('kickoff out-of-bounds builds with no returner and muffed/downed block safely', async () => {
+  it('kickoff out-of-bounds builds with no returner and muffed/downed continue to details', async () => {
     let rendered = renderScorer();
 
     completeKickoffReceiveFlowInputs('O');
     const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
-    expect(within(summaryDialog).getByText(/kickoff out-of-bounds at the v35/i)).toBeInTheDocument();
+    expect(within(summaryDialog).getByText(/kickoff out-of-bounds at the v08, ball spotted at the v35/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/returner jersey/i)).not.toBeInTheDocument();
     rendered.unmount();
 
     rendered = renderScorer();
     startKickoffReceiveResultSelection();
     fireEvent.click(screen.getByRole('button', { name: /^muffed/i }));
-    expect(screen.getByText('Muffed kickoff/free kick flow not implemented yet')).toBeInTheDocument();
+    expect(screen.getByLabelText(/returner jersey/i)).toBeInTheDocument();
     rendered.unmount();
 
     rendered = renderScorer();
     startKickoffReceiveResultSelection();
     fireEvent.click(screen.getByRole('button', { name: /^downed/i }));
-    expect(screen.getByText('Downed kickoff/free kick flow not implemented yet')).toBeInTheDocument();
+    expect(screen.getByLabelText(/downing player jersey/i)).toBeInTheDocument();
   });
 
-  it('kickoff return fumble and lateral are safe blocked with terminal-result scope', () => {
+  it('kickoff return fumble and lateral continue to their detail prompts', () => {
     const { unmount } = renderScorer();
 
     startKickoffReturnTerminalSelection();
     fireEvent.click(screen.getByRole('button', { name: /^fumble/i }));
-    expect(screen.getByText('Fumble return not implemented yet')).toBeInTheDocument();
-    expect(screen.queryByText(/built event — not submitted/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /final spot/i })).toBeInTheDocument();
     unmount();
 
     renderScorer();
     startKickoffReturnTerminalSelection();
     fireEvent.click(screen.getByRole('button', { name: /^lateral/i }));
-    expect(screen.getByText('Lateral flow not implemented yet')).toBeInTheDocument();
-    expect(screen.queryByText(/built event — not submitted/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/lateral to jersey/i)).toBeInTheDocument();
   });
 
-  it('keeps the play summary visible for an unresolved queued penalty and disables submit', async () => {
+  it('keeps the play summary visible for an unresolved queued penalty and advances to penalty entry on Enter', async () => {
     const submitMock = mockSubmitSuccess();
 
     try {
@@ -1044,6 +1285,9 @@ describe('FootballScorerShell', () => {
       fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
       expect(screen.getAllByText('Penalty queued — resolve before submitting').length).toBeGreaterThan(0);
       expect(assistant).toHaveClass('bg-yellow-100');
+      const queuedFlowDialog = screen.getByRole('dialog', { name: /rush result/i });
+      expect(queuedFlowDialog).toHaveClass('border-amber-400', 'bg-amber-50');
+      expect(within(queuedFlowDialog).getByText('Shift+E for Flag on the Play')).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
       const tacklerInput = screen.getByLabelText(/^tackler jersey/i);
@@ -1060,6 +1304,7 @@ describe('FootballScorerShell', () => {
 
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       expect(summaryDialog).toHaveTextContent(/jordan smith rush for 7 yards/i);
+      expect(summaryDialog).toHaveClass('border-amber-400', 'bg-amber-50');
       expect(within(summaryDialog).getByText('Penalty queued — resolve before submitting')).toBeInTheDocument();
       const enterPenaltyButton = within(summaryDialog).getByRole('button', { name: /^enter penalty$/i });
       expect(enterPenaltyButton).toBeEnabled();
@@ -1078,15 +1323,7 @@ describe('FootballScorerShell', () => {
       fireEvent.click(submitButton);
       fireEvent.keyDown(summaryDialog, { key: 'Enter', code: 'Enter' });
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
-
-      fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
-      const clearedSummary = await screen.findByRole('dialog', { name: /play summary review/i });
-      expect(clearedSummary).toHaveTextContent(/jordan smith rush for 7 yards/i);
-      expect(screen.queryByText('Penalty queued — resolve before submitting')).not.toBeInTheDocument();
-      expect(assistant).not.toHaveClass('bg-yellow-100');
-      const enabledSubmit = within(clearedSummary).getByRole('button', { name: /^submit play$/i });
-      expect(enabledSubmit).toBeEnabled();
-      expect(enabledSubmit).toHaveClass('bg-emerald-700');
+      expect(screen.getByRole('dialog', { name: /^penalty$/i })).toBeInTheDocument();
     } finally {
       submitMock.restore();
     }
@@ -1124,7 +1361,7 @@ describe('FootballScorerShell', () => {
     const penaltyNameInput = screen.getByPlaceholderText(/hold or holding/i);
     fireEvent.change(penaltyNameInput, { target: { value: 'Holding' } });
     fireEvent.submit(penaltyNameInput.closest('form'));
-    fireEvent.click(screen.getByRole('button', { name: /^home h$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
     fireEvent.click(screen.getByRole('button', { name: /^declined d$/i }));
 
     const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
@@ -1153,7 +1390,7 @@ describe('FootballScorerShell', () => {
       const penaltyNameInput = screen.getByPlaceholderText(/hold or holding/i);
       fireEvent.change(penaltyNameInput, { target: { value: 'Offside' } });
       fireEvent.submit(penaltyNameInput.closest('form'));
-      fireEvent.click(screen.getByRole('button', { name: /^visitor v$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^visitor tech v$/i }));
       fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
 
       const playerInput = screen.getByLabelText(/penalized player/i);
@@ -1221,7 +1458,7 @@ describe('FootballScorerShell', () => {
     fireEvent.submit(spotInput.closest('form'));
 
     const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
-    expect(within(summaryDialog).getByText(/jordan smith rush for 56 yards for a touchdown/i)).toBeInTheDocument();
+    expect(within(summaryDialog).getByText(/jordan smith rush for 56 yards to the goal line for a touchdown/i)).toBeInTheDocument();
   });
 
   it('submit play calls the FCQI submit adapter once and clears the draft on success', async () => {
@@ -1238,7 +1475,7 @@ describe('FootballScorerShell', () => {
       expect(screen.getByText(/jordan smith rush for 7 yards to the v49, tackled by #44 caleb moss/i)).toBeInTheDocument();
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
 
-      fireEvent.click(screen.getByRole('button', { name: /^submit play$/i }));
+      fireEvent.keyDown(window, { key: 'Enter', code: 'Enter' });
 
       expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
       expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1);
@@ -1252,6 +1489,40 @@ describe('FootballScorerShell', () => {
     } finally {
       submitMock.restore();
     }
+  });
+
+  it('undoes the last event in a local test game and restores the prior log', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    const eventLogSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="event-log"]');
+    const initialEvents = within(eventLogSlot).getAllByRole('listitem').length;
+    const undoButton = within(eventLogSlot).getByRole('button', { name: /undo last test event/i });
+    expect(undoButton).toBeDisabled();
+
+    completeRushFlowInputs();
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
+    expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents + 1);
+    expect(undoButton).toBeEnabled();
+
+    fireEvent.click(undoButton);
+
+    expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents);
+    expect(undoButton).toBeDisabled();
+    expect(screen.queryByText('Submitted play.')).not.toBeInTheDocument();
+  });
+
+  it('populates the visible team stats after a local rush is submitted', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    const statsSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="stats"]');
+
+    completeRushFlowInputs();
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const rushingRow = within(statsSlot).getByText('Rushing').closest('tr');
+    await waitFor(() => expect(within(rushingRow).getByText('1 for 7 yards')).toBeInTheDocument());
   });
 
   it('returned gameEnvelope updates the active scoreboard and event log after submit', async () => {
@@ -1308,7 +1579,7 @@ describe('FootballScorerShell', () => {
       submitTextToken(/recovering team/i, 'V');
       submitTextToken(/recovery player jersey/i, '4');
       submitTextToken(/recovery spot/i, 'H49');
-      submitTextToken(/returned/i, 'no');
+      fireEvent.click(screen.getByRole('button', { name: /^no return n$/i }));
 
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       expect(summaryDialog).toHaveTextContent(/recovered by #4 andre cole for vis at the h49/i);
@@ -1533,7 +1804,51 @@ describe('FootballScorerShell', () => {
       expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
       expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1);
       expect(submittedRequest(submitMock.fetchSpy).event.type).toBe('pass');
+      expect(submittedRequest(submitMock.fetchSpy).event.result).toMatchObject({
+        yards: 7,
+        endYardLine: 'V49',
+        pass: { terminalYardLine: 'V49' },
+      });
       expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents + 1);
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('retains and selects the last submitted passer so typing replaces the default', async () => {
+    const submitMock = mockSubmitSuccess();
+
+    try {
+      renderScorer();
+      completePassFlowInputs();
+      const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+      fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByRole('button', { name: /^pass/i }));
+      const passerInput = screen.getByLabelText(/passer jersey/i);
+      await waitFor(() => {
+        expect(passerInput).toHaveValue('12');
+        expect(passerInput.selectionStart).toBe(0);
+        expect(passerInput.selectionEnd).toBe(2);
+      });
+
+      fireEvent.submit(passerInput.closest('form'));
+      expect(screen.getByRole('dialog', { name: /pass result/i })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /cancel quick input/i }));
+
+      fireEvent.click(screen.getByRole('button', { name: /^pass/i }));
+      const replacementInput = screen.getByLabelText(/passer jersey/i);
+      await waitFor(() => {
+        expect(replacementInput).toHaveValue('12');
+        expect(replacementInput.selectionStart).toBe(0);
+        expect(replacementInput.selectionEnd).toBe(2);
+      });
+
+      fireEvent.change(replacementInput, { target: { value: '22' } });
+      expect(replacementInput).toHaveValue('22');
+      fireEvent.submit(replacementInput.closest('form'));
+      expect(screen.getByRole('dialog', { name: /pass result/i })).toBeInTheDocument();
     } finally {
       submitMock.restore();
     }
@@ -1574,7 +1889,7 @@ describe('FootballScorerShell', () => {
     }
   });
 
-  it('retains a Rush draft when a queued penalty reaches the out-of-scope canonical boundary', async () => {
+  it('submits a Rush with its resolved queued penalty', async () => {
     const submitMock = mockSubmitSuccess();
 
     try {
@@ -1589,7 +1904,7 @@ describe('FootballScorerShell', () => {
       const penaltyNameInput = screen.getByPlaceholderText(/hold or holding/i);
       fireEvent.change(penaltyNameInput, { target: { value: 'Holding' } });
       fireEvent.submit(penaltyNameInput.closest('form'));
-      fireEvent.click(screen.getByRole('button', { name: /^home h$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
       fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
 
       const playerInput = screen.getByLabelText(/penalized player/i);
@@ -1615,9 +1930,17 @@ describe('FootballScorerShell', () => {
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
       fireEvent.click(within(updatedSummary).getByRole('button', { name: /^submit play$/i }));
 
-      expect(await screen.findByText(/penalties are not supported by the first rush vertical slice/i)).toBeInTheDocument();
-      expect(submitMock.fetchSpy).not.toHaveBeenCalled();
-      expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
+      expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
+      expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1);
+      expect(submittedRequest(submitMock.fetchSpy).event.penalties).toEqual([expect.objectContaining({
+        code: 'HOLD',
+        team: 'H',
+        status: 'accepted',
+        enforcedFrom: 'spotOfFoul',
+        spotOfFoul: 'V45',
+        finalSpot: 'H45',
+        replayDown: true,
+      })]);
     } finally {
       submitMock.restore();
     }
@@ -1701,12 +2024,16 @@ function assertGameControlMenu() {
   expect(within(dialog).queryByLabelText(/fcqi flow progress/i)).not.toBeInTheDocument();
   expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
   [
-    ['Emergency', 'E'],
+    ['Emergency Clock Stop', 'E'],
     ['Quarter Functions', 'Q'],
+    ['Set Clock', 'K'],
+    ['Timeout', 'T'],
+    ['Challenge', 'C'],
     ['Ball Context', 'B'],
     ['Drive Start', 'D'],
     ['Set Possession', 'P'],
-    ['Roster Functions', 'R'],
+    ['Edit Penalties', 'F'],
+    ['Starters', 'R'],
   ].forEach(([label, hotkey]) => {
     const button = within(dialog).getByRole('button', { name: new RegExp(`^${label} ${hotkey}$`, 'i') });
     expect(within(button).getByText(hotkey)).toBeInTheDocument();
@@ -1842,18 +2169,22 @@ function completePuntFairCatchFlowInputs() {
   startPuntReceiveResultSelection();
   fireEvent.click(screen.getByRole('button', { name: /^fair catch/i }));
 
-  const returnerInput = screen.getByLabelText(/returner jersey/i);
+  const returnerInput = screen.getByLabelText(/fair caught by/i);
   fireEvent.change(returnerInput, { target: { value: '31' } });
   fireEvent.submit(returnerInput.closest('form'));
 }
 
-function startKickoffReceiveResultSelection() {
+function startKickoffReceiveResultSelection(kickedToSpot = 'V20') {
   fireEvent.click(screen.getByRole('button', { name: /^kick/i }));
   fireEvent.click(screen.getByRole('button', { name: /^kickoff \/ free kick/i }));
 
   const kickerInput = screen.getByLabelText(/kicker jersey/i);
   fireEvent.change(kickerInput, { target: { value: '22' } });
   fireEvent.submit(kickerInput.closest('form'));
+
+  const kickedToInput = screen.getByLabelText(/kicked to spot/i);
+  fireEvent.change(kickedToInput, { target: { value: kickedToSpot } });
+  fireEvent.submit(kickedToInput.closest('form'));
 
   expect(screen.getByRole('dialog', { name: /kick receive result/i })).toBeInTheDocument();
 }
@@ -1865,10 +2196,6 @@ function startKickoffReturnTerminalSelection() {
   const returnerInput = screen.getByLabelText(/returner jersey/i);
   fireEvent.change(returnerInput, { target: { value: '31' } });
   fireEvent.submit(returnerInput.closest('form'));
-
-  const startSpotInput = screen.getByLabelText(/return start spot/i);
-  fireEvent.change(startSpotInput, { target: { value: 'V20' } });
-  fireEvent.submit(startSpotInput.closest('form'));
 
   expect(screen.getByRole('dialog', { name: /return result/i })).toBeInTheDocument();
 }
@@ -1899,28 +2226,27 @@ function completeKickoffReturnFlowInputs(terminalResult) {
 }
 
 function completeKickoffReceiveFlowInputs(receiveResult) {
-  startKickoffReceiveResultSelection();
+  startKickoffReceiveResultSelection(receiveResult === 'O' ? 'V08' : 'V20');
   const label = receiveResult === 'T' ? /^touchback/i : /^out of bounds/i;
   fireEvent.click(screen.getByRole('button', { name: label }));
 
   if (receiveResult === 'O') {
-    const spotInput = screen.getByLabelText(/out-of-bounds spot/i);
+    expect(screen.getByRole('dialog', { name: /rekick or spot the ball/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^spot the ball/i }));
+    const spotInput = screen.getByLabelText(/awarded ball spot/i);
     fireEvent.change(spotInput, { target: { value: 'V35' } });
     fireEvent.submit(spotInput.closest('form'));
   }
 }
 
 function completeKickoffFairCatchFlowInputs() {
-  startKickoffReceiveResultSelection();
+  startKickoffReceiveResultSelection('V26');
   fireEvent.click(screen.getByRole('button', { name: /^fair catch/i }));
 
   const returnerInput = screen.getByLabelText(/returner jersey/i);
   fireEvent.change(returnerInput, { target: { value: '31' } });
   fireEvent.submit(returnerInput.closest('form'));
 
-  const spotInput = screen.getByLabelText(/fair catch spot/i);
-  fireEvent.change(spotInput, { target: { value: 'V26' } });
-  fireEvent.submit(spotInput.closest('form'));
 }
 
 function startFieldGoalResultSelection() {
@@ -1948,6 +2274,7 @@ function startPatTypeSelection() {
 const PASS_BUTTON_EXPECTATIONS = [
   ['Complete', 'C'],
   ['Incomplete', 'I'],
+  ['Broken Up', 'B'],
   ['Sack', 'S'],
   ['Sack Fumble', 'F'],
   ['Rush Conversion', 'R'],
@@ -1961,6 +2288,7 @@ const PUNT_RECEIVE_BUTTON_EXPECTATIONS = [
   ['Out of Bounds', 'O'],
   ['Muffed', 'M'],
   ['Downed', 'D'],
+  ['Blocked', 'B'],
 ];
 
 const FIELD_GOAL_RESULT_BUTTON_EXPECTATIONS = [

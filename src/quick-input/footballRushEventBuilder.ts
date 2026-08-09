@@ -5,6 +5,7 @@ import type {
   FootballDraftIntent,
 } from './footballIntentSchema';
 import { validateFootballDraftIntent } from './footballIntentSchema';
+import { mapDraftPenaltyToCanonicalEvent } from './footballPenaltyMapper';
 import { generateFootballPlaySummary } from './footballPlaySummaryGrammar';
 
 export type RushEventBuildError = {
@@ -36,10 +37,6 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
   if (!intent.play.possession || intent.prePlay.possession !== intent.play.possession) {
     errors.push({ code: 'INVALID_PRE_PLAY_CONTEXT', message: 'Rush possession must match the pre-play state.', field: 'prePlay.possession' });
   }
-  if (intent.penalties.length > 0) {
-    errors.push({ code: 'PENALTIES_OUT_OF_SCOPE', message: 'Penalties are not supported by the first Rush vertical slice.', field: 'penalties' });
-  }
-
   const validation = validateFootballDraftIntent(intent);
   if (!validation.ok) {
     errors.push(...validation.errors.map((error) => ({ code: error.code, message: error.message, field: error.field })));
@@ -49,7 +46,7 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
   if (!rusher || rusher.role !== 'rusher' || rusher.team !== intent.play.possession) {
     errors.push({ code: 'MISSING_REQUIRED_PARTICIPANT', message: 'Rush primary participant must resolve to the possessing-team rusher.', field: 'participants.primary' });
   }
-  if (!['tackle', 'outOfBounds', 'touchdown', 'fumble'].includes(intent.result.code)) {
+  if (!['tackle', 'outOfBounds', 'touchdown', 'safety', 'touchback', 'fumble'].includes(intent.result.code)) {
     errors.push({ code: 'MISSING_REQUIRED_RESULT', message: 'Unsupported canonical Rush outcome.', field: 'result.code' });
   }
   if (typeof intent.result.yards !== 'number' || !Number.isInteger(intent.result.yards)) {
@@ -59,8 +56,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     errors.push({ code: 'MISSING_REQUIRED_RESULT', message: 'Non-touchdown Rush result requires an end spot.', field: 'result.endYardLine' });
   }
 
-  const fumble = intent.result.code === 'fumble' ? intent.result.fumble : undefined;
-  if (intent.result.code === 'fumble') {
+  const fumble = intent.result.fumble;
+  if (fumble) {
     for (const [field, value] of [
       ['fumblerPlayerId', fumble?.fumblerPlayerId],
       ['recoveredByPlayerId', fumble?.recoveredByPlayerId],
@@ -95,8 +92,15 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     ...(intent.result.endYardLine && intent.result.endYardLine !== 'goal' ? { endYardLine: intent.result.endYardLine } : {}),
     ...(typeof intent.result.firstDown === 'boolean' ? { firstDown: intent.result.firstDown } : {}),
   };
-  if (intent.result.code === 'touchdown') {
+  if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
+  if (intent.result.return) result.return = { ...intent.result.return };
+  if (intent.result.nextPossession) result.nextPossession = intent.result.nextPossession;
+  if (intent.result.scoring) {
+    result.scoring = { ...intent.result.scoring };
+  } else if (intent.result.code === 'touchdown') {
     result.scoring = { team: possession, points: 6, type: 'touchdown' };
+  } else if (intent.result.code === 'safety') {
+    result.scoring = { team: possession === 'H' ? 'V' : 'H', points: 2, type: 'safety' };
   }
   if (fumble) {
     const turnover = fumble.recoveredByTeam !== possession;
@@ -107,6 +111,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
       recoveredByPlayerId: fumble.recoveredByPlayerId!,
       recoveredByTeam: fumble.recoveredByTeam!,
       recoverySpot: fumble.recoverySpot!,
+      ...(typeof fumble.returnYards === 'number' ? { returnYards: fumble.returnYards } : {}),
+      ...(fumble.returnEndYardLine ? { returnEndYardLine: fumble.returnEndYardLine } : {}),
       turnover,
     };
     if (turnover) {
@@ -116,6 +122,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
         playerId: fumble.fumblerPlayerId,
         spot: fumble.recoverySpot!,
         recoveredBy: fumble.recoveredByTeam,
+        ...(typeof fumble.returnYards === 'number' ? { returnYards: fumble.returnYards } : {}),
+        ...(fumble.returnEndYardLine ? { returnEndYardLine: fumble.returnEndYardLine } : {}),
       };
     }
   }
@@ -135,7 +143,7 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
       defenders: canonicalRushParticipants(intent).map(mapParticipant),
     },
     result,
-    penalties: [],
+    penalties: intent.penalties.map(mapDraftPenaltyToCanonicalEvent),
     description: summary.summaryText,
   };
 
@@ -161,7 +169,12 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
 
 function canonicalRushParticipants(intent: FootballDraftIntent): DraftParticipant[] {
   const participants = [...intent.participants.defenders];
-  for (const participant of [intent.participants.forcedBy, intent.participants.recoveredBy]) {
+  for (const participant of [
+    intent.participants.forcedBy,
+    intent.participants.recoveredBy,
+    intent.participants.returner,
+    ...intent.participants.others,
+  ]) {
     if (participant && !participants.some((candidate) => candidate.playerId === participant.playerId)) {
       participants.push(participant);
     }

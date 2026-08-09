@@ -2,6 +2,32 @@ import React, { useEffect, useRef, useState } from 'react';
 import { searchFootballPenaltyTable } from '../../quick-input/penaltyTable';
 import FootballFlowProgress from './FootballFlowProgress';
 
+const yardLineSteps = new Set([
+  'endSpot',
+  'recoverSpot',
+  'lateralSpot',
+  'caughtAtSpot',
+  'passYardLine',
+  'sackSpot',
+  'puntSpot',
+  'returnEndSpot',
+  'downedSpot',
+  'kickReturnStartSpot',
+  'kickTouchbackSpot',
+  'kickFairCatchSpot',
+  'kickOutOfBoundsSpot',
+  'kickOutOfBoundsAwardedSpot',
+  'fieldGoalSpot',
+  'penaltySpotOfFoul',
+  'penaltyFinalSpot',
+  'gameControlSpot',
+  'gameControlDriveSpot',
+]);
+
+const normalizeVisibleInput = (step, value) => (
+  yardLineSteps.has(step) || step === 'recoverTeam' ? value.toUpperCase() : value
+);
+
 const stepCopy = {
   rusherJersey: {
     title: 'Rush',
@@ -42,7 +68,7 @@ const stepCopy = {
   forcedByJersey: {
     title: 'Fumble',
     label: 'Forced by jersey',
-    helper: 'Enter the defender who forced the fumble.',
+    helper: 'Enter the defender who forced the fumble, or press Enter to skip.',
     placeholder: '44',
   },
   recoverTeam: {
@@ -65,9 +91,9 @@ const stepCopy = {
   },
   fumbleReturned: {
     title: 'Fumble recovery',
-    label: 'Returned?',
-    helper: 'Enter yes or no. Returned fumbles are blocked in this pass.',
-    placeholder: 'No',
+    label: 'Fumble Return',
+    helper: 'Choose Return or No Return.',
+    placeholder: 'N',
   },
   passerJersey: {
     title: 'Pass',
@@ -105,17 +131,17 @@ const stepCopy = {
     helper: 'Enter the intended receiver jersey number.',
     placeholder: '88',
   },
+  interceptorJersey: {
+    title: 'Interception',
+    label: 'Interceptor jersey',
+    helper: 'Enter the defender who intercepted the pass.',
+    placeholder: '44',
+  },
   passYardLine: {
     title: 'Pass yardline',
     label: 'Yardline',
     helper: 'Enter the pass target/interception yardline, or press Enter to skip.',
     placeholder: 'V49',
-  },
-  brokenUp: {
-    title: 'Pass broken up',
-    label: 'Broken Up?',
-    helper: 'Enter yes or no. If yes, one defender is required.',
-    placeholder: 'No',
   },
   brokenUpDefenderJersey: {
     title: 'Pass broken up',
@@ -125,9 +151,9 @@ const stepCopy = {
   },
   hurried: {
     title: 'Pass hurried',
-    label: 'Hurried?',
-    helper: 'Enter yes or no. If yes, up to three defenders may be entered.',
-    placeholder: 'No',
+    label: 'Hurry',
+    helper: 'Choose Hurry or No Hurry. Up to three hurry defenders may be entered.',
+    placeholder: 'N',
   },
   hurryDefender1Jersey: {
     title: 'Pass hurry',
@@ -183,6 +209,12 @@ const stepCopy = {
     helper: 'Choose the kick receive result. T means Touchback and C means Fair Catch here.',
     placeholder: 'R',
   },
+  puntBlockedByJersey: {
+    title: 'Punt blocked',
+    label: 'Blocked by jersey',
+    helper: 'Enter the player who blocked the punt.',
+    placeholder: '44',
+  },
   returnerJersey: {
     title: 'Punt returner',
     label: 'Returner jersey',
@@ -212,6 +244,24 @@ const stepCopy = {
     label: 'Final spot',
     helper: 'Enter the return final spot.',
     placeholder: 'V31',
+  },
+  returnOwnGoalDecision: {
+    title: 'Touchback or Safety?',
+    label: 'Own goal-line result',
+    helper: 'Choose how the return ended.',
+    placeholder: 'T',
+  },
+  lateralToJersey: {
+    title: 'Lateral',
+    label: 'Lateral to jersey',
+    helper: 'Enter the teammate who received the lateral.',
+    placeholder: '22',
+  },
+  lateralSpot: {
+    title: 'Lateral',
+    label: 'Lateral received at',
+    helper: 'Enter the spot where the teammate received the lateral.',
+    placeholder: 'V35',
   },
   downingPlayerJersey: {
     title: 'Punt downed',
@@ -244,9 +294,9 @@ const stepCopy = {
     placeholder: 'R',
   },
   kickReturnStartSpot: {
-    title: 'Kick return start',
-    label: 'Return start spot',
-    helper: 'Enter the catch or return start spot.',
+    title: 'Kickoff / Free Kick',
+    label: 'Kicked To Spot',
+    helper: 'Enter where the kick was caught, touched, or landed.',
     placeholder: 'V20',
   },
   kickTouchbackSpot: {
@@ -261,11 +311,29 @@ const stepCopy = {
     helper: 'Enter the fair catch spot.',
     placeholder: 'V26',
   },
+  kickOutOfBoundsDecision: {
+    title: 'Rekick or Spot the Ball?',
+    label: 'Free kick out of bounds',
+    helper: 'Choose how the free-kick out-of-bounds infraction will be handled.',
+    placeholder: 'R',
+  },
   kickOutOfBoundsSpot: {
     title: 'Kick out of bounds',
-    label: 'Out-of-bounds spot',
-    helper: 'Enter the dead-ball spot.',
+    label: 'Went out of bounds at',
+    helper: 'Enter the yardline where the kick actually crossed out of bounds.',
+    placeholder: 'V08',
+  },
+  kickOutOfBoundsAwardedSpot: {
+    title: 'Spot the Ball',
+    label: 'Awarded ball spot',
+    helper: 'Enter the spot where the receiving team will begin its drive. Kick credit is calculated to this spot.',
     placeholder: 'V35',
+  },
+  kickRekickPenaltyReview: {
+    title: 'Free Kick Infraction',
+    label: 'Penalty review',
+    helper: 'Review the prefilled penalty, then accept it to continue to the play summary.',
+    placeholder: 'A',
   },
   fieldGoalSpot: {
     title: 'Field goal',
@@ -292,9 +360,9 @@ const stepCopy = {
     placeholder: '44',
   },
   fieldGoalReturnAttempted: {
-    title: 'Return Attempted?',
-    label: 'Return Attempted?',
-    helper: 'Choose whether the missed or blocked field goal was returned.',
+    title: 'Field Goal Return',
+    label: 'Field Goal Return',
+    helper: 'Choose Return or No Return.',
     placeholder: 'N',
   },
   patType: {
@@ -322,9 +390,9 @@ const stepCopy = {
     placeholder: '44',
   },
   patKickReturnAttempted: {
-    title: 'Return Attempted?',
-    label: 'Return Attempted?',
-    helper: 'Choose whether the blocked PAT was returned.',
+    title: 'Attempted Return by the Defense?',
+    label: 'Defensive return attempt',
+    helper: 'Choose Attempted Return or No Return.',
     placeholder: 'N',
   },
   patRusherJersey: {
@@ -340,9 +408,9 @@ const stepCopy = {
     placeholder: 'G',
   },
   patRushReturnAttempted: {
-    title: 'Return Attempted?',
-    label: 'Return Attempted?',
-    helper: 'Choose whether the fumbled try was returned.',
+    title: 'PAT Return',
+    label: 'PAT Return',
+    helper: 'Choose Return or No Return.',
     placeholder: 'N',
   },
   patPasserJersey: {
@@ -364,9 +432,9 @@ const stepCopy = {
     placeholder: 'G',
   },
   patPassReturnAttempted: {
-    title: 'Return Attempted?',
-    label: 'Return Attempted?',
-    helper: 'Choose whether the intercepted or fumbled try was returned.',
+    title: 'PAT Return',
+    label: 'PAT Return',
+    helper: 'Choose Return or No Return.',
     placeholder: 'N',
   },
   penaltyName: {
@@ -392,6 +460,12 @@ const stepCopy = {
     label: 'Penalized player # (optional)',
     helper: 'Enter a penalized player jersey, or press Enter to skip.',
     placeholder: '56',
+  },
+  penaltyEjected: {
+    title: 'Ejection',
+    label: 'Ejection decision',
+    helper: 'Was the penalized person ejected from the game?',
+    placeholder: 'N',
   },
   penaltyEnforcedFrom: {
     title: 'Enforced From',
@@ -431,14 +505,14 @@ const stepCopy = {
   },
   offsettingPlayCounts: {
     title: 'Offsetting fouls',
-    label: 'Does the previous play count?',
-    helper: 'Choose whether the previous play counts.',
+    label: 'Previous Play',
+    helper: 'Choose Play Counts or No Play.',
     placeholder: 'N',
   },
   gameControlMenu: {
     title: 'Game Control',
     label: 'Game Control',
-    helper: 'Choose a non-play game operation. Coin Toss is hidden until pregame detection is wired.',
+    helper: 'Choose a non-play game operation.',
     placeholder: 'B',
   },
   gameControlQuarterMenu: {
@@ -466,10 +540,28 @@ const stepCopy = {
     placeholder: 'H35',
   },
   gameControlPossession: {
-    title: 'Set Possession',
-    label: 'Possession Team',
-    helper: 'Choose Home or Visitor.',
+    title: 'Select Team',
+    label: 'Team',
+    helper: 'Choose Home or Visitor for this game-control action.',
     placeholder: 'H',
+  },
+  gameControlDriveSpot: {
+    title: 'Drive Start',
+    label: 'Starting Spot',
+    helper: 'Enter the spot where the selected team begins its drive.',
+    placeholder: 'H25',
+  },
+  gameControlClock: {
+    title: 'Set Game Clock',
+    label: 'Game Clock',
+    helper: 'Enter the displayed game clock in MM:SS format.',
+    placeholder: '12:34',
+  },
+  gameControlChallengeStatus: {
+    title: 'Challenge',
+    label: 'Challenge Result',
+    helper: 'Record the current or final result of the challenge.',
+    placeholder: 'I',
   },
 };
 
@@ -484,6 +576,7 @@ const rushResultButtons = [
 const passResultButtons = [
   { label: 'Complete', hotkey: 'C', value: 'C' },
   { label: 'Incomplete', hotkey: 'I', value: 'I' },
+  { label: 'Broken Up', hotkey: 'B', value: 'B' },
   { label: 'Sack', hotkey: 'S', value: 'S' },
   { label: 'Sack Fumble', hotkey: 'F', value: 'F' },
   { label: 'Rush Conversion', hotkey: 'R', value: 'R' },
@@ -499,9 +592,26 @@ const puntReceiveResultButtons = [
   { label: 'Out of Bounds', hotkey: 'O', value: 'O' },
   { label: 'Muffed', hotkey: 'M', value: 'M' },
   { label: 'Downed', hotkey: 'D', value: 'D' },
+  { label: 'Blocked', hotkey: 'B', value: 'B' },
 ];
 
+const kickReceiveResultButtons = puntReceiveResultButtons.filter((button) => button.value !== 'B');
+
 const returnTerminalResultButtons = rushResultButtons;
+
+const returnOwnGoalDecisionButtons = [
+  { label: 'Touchback', hotkey: 'T', value: 'T' },
+  { label: 'Safety', hotkey: 'S', value: 'S' },
+];
+
+const kickOutOfBoundsDecisionButtons = [
+  { label: 'Rekick', hotkey: 'R', value: 'R' },
+  { label: 'Spot the Ball', hotkey: 'S', value: 'S' },
+];
+
+const kickRekickPenaltyReviewButtons = [
+  { label: 'Accept Penalty', hotkey: 'A', value: 'A' },
+];
 
 const kickMenuButtons = [
   { label: 'Kickoff / Free Kick', hotkey: 'O', value: 'O' },
@@ -544,20 +654,30 @@ const patPassResultButtons = [
   { label: 'Fumbled', hotkey: 'F', value: 'F' },
 ];
 
-const returnAttemptedButtons = [
-  { label: 'Yes', hotkey: 'Y', value: 'Y' },
-  { label: 'No', hotkey: 'N', value: 'N' },
+const hurryButtons = [
+  { label: 'Hurry', hotkey: 'Y', value: 'Y' },
+  { label: 'No Hurry', hotkey: 'N', value: 'N' },
 ];
 
-const penaltyTeamButtons = [
-  { label: 'Home', hotkey: 'H', value: 'H' },
-  { label: 'Visitor', hotkey: 'V', value: 'V' },
+const returnAttemptedButtons = [
+  { label: 'Return', hotkey: 'Y', value: 'Y' },
+  { label: 'No Return', hotkey: 'N', value: 'N' },
+];
+
+const patReturnAttemptedButtons = [
+  { label: 'Attempted Return', hotkey: 'Y', value: 'Y' },
+  { label: 'No Return', hotkey: 'N', value: 'N' },
 ];
 
 const penaltyResolutionButtons = [
   { label: 'Accepted', hotkey: 'A', value: 'A' },
   { label: 'Declined', hotkey: 'D', value: 'D' },
   { label: 'Offsetting', hotkey: 'O', value: 'O' },
+];
+
+const penaltyEjectedButtons = [
+  { label: 'Ejected', hotkey: 'Y', value: 'Y' },
+  { label: 'Not Ejected', hotkey: 'N', value: 'N' },
 ];
 
 const penaltyEnforcedFromButtons = [
@@ -573,22 +693,35 @@ const penaltyDownButtons = [
 ];
 
 const offsettingPlayCountsButtons = [
-  { label: 'Yes, play counts', hotkey: 'Y', value: 'Y' },
-  { label: 'No, play is cancelled', hotkey: 'N', value: 'N' },
+  { label: 'Play Counts', hotkey: 'Y', value: 'Y' },
+  { label: 'No Play', hotkey: 'N', value: 'N' },
 ];
 
 const gameControlMenuButtons = [
-  { label: 'Emergency', hotkey: 'E', value: 'E' },
+  { label: 'Emergency Clock Stop', hotkey: 'E', value: 'E' },
   { label: 'Quarter Functions', hotkey: 'Q', value: 'Q' },
+  { label: 'Set Clock', hotkey: 'K', value: 'K' },
+  { label: 'Timeout', hotkey: 'T', value: 'T' },
+  { label: 'Challenge', hotkey: 'C', value: 'C' },
   { label: 'Ball Context', hotkey: 'B', value: 'B' },
   { label: 'Drive Start', hotkey: 'D', value: 'D' },
   { label: 'Set Possession', hotkey: 'P', value: 'P' },
-  { label: 'Roster Functions', hotkey: 'R', value: 'R' },
+  { label: 'Edit Penalties', hotkey: 'F', value: 'F' },
+  { label: 'Starters', hotkey: 'R', value: 'R' },
 ];
 
 const quarterFunctionButtons = [
   { label: 'Start Quarter', hotkey: 'S', value: 'S' },
   { label: 'End Quarter', hotkey: 'E', value: 'E' },
+];
+
+const challengeStatusButtons = [
+  { label: 'Challenge Initiated', hotkey: 'I', value: 'I' },
+  { label: 'Challenge Successful', hotkey: 'S', value: 'S' },
+  { label: 'Challenge Unsuccessful', hotkey: 'U', value: 'U' },
+  { label: 'Call Stands', hotkey: 'ST', value: 'ST' },
+  { label: 'Call Confirmed', hotkey: 'CF', value: 'CF' },
+  { label: 'Call Overturned', hotkey: 'O', value: 'O' },
 ];
 
 export default function FootballFlowModal({
@@ -598,11 +731,15 @@ export default function FootballFlowModal({
   onStepClick,
   onTokenCommit,
   progressSteps = [],
+  teamAliases,
+  teamNames,
 }) {
   const [value, setValue] = useState(state.currentToken || '');
   const inputRef = useRef(null);
-  const activeStep = state.currentStep ? stepCopy[state.currentStep] : null;
-  const activeButtons = resultButtonsForStep(state.currentStep);
+  const selectedPrefillRef = useRef(null);
+  const aliases = normalizeTeamAliases(teamAliases);
+  const activeStep = state.currentStep ? stepCopyForState(state, aliases, teamNames) : null;
+  const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state);
   const buttonOnly = Boolean(activeButtons);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 8)
@@ -614,7 +751,15 @@ export default function FootballFlowModal({
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, [state.currentStep, state.status]);
+    if (!state.selectCurrentToken) {
+      selectedPrefillRef.current = null;
+      return;
+    }
+    const selectionKey = `${state.flow || ''}:${state.currentStep || ''}:${state.currentToken}`;
+    if (value !== state.currentToken || selectedPrefillRef.current === selectionKey) return;
+    inputRef.current?.select();
+    selectedPrefillRef.current = selectionKey;
+  }, [state.currentStep, state.currentToken, state.flow, state.selectCurrentToken, state.status, value]);
 
   useEffect(() => {
     if (!activeButtons || state.status !== 'token.awaiting') return undefined;
@@ -629,7 +774,7 @@ export default function FootballFlowModal({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onTokenCommit, state.currentStep, state.status]);
+  }, [aliases.H, aliases.V, onTokenCommit, state.currentStep, state.status, state.tokens?.gameControlSelection, state.tokens?.puntBlocked, teamNames?.H, teamNames?.V]);
 
   if (!activeStep || (state.status !== 'token.awaiting' && state.status !== 'token.error')) {
     return null;
@@ -645,6 +790,8 @@ export default function FootballFlowModal({
       eyebrow="Football confirmed quick input"
       onCancel={onCancel}
       onStepClick={onStepClick}
+      queuedPenaltyActive={Boolean(state.queuedPenaltyRequested)}
+      showPenaltyShortcut={['rush', 'pass', 'punt', 'kick'].includes(state.flow)}
       progressSteps={state.flow === 'gameControl' ? [] : progressSteps}
       title={activeStep.title}
     >
@@ -698,10 +845,12 @@ export default function FootballFlowModal({
               <input
                 ref={inputRef}
                 aria-invalid={state.status === 'token.error' ? 'true' : 'false'}
+                autoCapitalize={yardLineSteps.has(state.currentStep) ? 'characters' : 'off'}
                 className="mt-2 w-full rounded border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold tabular-nums outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                 id={`fcqi-${state.currentStep}`}
-                onChange={(event) => setValue(event.target.value)}
+                onChange={(event) => setValue(normalizeVisibleInput(state.currentStep, event.target.value))}
                 placeholder={activeStep.placeholder}
+                spellCheck={yardLineSteps.has(state.currentStep) ? false : undefined}
                 value={value}
               />
             </>
@@ -739,17 +888,22 @@ export default function FootballFlowModal({
   );
 }
 
-const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, title }) => (
+const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, queuedPenaltyActive, showPenaltyShortcut, title }) => (
   <div className="fixed inset-0 z-40 grid place-items-center bg-zinc-950/55 p-4" role="presentation">
     <section
       aria-label={title}
       aria-modal="true"
-      className="w-full max-w-md rounded border border-zinc-300 bg-white shadow-xl"
+      className={`w-full max-w-md rounded border shadow-xl ${
+        queuedPenaltyActive
+          ? 'border-amber-400 bg-amber-50'
+          : 'border-zinc-300 bg-white'
+      }`}
+      data-penalty-queued={queuedPenaltyActive ? 'true' : 'false'}
       role="dialog"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4">
+      <div className={`flex items-start justify-between gap-4 border-b px-5 py-4 ${queuedPenaltyActive ? 'border-amber-300' : 'border-zinc-200'}`}>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
+          <p className={`text-xs font-semibold uppercase tracking-wide ${queuedPenaltyActive ? 'text-amber-800' : 'text-emerald-700'}`}>{eyebrow}</p>
           <h2 className="mt-1 text-lg font-semibold text-zinc-950">{title}</h2>
         </div>
         <button
@@ -765,38 +919,119 @@ const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, t
         <FootballFlowProgress onStepClick={onStepClick} steps={progressSteps} />
         {children}
       </div>
+      {showPenaltyShortcut && (
+        <div className={`border-t px-5 py-3 text-center text-xs font-black uppercase tracking-wide ${
+          queuedPenaltyActive
+            ? 'border-amber-300 bg-amber-100 text-amber-950'
+            : 'border-zinc-200 bg-zinc-50 text-zinc-600'
+        }`}>
+          Shift+E for Flag on the Play
+        </div>
+      )}
     </section>
   </div>
 );
 
-function resultButtonsForStep(step) {
+function resultButtonsForStep(step, aliases, teamNames, state) {
   if (step === 'result') return rushResultButtons;
   if (step === 'passResult') return passResultButtons;
   if (step === 'completeResult') return completeResultButtons;
-  if (step === 'puntReceiveResult') return puntReceiveResultButtons;
+  if (step === 'puntReceiveResult') return state?.tokens?.puntBlocked
+    ? puntReceiveResultButtons.filter((button) => button.value !== 'B')
+    : puntReceiveResultButtons;
   if (step === 'kickMenu') return kickMenuButtons;
-  if (step === 'kickReceiveResult') return puntReceiveResultButtons;
+  if (step === 'kickReceiveResult') return kickReceiveResultButtons;
+  if (step === 'kickOutOfBoundsDecision') return kickOutOfBoundsDecisionButtons;
+  if (step === 'kickRekickPenaltyReview') return kickRekickPenaltyReviewButtons;
   if (step === 'returnTerminalResult') return returnTerminalResultButtons;
+  if (step === 'returnOwnGoalDecision') return returnOwnGoalDecisionButtons;
+  if (step === 'fumbleReturned') return returnAttemptedButtons;
+  if (step === 'hurried') return hurryButtons;
   if (step === 'fieldGoalResult') return fieldGoalResultButtons;
   if (step === 'fieldGoalMissedReason') return missedReasonButtons;
   if (step === 'fieldGoalReturnAttempted') return returnAttemptedButtons;
   if (step === 'patType') return patTypeButtons;
   if (step === 'patKickResult') return fieldGoalResultButtons;
   if (step === 'patKickMissedReason') return missedReasonButtons;
-  if (step === 'patKickReturnAttempted') return returnAttemptedButtons;
+  if (step === 'patKickReturnAttempted') return patReturnAttemptedButtons;
   if (step === 'patRushResult') return patRushResultButtons;
   if (step === 'patRushReturnAttempted') return returnAttemptedButtons;
   if (step === 'patPassResult') return patPassResultButtons;
   if (step === 'patPassReturnAttempted') return returnAttemptedButtons;
-  if (step === 'penaltyTeam' || step === 'offsettingSecondTeam') return penaltyTeamButtons;
+  if (step === 'penaltyTeam' || step === 'offsettingSecondTeam') return teamButtonsForAliases(aliases, teamNames);
   if (step === 'penaltyResolution') return penaltyResolutionButtons;
+  if (step === 'penaltyEjected') return penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
   if (step === 'penaltyDown') return penaltyDownButtons;
   if (step === 'offsettingPlayCounts') return offsettingPlayCountsButtons;
   if (step === 'gameControlMenu') return gameControlMenuButtons;
   if (step === 'gameControlQuarterMenu') return quarterFunctionButtons;
-  if (step === 'gameControlPossession') return penaltyTeamButtons;
+  if (step === 'gameControlPossession') return state?.tokens?.gameControlSelection === 'timeout'
+    ? timeoutButtonsForAliases(aliases, teamNames)
+    : teamButtonsForAliases(aliases, teamNames);
+  if (step === 'gameControlChallengeStatus') return challengeStatusButtons;
   return null;
+}
+
+function normalizeTeamAliases(aliases) {
+  const home = String(aliases?.H || 'H').trim().toUpperCase();
+  const visitor = String(aliases?.V || 'V').trim().toUpperCase();
+  return {
+    H: /^[A-Z]$/.test(home) ? home : 'H',
+    V: /^[A-Z]$/.test(visitor) ? visitor : 'V',
+  };
+}
+
+function teamButtonsForAliases(aliases, teamNames) {
+  return [
+    { label: teamNames?.H || 'Home', hotkey: aliases.H, value: 'H' },
+    { label: teamNames?.V || 'Visitor', hotkey: aliases.V, value: 'V' },
+  ];
+}
+
+function timeoutButtonsForAliases(aliases, teamNames) {
+  return [
+    ...teamButtonsForAliases(aliases, teamNames),
+    { label: 'Officials', hotkey: 'O', value: 'O' },
+    { label: 'Media', hotkey: 'M', value: 'M' },
+  ];
+}
+
+function stepCopyForState(state, aliases, teamNames) {
+  const step = state.currentStep;
+  const copy = stepCopy[step];
+  if (step === 'returnerJersey' && state.tokens?.puntReceiveResult === 'fairCatch') {
+    return {
+      ...copy,
+      title: 'Fair Catch',
+      label: 'Fair Caught By',
+      helper: 'Enter the jersey number of the player who made the fair catch.',
+    };
+  }
+  if (step === 'kickRekickPenaltyReview') {
+    const kicker = state.tokens?.kicker;
+    const kickingTeam = kicker?.team || 'H';
+    const teamName = teamNames?.[kickingTeam] || (kickingTeam === 'H' ? 'Home' : 'Visitor');
+    const player = [kicker?.jersey ? `#${kicker.jersey}` : '', kicker?.displayName || ''].filter(Boolean).join(' ');
+    return {
+      ...copy,
+      helper: `Free Kick Infraction · ${teamName}${player ? ` · ${player}` : ''} · 5 yards · Accepted · Previous Spot · Repeat Down · Rekick at ${state.tokens?.kickRekickSpot || 'calculated spot'}.`,
+    };
+  }
+  if (!copy || !['recoverTeam', 'penaltyTeam', 'offsettingSecondTeam', 'gameControlPossession'].includes(step)) return copy;
+  if (step === 'gameControlPossession' && state.tokens?.gameControlSelection === 'timeout') {
+    return {
+      ...copy,
+      title: 'Timeout',
+      helper: `Choose ${teamNames?.H || 'Home'}, ${teamNames?.V || 'Visitor'}, Officials, or Media.`,
+      placeholder: aliases.H,
+    };
+  }
+  return {
+    ...copy,
+    helper: `Use ${aliases.H} for Home or ${aliases.V} for Visitor. Canonical H and V are also accepted.`,
+    placeholder: aliases.H,
+  };
 }
 
 function isPenaltySelectionStep(step) {

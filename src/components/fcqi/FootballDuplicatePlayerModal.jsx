@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const contextLabel = {
   offense: 'offensive',
@@ -6,7 +6,22 @@ const contextLabel = {
   specialTeams: 'special teams',
 };
 
-export default function FootballDuplicatePlayerModal({ duplicate, onCancel, onSelect }) {
+export default function FootballDuplicatePlayerModal({ duplicate, onCancel, onSelect, queuedPenaltyActive = false }) {
+  useEffect(() => {
+    if (!duplicate) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.key !== 'Enter') return;
+      const defaultPlayerId = duplicate.recommendedPlayerId || duplicate.candidates[0]?.playerId;
+      if (!defaultPlayerId) return;
+      event.preventDefault();
+      onSelect(defaultPlayerId);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [duplicate, onSelect]);
+
   if (!duplicate) return null;
 
   return (
@@ -14,10 +29,14 @@ export default function FootballDuplicatePlayerModal({ duplicate, onCancel, onSe
       <section
         aria-label="Duplicate jersey selection"
         aria-modal="true"
-        className="w-full max-w-lg rounded border border-zinc-300 bg-white shadow-xl"
+        className={`w-full max-w-lg rounded border shadow-xl ${
+          queuedPenaltyActive
+            ? 'border-amber-400 bg-amber-50'
+            : 'border-zinc-300 bg-white'
+        }`}
         role="dialog"
       >
-        <div className="border-b border-zinc-200 px-5 py-4">
+        <div className={`border-b px-5 py-4 ${queuedPenaltyActive ? 'border-amber-300' : 'border-zinc-200'}`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
             Multiple players found
           </p>
@@ -40,6 +59,7 @@ export default function FootballDuplicatePlayerModal({ duplicate, onCancel, onSe
                     ? 'border-emerald-600 bg-emerald-50'
                     : 'border-zinc-300 bg-white hover:bg-zinc-50'
                 }`}
+                data-default-player={recommended ? 'true' : 'false'}
                 onClick={() => onSelect(candidate.playerId)}
                 type="button"
               >
@@ -61,7 +81,7 @@ export default function FootballDuplicatePlayerModal({ duplicate, onCancel, onSe
           })}
         </div>
 
-        <div className="flex justify-end border-t border-zinc-200 px-5 py-4">
+        <div className={`flex justify-end border-t px-5 py-4 ${queuedPenaltyActive ? 'border-amber-300' : 'border-zinc-200'}`}>
           <button
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
             onClick={onCancel}

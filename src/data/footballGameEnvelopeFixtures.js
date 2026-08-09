@@ -1,3 +1,9 @@
+import {
+  footballPregameTestRosterEnvelope,
+  footballPregameTestTeams,
+} from './footballPregameTestRosters';
+import footballSecondQuarterRecovery from './footballSecondQuarterRecovery.json';
+
 const baseTeams = {
   H: {
     teamId: 'TEAM-H',
@@ -22,6 +28,8 @@ const baseRules = {
   kickoffSpot: 'H35',
   touchbackSpot: 'V25',
   patSpot: 'V03',
+  safetyKickSpot: 'H20',
+  patReturns: true,
   overtimeEnabled: true,
 };
 
@@ -141,6 +149,7 @@ const makeEnvelope = ({
   period,
   updatedAt,
   teams,
+  rosters = rosterEnvelope,
   clock,
   liveState,
   events = [],
@@ -169,7 +178,7 @@ const makeEnvelope = ({
   },
   clock,
   liveState,
-  rosters: rosterEnvelope,
+  rosters,
   events,
   drives: {
     current: currentDrive,
@@ -233,6 +242,8 @@ export const gameEnvelopeFixtures = {
     status: 'pregame',
     period: 0,
     updatedAt: '2026-06-20T00:00:00Z',
+    teams: footballPregameTestTeams,
+    rosters: footballPregameTestRosterEnvelope,
     clock: {
       period: 0,
       clock: '15:00',
@@ -646,10 +657,28 @@ export const gameEnvelopeFixtures = {
       result: null,
     },
   }),
+  secondQuarterRecovery: {
+    ...makeEnvelope({
+      gameId: 'FB-PREGAME',
+      status: 'inProgress',
+      period: 2,
+      updatedAt: footballSecondQuarterRecovery.updatedAt,
+      teams: footballSecondQuarterRecovery.teams,
+      rosters: footballPregameTestRosterEnvelope,
+      clock: footballSecondQuarterRecovery.clock,
+      liveState: footballSecondQuarterRecovery.liveState,
+      events: footballSecondQuarterRecovery.events,
+      currentDrive: footballSecondQuarterRecovery.drives.current,
+      completedDrives: footballSecondQuarterRecovery.drives.completed,
+      stats: { sourceEventSequence: 45 },
+    }),
+    operatorTeamAliases: { H: 'W', V: 'F' },
+  },
 };
 
 export const fixtureOptions = [
   { key: 'pregame', label: 'Pregame' },
+  { key: 'secondQuarterRecovery', label: 'Second Quarter Recovery' },
   { key: 'kickoffDrive', label: 'Drive After Kickoff' },
   { key: 'normal', label: 'In Game' },
   { key: 'redzone', label: 'Red Zone' },

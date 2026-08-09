@@ -1,6 +1,5 @@
 import type {
   DraftParticipant,
-  DraftPenalty,
   DraftPrePlayContext,
   DraftResult,
   DraftWarning,
@@ -14,6 +13,7 @@ import { validateFootballDraftIntent } from './footballIntentSchema';
 import { generateFootballPlaySummary } from './footballPlaySummaryGrammar';
 import { buildCanonicalRushEvent } from './footballRushEventBuilder';
 import { buildCanonicalPassEvent } from './footballPassEventBuilder';
+import { mapDraftPenaltyToCanonicalEvent } from './footballPenaltyMapper';
 
 export const FOOTBALL_SUBMIT_EVENT_REQUEST_SCHEMA_VERSION = 'football.submitEventRequest.v1' as const;
 
@@ -88,7 +88,7 @@ export type FootballEventParticipants = {
   others: FootballEventParticipant[];
 };
 
-export type FootballEventPenalty = DraftPenalty;
+export type FootballEventPenalty = ReturnType<typeof mapDraftPenaltyToCanonicalEvent>;
 
 export type FootballEventSourceMetadata = {
   kind: 'fcqi';
@@ -229,7 +229,7 @@ function buildDraftEvent(
     preState: copyPreState(intent.prePlay),
     participants: mapParticipants(intent),
     result: copyResult(intent.result),
-    penalties: intent.penalties.map(copyPenalty),
+    penalties: intent.penalties.map(mapDraftPenaltyToCanonicalEvent),
     description,
     source: {
       kind: 'fcqi',
@@ -307,15 +307,12 @@ function copyResult(result: DraftResult): DraftResult {
     pass: result.pass ? { ...result.pass } : undefined,
     kick: result.kick ? { ...result.kick } : undefined,
     return: result.return ? { ...result.return } : undefined,
+    laterals: result.laterals ? result.laterals.map((lateral) => ({ ...lateral })) : undefined,
     fumble: result.fumble ? { ...result.fumble } : undefined,
     turnover: result.turnover ? { ...result.turnover } : undefined,
     scoring: result.scoring ? { ...result.scoring } : undefined,
     gameControl: result.gameControl ? { ...result.gameControl } : undefined,
   };
-}
-
-function copyPenalty(penalty: DraftPenalty): FootballEventPenalty {
-  return { ...penalty };
 }
 
 function mapValidationError(error: FootballIntentValidationError): FootballEventBuildError {
@@ -335,5 +332,6 @@ function isSupportedPlayFamily(family: FootballPlayFamily): boolean {
     'fieldGoal',
     'try',
     'penalty',
+    'gameControl',
   ].includes(family);
 }

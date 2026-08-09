@@ -22,6 +22,15 @@ const PLAY_BUTTONS = [
 
 const editableSelector = 'input, textarea, select, [contenteditable="true"]';
 
+const fcqiClientEventIdPattern = /^fcqi-[a-z-]+-(\d+)-client$/i;
+
+export const getHighestFootballFcqiSeedCounter = (envelope) => (
+  (envelope?.events || []).reduce((highest, event) => {
+    const match = String(event?.clientEventId || '').match(fcqiClientEventIdPattern);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0)
+);
+
 export const getFootballFcqiAssistantMessage = (state) => {
   if (!state || state.status === 'idle' || state.status === 'cancelled') return 'Choose a play type.';
   if (state.queuedPenaltyRequested) return 'Penalty queued — resolve before submitting';
@@ -38,9 +47,8 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'completeResult') return 'Choose complete pass result.';
   if (state.currentStep === 'intendedReceiverJersey') return 'Enter intended receiver jersey number.';
   if (state.currentStep === 'passYardLine') return 'Enter pass yardline or skip.';
-  if (state.currentStep === 'brokenUp') return 'Was the pass broken up?';
   if (state.currentStep === 'brokenUpDefenderJersey') return 'Enter pass breakup defender jersey.';
-  if (state.currentStep === 'hurried') return 'Was the passer hurried?';
+  if (state.currentStep === 'hurried') return 'Choose Hurry or No Hurry.';
   if (state.currentStep === 'hurryDefender1Jersey') return 'Enter hurry defender jersey.';
   if (state.currentStep === 'hurryDefender2Jersey') return 'Enter another hurry defender or skip.';
   if (state.currentStep === 'hurryDefender3Jersey') return 'Enter third hurry defender or skip.';
@@ -50,17 +58,19 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'punterJersey') return 'Enter punter jersey number.';
   if (state.currentStep === 'puntSpot') return 'Enter punt receive or dead-ball spot.';
   if (state.currentStep === 'puntReceiveResult') return 'Choose kick receive result.';
+  if (state.currentStep === 'puntBlockedByJersey') return 'Enter the punt blocker jersey.';
   if (state.currentStep === 'returnerJersey') return 'Enter returner jersey number.';
   if (state.currentStep === 'returnTerminalResult') return 'Choose return result.';
   if (state.currentStep === 'returnTackleAJersey') return 'Enter return tackler jersey.';
   if (state.currentStep === 'returnTackleBJersey') return 'Enter second return tackler or skip.';
   if (state.currentStep === 'returnEndSpot') return 'Enter return final spot.';
+  if (state.currentStep === 'returnOwnGoalDecision') return 'Choose Touchback or Safety.';
   if (state.currentStep === 'downingPlayerJersey') return 'Enter downing player jersey or skip.';
   if (state.currentStep === 'downedSpot') return 'Enter downed spot.';
   if (state.currentStep === 'kickMenu') return 'Choose kick type.';
   if (state.currentStep === 'kickerJersey') return 'Enter kicker jersey number.';
   if (state.currentStep === 'kickReceiveResult') return 'Choose kick receive result.';
-  if (state.currentStep === 'kickReturnStartSpot') return 'Enter kick return start spot.';
+  if (state.currentStep === 'kickReturnStartSpot') return 'Enter the kicked-to spot.';
   if (state.currentStep === 'kickTouchbackSpot') return 'Enter touchback spot.';
   if (state.currentStep === 'kickFairCatchSpot') return 'Enter fair catch spot.';
   if (state.currentStep === 'kickOutOfBoundsSpot') return 'Enter out-of-bounds spot.';
@@ -68,30 +78,31 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'fieldGoalResult') return 'Choose field goal result.';
   if (state.currentStep === 'fieldGoalMissedReason') return 'Choose missed field goal reason.';
   if (state.currentStep === 'fieldGoalBlockedByJersey') return 'Enter field goal blocker jersey.';
-  if (state.currentStep === 'fieldGoalReturnAttempted') return 'Was the field goal returned?';
+  if (state.currentStep === 'fieldGoalReturnAttempted') return 'Choose Return or No Return.';
   if (state.currentStep === 'patType') return 'Choose PAT type.';
   if (state.currentStep === 'patKickResult') return 'Choose kick PAT result.';
   if (state.currentStep === 'patKickMissedReason') return 'Choose missed PAT reason.';
   if (state.currentStep === 'patKickBlockedByJersey') return 'Enter PAT blocker jersey.';
-  if (state.currentStep === 'patKickReturnAttempted') return 'Was the PAT returned?';
+  if (state.currentStep === 'patKickReturnAttempted') return 'Choose Return or No Return.';
   if (state.currentStep === 'patRusherJersey') return 'Enter two-point rusher jersey.';
   if (state.currentStep === 'patRushResult') return 'Choose rush PAT result.';
-  if (state.currentStep === 'patRushReturnAttempted') return 'Was the PAT returned?';
+  if (state.currentStep === 'patRushReturnAttempted') return 'Choose Return or No Return.';
   if (state.currentStep === 'patPasserJersey') return 'Enter two-point passer jersey.';
   if (state.currentStep === 'patReceiverJersey') return 'Enter two-point receiver jersey.';
   if (state.currentStep === 'patPassResult') return 'Choose pass PAT result.';
-  if (state.currentStep === 'patPassReturnAttempted') return 'Was the PAT returned?';
+  if (state.currentStep === 'patPassReturnAttempted') return 'Choose Return or No Return.';
   if (state.currentStep === 'penaltyName') return 'Enter penalty name.';
   if (state.currentStep === 'penaltyTeam') return 'Choose penalty team.';
   if (state.currentStep === 'penaltyResolution') return 'Choose penalty resolution.';
   if (state.currentStep === 'penaltyPlayerJersey') return 'Enter penalized player or skip.';
+  if (state.currentStep === 'penaltyEjected') return 'Choose whether the penalized person was ejected.';
   if (state.currentStep === 'penaltyEnforcedFrom') return 'Choose enforcement spot.';
   if (state.currentStep === 'penaltySpotOfFoul') return 'Enter spot of foul.';
   if (state.currentStep === 'penaltyFinalSpot') return 'Enter penalty final spot.';
   if (state.currentStep === 'penaltyDown') return 'Choose down consequence.';
   if (state.currentStep === 'offsettingSecondName') return 'Enter matching offsetting penalty.';
   if (state.currentStep === 'offsettingSecondTeam') return 'Choose matching penalty team.';
-  if (state.currentStep === 'offsettingPlayCounts') return 'Does the previous play count?';
+  if (state.currentStep === 'offsettingPlayCounts') return 'Choose Play Counts or No Play.';
   if (state.currentStep === 'gameControlMenu') return 'Choose game control function.';
   if (state.currentStep === 'gameControlQuarterMenu') return 'Choose quarter function.';
   if (state.currentStep === 'gameControlDown') return 'Enter down.';
@@ -108,17 +119,20 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'recoverTeam') return 'Enter recovering team.';
   if (state.currentStep === 'recoverPlayerJersey') return 'Enter recovery player jersey.';
   if (state.currentStep === 'recoverSpot') return 'Enter recovery spot.';
-  if (state.currentStep === 'fumbleReturned') return 'Was the fumble returned?';
+  if (state.currentStep === 'fumbleReturned') return 'Choose Return or No Return.';
   return 'Choose a play type.';
 };
 
 export default function FootballConfirmedQuickInput({
   debug = false,
   envelope,
+  onOpenPenaltyEditor,
+  onOpenStarters,
   onSubmitAccepted,
   onStateChange,
   state,
   submitAdapter = submitFootballFcqiEvent,
+  teamAliases,
 }) {
   const fallbackState = useMemo(() => createInitialFootballQuickInputState(), []);
   const currentState = state || fallbackState;
@@ -138,10 +152,13 @@ export default function FootballConfirmedQuickInput({
   const startCounter = useRef(0);
   const submitInFlightRef = useRef(false);
   const context = useMemo(
-    () => buildQuickInputContext(envelope, startMeta),
-    [envelope, startMeta],
+    () => buildQuickInputContext(envelope, startMeta, teamAliases),
+    [envelope, startMeta, teamAliases],
   );
   const gamePhase = gamePhaseForEnvelope(envelope);
+  const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
+    && Boolean(envelope.liveState?.pendingTryTeam);
+  const showPatPrompt = awaitingPatTry && !isActiveFcqiPlayFlow(currentState);
 
   const publishState = (nextState) => {
     onStateChange?.(nextState);
@@ -159,16 +176,23 @@ export default function FootballConfirmedQuickInput({
   const applyEvent = (event, activeContext = context, baseState = currentState) =>
     transitionFootballQuickInput(baseState, event, activeContext).state;
 
-  const startRush = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
+  const createStartMeta = (family, startedBy, hotkey) => {
+    startCounter.current = Math.max(
+      startCounter.current,
+      getHighestFootballFcqiSeedCounter(envelope),
+    ) + 1;
+    return {
       startedBy,
-      hotkey: startedBy === 'hotkey' ? 'R' : undefined,
-      seed: `fcqi-rush-${startCounter.current}`,
+      hotkey: startedBy === 'hotkey' ? hotkey : undefined,
+      seed: `fcqi-${family}-${startCounter.current}`,
       startedAt: new Date().toISOString(),
     };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+  };
+
+  const startRush = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
+    const nextStartMeta = createStartMeta('rush', startedBy, 'R');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -180,14 +204,8 @@ export default function FootballConfirmedQuickInput({
 
   const startPass = (startedBy) => {
     if (!isPlayFamilyAvailable(gamePhase, 'pass')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
-      startedBy,
-      hotkey: startedBy === 'hotkey' ? 'P' : undefined,
-      seed: `fcqi-pass-${startCounter.current}`,
-      startedAt: new Date().toISOString(),
-    };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+    const nextStartMeta = createStartMeta('pass', startedBy, 'P');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -199,14 +217,8 @@ export default function FootballConfirmedQuickInput({
 
   const startPunt = (startedBy) => {
     if (!isPlayFamilyAvailable(gamePhase, 'punt')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
-      startedBy,
-      hotkey: startedBy === 'hotkey' ? 'U' : undefined,
-      seed: `fcqi-punt-${startCounter.current}`,
-      startedAt: new Date().toISOString(),
-    };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+    const nextStartMeta = createStartMeta('punt', startedBy, 'U');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -218,14 +230,8 @@ export default function FootballConfirmedQuickInput({
 
   const startKick = (startedBy) => {
     if (!isPlayFamilyAvailable(gamePhase, 'kickoff')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
-      startedBy,
-      hotkey: startedBy === 'hotkey' ? 'K' : undefined,
-      seed: `fcqi-kick-${startCounter.current}`,
-      startedAt: new Date().toISOString(),
-    };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+    const nextStartMeta = createStartMeta('kick', startedBy, 'K');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -235,16 +241,26 @@ export default function FootballConfirmedQuickInput({
     ));
   };
 
+  const startPat = (startedBy) => {
+    if (!awaitingPatTry || !isPlayFamilyAvailable(gamePhase, 'kickoff')) return;
+    const nextStartMeta = createStartMeta('pat', startedBy, 'A');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
+    setStartMeta(nextStartMeta);
+    setPenaltyMessage('');
+    clearSubmitStatus();
+    let nextState = transitionFootballQuickInput(currentState, {
+      type: 'START_KICK',
+      startedBy,
+    }, nextContext).state;
+    nextState = transitionFootballQuickInput(nextState, { type: 'INPUT_TOKEN', value: 'A' }, nextContext).state;
+    nextState = transitionFootballQuickInput(nextState, { type: 'COMMIT_TOKEN' }, nextContext).state;
+    publishState(nextState);
+  };
+
   const startPenalty = (startedBy, source = 'immediate') => {
     if (!isPlayFamilyAvailable(gamePhase, 'penalty')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
-      startedBy,
-      hotkey: startedBy === 'hotkey' ? 'E' : undefined,
-      seed: `fcqi-penalty-${startCounter.current}`,
-      startedAt: new Date().toISOString(),
-    };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+    const nextStartMeta = createStartMeta('penalty', startedBy, 'E');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -256,14 +272,8 @@ export default function FootballConfirmedQuickInput({
 
   const startGameControl = (startedBy) => {
     if (!isPlayFamilyAvailable(gamePhase, 'gameControl')) return;
-    startCounter.current += 1;
-    const nextStartMeta = {
-      startedBy,
-      hotkey: startedBy === 'hotkey' ? 'G' : undefined,
-      seed: `fcqi-game-control-${startCounter.current}`,
-      startedAt: new Date().toISOString(),
-    };
-    const nextContext = buildQuickInputContext(envelope, nextStartMeta);
+    const nextStartMeta = createStartMeta('game-control', startedBy, 'G');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -283,9 +293,12 @@ export default function FootballConfirmedQuickInput({
       }
       if (event.target?.closest?.(editableSelector)) return;
       const key = event.key.toLowerCase();
-      if (key !== 'r' && key !== 'p' && key !== 'u' && key !== 'k' && key !== 'e' && key !== 'g') return;
+      if (key !== 'r' && key !== 'p' && key !== 'u' && key !== 'k' && key !== 'e' && key !== 'g' && key !== 'a') return;
+      if (key === 'a' && !awaitingPatTry) return;
       event.preventDefault();
-      if (key === 'k') {
+      if (key === 'a') {
+        startPat('hotkey');
+      } else if (key === 'k') {
         startKick('hotkey');
       } else if (key === 'g') {
         startGameControl('hotkey');
@@ -312,6 +325,17 @@ export default function FootballConfirmedQuickInput({
   const commitToken = (value) => {
     setPenaltyMessage('');
     clearSubmitStatus();
+    const normalizedValue = String(value || '').trim().toUpperCase();
+    if (currentState.currentStep === 'gameControlMenu' && normalizedValue === 'R' && onOpenStarters) {
+      publishState(createInitialFootballQuickInputState());
+      onOpenStarters();
+      return;
+    }
+    if (currentState.currentStep === 'gameControlMenu' && normalizedValue === 'F' && onOpenPenaltyEditor) {
+      publishState(createInitialFootballQuickInputState());
+      onOpenPenaltyEditor();
+      return;
+    }
     let nextState = applyEvent({ type: 'INPUT_TOKEN', value });
     nextState = transitionFootballQuickInput(nextState, { type: 'COMMIT_TOKEN' }, context).state;
     publishState(nextState);
@@ -413,7 +437,6 @@ export default function FootballConfirmedQuickInput({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
         <div>
           <h2 className="text-base font-semibold">Play Entry</h2>
-          <p className="mt-1 text-sm text-zinc-600">Football Confirmed Quick Input</p>
         </div>
         {submitStatus.status === 'submitting' && (
           <span className="rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-800">
@@ -434,6 +457,18 @@ export default function FootballConfirmedQuickInput({
 
       <div className="space-y-4 p-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {showPatPrompt && (
+            <button
+              className="col-span-2 flex min-h-14 items-center justify-between gap-4 rounded border-2 border-amber-500 bg-amber-50 px-4 py-3 text-left text-base font-black text-amber-950 shadow-sm hover:bg-amber-100 sm:col-span-3"
+              onClick={() => startPat('button')}
+              type="button"
+            >
+              <span>Point After Try</span>
+              <span aria-hidden="true" className="grid h-8 min-w-8 place-items-center rounded border border-amber-600 bg-white px-2 text-sm font-black text-amber-900">
+                A
+              </span>
+            </button>
+          )}
           {PLAY_BUTTONS.map((button) => {
             const family = button.label === 'Kick' ? 'kickoff' : button.label === 'Game Control' ? 'gameControl' : button.label.toLowerCase();
             const enabled = button.enabled && isPlayFamilyAvailable(gamePhase, family);
@@ -481,10 +516,21 @@ export default function FootballConfirmedQuickInput({
           </div>
         )}
 
-        <div className="rounded border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-          <span className="font-semibold text-zinc-950">Assistant:</span>{' '}
-          {getFootballFcqiAssistantMessage(currentState)}
-        </div>
+        {showPatPrompt ? (
+          <div
+            aria-label="Assistant: Press A to enter PAT Try."
+            className="flex items-center gap-2 rounded border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
+          >
+            <span>Assistant: Press</span>
+            <span aria-hidden="true" className="grid h-6 min-w-6 place-items-center rounded border border-amber-600 bg-white px-1.5 text-xs font-black">A</span>
+            <span>to enter PAT Try.</span>
+          </div>
+        ) : (
+          <div className="rounded border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+            <span className="font-semibold text-zinc-950">Assistant:</span>{' '}
+            {getFootballFcqiAssistantMessage(currentState)}
+          </div>
+        )}
 
         {currentState.queuedPenaltyRequested && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
@@ -547,11 +593,14 @@ export default function FootballConfirmedQuickInput({
         prePlaySpot={envelope.liveState.yardLine}
         progressSteps={progressSteps}
         state={currentState}
+        teamAliases={teamAliases}
+        teamNames={{ H: envelope.game.teams.H.name, V: envelope.game.teams.V.name }}
       />
       <FootballDuplicatePlayerModal
         duplicate={currentState.status === 'jersey.disambiguating' ? currentState.duplicate : null}
         onCancel={() => publishState(applyEvent({ type: 'CANCEL_DUPLICATE' }))}
         onSelect={selectDuplicatePlayer}
+        queuedPenaltyActive={Boolean(currentState.queuedPenaltyRequested)}
       />
       <FootballPlaySummaryModal
         isSubmitting={submitStatus.status === 'submitting'}
@@ -586,11 +635,27 @@ function formatSubmitErrors(errors) {
   return errors.map((error) => error.message || error.code).join(' ');
 }
 
-function buildQuickInputContext(envelope, startMeta) {
+function buildQuickInputContext(envelope, startMeta, teamAliases) {
   const pregame = pregameForEnvelope(envelope);
   const phase = gamePhaseForEnvelope(envelope);
   const possession = envelope.liveState.possession || null;
-  const actionTeam = possession || (phase === 'awaitingKickoff' ? pregame.coinToss.firstHalfKickingTeam : null);
+  const latestEvent = envelope.events.at(-1);
+  const setupActionTeam = envelope.liveState.nextPlayContext === 'awaitingTry'
+    ? latestEvent?.result?.scoring?.team || latestEvent?.possession
+    : envelope.liveState.nextPlayContext === 'awaitingKickoff'
+      ? latestEvent?.participants?.primary?.team || latestEvent?.participants?.kicker?.team || latestEvent?.possession
+      : envelope.liveState.nextPlayContext === 'awaitingSafetyKick'
+        ? latestEvent?.possession
+        : !possession && latestEvent?.type === 'try'
+          ? latestEvent?.result?.scoring?.team || latestEvent?.participants?.primary?.team || latestEvent?.participants?.kicker?.team
+          : !possession && latestEvent?.type === 'fieldGoal' && (latestEvent.subtype === 'made' || latestEvent.result?.code === 'made')
+            ? latestEvent?.result?.scoring?.team || latestEvent?.participants?.primary?.team || latestEvent?.participants?.kicker?.team || latestEvent?.possession
+            : null;
+  const actionTeam = possession
+    || setupActionTeam
+    || envelope.liveState.pendingTryTeam
+    || envelope.liveState.kickoffTeam
+    || (phase === 'awaitingKickoff' ? pregame.coinToss.firstHalfKickingTeam : null);
   const baseEventSequence = envelope.events.at(-1)?.sequence ?? 0;
 
   return {
@@ -630,6 +695,8 @@ function buildQuickInputContext(envelope, startMeta) {
       driveNumber: envelope.liveState.driveNumber || 0,
     },
     roster: flattenRoster(envelope),
+    retainedPrimaryJerseys: retainedPrimaryJerseysForEnvelope(envelope, actionTeam || 'H'),
+    teamAliases: normalizeTeamAliases(teamAliases),
     gamePhase: phase,
     intentId: `${startMeta.seed}-intent`,
     clientEventId: `${startMeta.seed}-client`,
@@ -637,6 +704,15 @@ function buildQuickInputContext(envelope, startMeta) {
     deriveRushYardsFromEndSpot: true,
     calculateRushYards: ({ startYardLine, endYardLine, possession: possessionTeam }) =>
       calculateYardsGained(startYardLine, endYardLine, possessionTeam),
+  };
+}
+
+function normalizeTeamAliases(aliases) {
+  const home = String(aliases?.H || 'H').trim().toUpperCase();
+  const visitor = String(aliases?.V || 'V').trim().toUpperCase();
+  return {
+    H: /^[A-Z]$/.test(home) ? home : 'H',
+    V: /^[A-Z]$/.test(visitor) ? visitor : 'V',
   };
 }
 
@@ -653,6 +729,34 @@ function flattenRoster(envelope) {
   return Object.values(envelope.rosters?.teams || {}).flatMap((team) =>
     Object.values(team.players || {}),
   );
+}
+
+function retainedPrimaryJerseysForEnvelope(envelope, teamCode) {
+  const retainedJersey = (type, subtype) => {
+    const event = [...(envelope.events || [])].reverse().find((candidate) => {
+      if (candidate.type !== type || (subtype && candidate.subtype !== subtype)) return false;
+      if (candidate.status && candidate.status !== 'accepted') return false;
+      const participant = candidate.participants?.primary
+        || candidate.participants?.kicker
+        || candidate.participants?.punter;
+      return participant?.playerId && participant.team === teamCode;
+    });
+    const participant = event?.participants?.primary
+      || event?.participants?.kicker
+      || event?.participants?.punter;
+    const player = participant?.playerId
+      ? envelope.rosters?.teams?.[participant.team]?.players?.[participant.playerId]
+      : null;
+    return player?.jersey ? String(player.jersey) : undefined;
+  };
+
+  return {
+    passer: retainedJersey('pass'),
+    punter: retainedJersey('punt'),
+    kickoffKicker: retainedJersey('kickoff'),
+    fieldGoalKicker: retainedJersey('fieldGoal'),
+    patKicker: retainedJersey('try', 'kick'),
+  };
 }
 
 function isActiveFcqiPlayFlow(state) {

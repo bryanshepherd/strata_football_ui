@@ -22,21 +22,22 @@ export function oppositeTeam(team) {
 }
 
 export function parseSpot(spot) {
-  if (spot === 'goal') {
-    return { raw: spot, valid: true, goal: true };
-  }
-
-  if (spot === '50') {
-    return { raw: spot, valid: true, side: '50', yard: 50 };
-  }
-
   if (typeof spot !== 'string') {
     return { raw: spot, valid: false, reason: 'spot must be a string' };
   }
 
-  const match = spot.match(/^([HV])(\d{2})$/);
+  const normalized = spot.trim().toUpperCase();
+  if (normalized === 'GOAL') {
+    return { raw: 'goal', valid: true, goal: true };
+  }
+
+  if (normalized === '50') {
+    return { raw: normalized, valid: true, side: '50', yard: 50 };
+  }
+
+  const match = normalized.match(/^([HV])(\d{1,2})$/);
   if (!match) {
-    return { raw: spot, valid: false, reason: 'spot must use H35, V20, or 50 format' };
+    return { raw: normalized, valid: false, reason: 'spot must use H35, V20, or 50 format' };
   }
 
   const yard = Number(match[2]);
@@ -45,7 +46,7 @@ export function parseSpot(spot) {
   }
 
   return {
-    raw: spot,
+    raw: `${match[1]}${String(yard).padStart(2, '0')}`,
     valid: true,
     side: match[1],
     yard,
@@ -56,9 +57,11 @@ export function spotToPossessionRelative(spot, possession) {
   const parsed = typeof spot === 'string' ? parseSpot(spot) : spot;
   const team = normalizeTeamCode(possession);
 
-  if (!team || !parsed?.valid || parsed.goal) {
+  if (!team || !parsed?.valid) {
     return null;
   }
+
+  if (parsed.goal) return 100;
 
   if (parsed.side === '50') {
     return 50;
@@ -176,6 +179,8 @@ export function createLiveState({
     redZone: Boolean(normalizedPossession && yardLine && isRedZone(yardLine, normalizedPossession)),
     driveId: driveId ?? null,
     driveNumber: driveNumber ?? 0,
+    pendingTryTeam: null,
+    kickoffTeam: null,
     nextPlayContext:
       normalizedPossession && down && activeDistance !== null && yardLine
         ? `${normalizedPossession},${down},${activeLineToGain === 'goal' ? 'goal' : activeDistance},${yardLine}`
@@ -186,14 +191,19 @@ export function createLiveState({
 export function applyFootballEventToEnvelope(envelope, event, options = {}) {
   const trace = [];
   const rules = {
+    ...(envelope?.game?.rules || {}),
     downs: envelope?.game?.rules?.downs || DEFAULT_DOWNS,
     yardsToFirstDown: envelope?.game?.rules?.yardsToFirstDown || DEFAULT_YARDS_TO_FIRST,
   };
   const preState = normalizePreState(envelope, event);
   const eventType = event?.type;
   const result = event?.result || {};
-  const endYardLine = result.endYardLine || result.returnEndYardLine || event?.postState?.yardLine || preState.yardLine;
+  const endYardLine = penaltyAdjustedEndYardLine(event, preState) || result.endYardLine || result.returnEndYardLine || event?.postState?.yardLine || preState.yardLine;
+  const statisticalEndYardLine = acceptedPreviousSpotPenalty(event)
+    ? preState.yardLine
+    : acceptedSpotOfFoul(event) || result.endYardLine || result.returnEndYardLine || endYardLine;
   const possession = normalizeTeamCode(event?.possession || preState.possession);
+  const explicitScoringCounts = !acceptedPreviousSpotPenalty(event) && !acceptedSpotOfFoul(event);
 
   addTrace(trace, 'state', 'pre-play state read', {
     input: preState,
@@ -201,20 +211,41 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     reason: 'Engine consumes canonical GameEnvelope.liveState plus ScoringEvent.preState.',
   });
 
-  if (eventType === 'kickoff') {
-    return applyKickoff(envelope, event, preState, endYardLine, options, trace, rules);
-  }
-
   if (eventType === 'try') {
-    return endPossessionFreeContext(envelope, event, preState, 'try', trace);
+    const tryTeam = normalizeTeamCode(event?.participants?.primary?.team || event?.participants?.kicker?.team || event?.result?.scoring?.team);
+    const kickoffSpot = ruleSpotForTeam(rules.kickoffSpot || 'H35', tryTeam, 'own');
+    return endPossessionFreeContext(envelope, event, preState, 'try', trace, kickoffSpot, {
+      kickoffTeam: tryTeam,
+      nextPlayContext: 'awaitingKickoff',
+    });
   }
 
-  if (isTouchdownEvent(event, endYardLine, possession)) {
-    return endDriveOnly(envelope, event, preState, endYardLine, 'touchdown', trace);
+  if (isTouchdownEvent(event, statisticalEndYardLine, possession, explicitScoringCounts)) {
+    const scoring = event.result?.scoring || { team: possession, points: 6, type: 'touchdown' };
+    const scoringTeam = normalizeTeamCode(scoring.team) || possession;
+    const patSpot = ruleSpotForTeam(rules.patSpot || 'V03', scoringTeam, 'opponent');
+    return endDriveOnly(envelope, event, preState, statisticalEndYardLine, 'touchdown', trace, patSpot, scoring, {
+      pendingTryTeam: scoringTeam,
+      nextPlayContext: 'awaitingTry',
+    });
   }
 
-  if (isSafetyEvent(event)) {
-    return endDriveOnly(envelope, event, preState, endYardLine, 'safety', trace);
+  if (isSafetyEvent(event, statisticalEndYardLine, possession, explicitScoringCounts)) {
+    const scoring = event.result?.scoring || { team: oppositeTeam(possession), points: 2, type: 'safety' };
+    const scoringTeam = normalizeTeamCode(scoring.team) || oppositeTeam(possession);
+    const safetyTeam = oppositeTeam(scoringTeam);
+    const safetyKickSpot = ruleSpotForTeam(rules.safetyKickSpot || rules.freeKickSpot || 'H20', safetyTeam, 'own');
+    return endDriveOnly(envelope, event, preState, statisticalEndYardLine, 'safety', trace, safetyKickSpot, scoring, {
+      kickoffTeam: safetyTeam,
+      nextPlayContext: 'awaitingSafetyKick',
+    });
+  }
+
+  if (eventType === 'kickoff') {
+    if (acceptedPreviousSpotPenalty(event) && hasReplayDown(event)) {
+      return applyKickoffRekick(envelope, event, preState, endYardLine, trace);
+    }
+    return applyKickoff(envelope, event, preState, endYardLine, options, trace, rules);
   }
 
   if (eventType === 'punt') {
@@ -229,31 +260,34 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     return applyPossessionChangeEndDrive(envelope, event, preState, turnoverEndSpot(result, endYardLine), 'turnover', options, trace, rules);
   }
 
-  return applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules);
+  return applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules, statisticalEndYardLine);
 }
 
-function applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules) {
+function applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules, statisticalEndYardLine = endYardLine) {
   const possession = normalizeTeamCode(event.possession || preState.possession);
-  const yardsGained = resultYards(event, preState, endYardLine, possession);
+  const yardsGained = resultYards(event, preState, statisticalEndYardLine, possession);
   const yardsToGain = calculateYardsToGain(preState.yardLine, preState.lineToGain, possession);
-  const firstDown =
-    event.result?.firstDown === true ||
-    hasAutomaticFirstDown(event) ||
-    (typeof yardsGained === 'number' && typeof yardsToGain === 'number' && yardsGained >= yardsToGain);
+  const automaticFirstDown = hasAutomaticFirstDown(event);
+  const replayDown = hasReplayDown(event);
+  const explicitPlayResultCounts = !acceptedPreviousSpotPenalty(event) && !acceptedSpotOfFoul(event);
+  const firstDown = automaticFirstDown || (!replayDown && (
+    (explicitPlayResultCounts && event.result?.firstDown === true)
+    || (typeof yardsGained === 'number' && typeof yardsToGain === 'number' && yardsGained >= yardsToGain)
+  ));
 
   addTrace(trace, 'field', 'possession-relative yard math', {
-    input: { start: preState.yardLine, end: endYardLine, possession },
+    input: { start: preState.yardLine, statisticalEnd: statisticalEndYardLine, enforcedEnd: endYardLine, possession },
     result: `${yardsGained ?? 'unknown'} yards`,
     reason: 'Gain/loss is calculated from offense-relative field positions.',
   });
 
   addTrace(trace, 'down-distance', 'first-down checks', {
-    input: { yardsGained, yardsToGain, resultFirstDown: event.result?.firstDown, automaticFirstDown: hasAutomaticFirstDown(event) },
+    input: { yardsGained, yardsToGain, resultFirstDown: event.result?.firstDown, automaticFirstDown, replayDown },
     result: firstDown ? 'first down' : 'no first down',
     reason: 'First down can come from yardage, accepted result metadata, or typed penalty flag.',
   });
 
-  if (preState.down >= rules.downs && !firstDown) {
+  if (preState.down >= rules.downs && !firstDown && !replayDown) {
     return applyPossessionChangeEndDrive(envelope, event, preState, endYardLine, 'turnoverOnDowns', options, trace, rules);
   }
 
@@ -274,6 +308,7 @@ function applyScrimmagePlay(envelope, event, preState, endYardLine, options, tra
       driveTransition: continueDrive(preState.driveId),
       yardsGained,
       firstDown: true,
+      scoringUpdate: null,
     });
   }
 
@@ -294,11 +329,12 @@ function applyScrimmagePlay(envelope, event, preState, endYardLine, options, tra
     driveTransition: continueDrive(preState.driveId),
     yardsGained,
     firstDown: false,
+    scoringUpdate: null,
   });
 }
 
 function applyKickoff(envelope, event, preState, endYardLine, options, trace, rules) {
-  const kickingTeam = normalizeTeamCode(event.possession || preState.possession);
+  const kickingTeam = kickoffKickingTeam(event, preState);
   const receivingTeam = normalizeTeamCode(event.result?.nextPossession || event.postState?.possession) || oppositeTeam(kickingTeam);
   const drive = createStartedDrive(envelope, receivingTeam, endYardLine, 'kickoff', options);
   const lineToGain = calculateLineToGain(endYardLine, receivingTeam, rules.yardsToFirstDown);
@@ -332,6 +368,45 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
     yardsGained: null,
     firstDown: true,
   });
+}
+
+function applyKickoffRekick(envelope, event, preState, endYardLine, trace) {
+  const kickingTeam = kickoffKickingTeam(event, preState);
+  addTrace(trace, 'drive', 'free-kick infraction rekick', {
+    input: { kickingTeam, endYardLine, penalties: event.penalties },
+    result: `awaiting rekick at ${endYardLine}`,
+    reason: 'An accepted previous-spot Free Kick Infraction with repeat down does not start the receiving team drive.',
+  });
+
+  return finish({
+    envelope,
+    event,
+    trace,
+    liveState: createInactiveLiveState(preState, endYardLine, {
+      kickoffTeam: kickingTeam,
+      nextPlayContext: 'awaitingKickoff',
+    }),
+    driveTransition: {
+      shouldEndCurrent: false,
+      shouldStartNew: false,
+      endedDriveId: null,
+      startedDrive: null,
+      driveResult: 'rekick',
+      reason: 'freeKickInfraction',
+    },
+    yardsGained: null,
+    firstDown: false,
+    scoringUpdate: null,
+  });
+}
+
+function kickoffKickingTeam(event, preState) {
+  return normalizeTeamCode(
+    event?.participants?.kicker?.team
+    || event?.participants?.primary?.team
+    || event?.possession
+    || preState.possession,
+  );
 }
 
 function applyPossessionChangeEndDrive(envelope, event, preState, endYardLine, driveResult, options, trace, rules) {
@@ -382,13 +457,34 @@ function applyFieldGoal(envelope, event, preState, endYardLine, options, trace, 
   });
 
   if (made) {
-    return endDriveOnly(envelope, event, preState, endYardLine, 'fieldGoal', trace);
+    const scoringTeam = normalizeTeamCode(
+      event.result?.scoring?.team
+      || event?.participants?.primary?.team
+      || event?.participants?.kicker?.team
+      || event?.possession
+      || preState.possession,
+    );
+    const kickoffSpot = ruleSpotForTeam(rules.kickoffSpot || 'H35', scoringTeam, 'own');
+    return endDriveOnly(
+      envelope,
+      event,
+      preState,
+      endYardLine,
+      'fieldGoal',
+      trace,
+      kickoffSpot,
+      event.result?.scoring || null,
+      {
+        kickoffTeam: scoringTeam,
+        nextPlayContext: 'awaitingKickoff',
+      },
+    );
   }
 
   return applyPossessionChangeEndDrive(envelope, event, preState, endYardLine, 'missedFieldGoal', options, trace, rules);
 }
 
-function endDriveOnly(envelope, event, preState, endYardLine, driveResult, trace) {
+function endDriveOnly(envelope, event, preState, endYardLine, driveResult, trace, nextSpot = endYardLine, scoringUpdate = event.result?.scoring || null, setup = {}) {
   addTrace(trace, 'drive', 'drive start/end decisions', {
     input: { driveId: preState.driveId, driveResult },
     result: `end ${preState.driveId || 'none'}`,
@@ -399,7 +495,7 @@ function endDriveOnly(envelope, event, preState, endYardLine, driveResult, trace
     envelope,
     event,
     trace,
-    liveState: createInactiveLiveState(preState, endYardLine),
+    liveState: createInactiveLiveState(preState, nextSpot, setup),
     driveTransition: {
       shouldEndCurrent: true,
       shouldStartNew: false,
@@ -410,10 +506,11 @@ function endDriveOnly(envelope, event, preState, endYardLine, driveResult, trace
     },
     yardsGained: resultYards(event, preState, endYardLine, preState.possession),
     firstDown: false,
+    scoringUpdate,
   });
 }
 
-function endPossessionFreeContext(envelope, event, preState, driveResult, trace) {
+function endPossessionFreeContext(envelope, event, preState, driveResult, trace, nextSpot = event.result?.endYardLine || preState.yardLine, setup = {}) {
   addTrace(trace, 'scoring', 'PAT/two-point context', {
     input: { type: event.type, subtype: event.subtype, result: event.result },
     result: driveResult,
@@ -424,7 +521,7 @@ function endPossessionFreeContext(envelope, event, preState, driveResult, trace)
     envelope,
     event,
     trace,
-    liveState: createInactiveLiveState(preState, event.result?.endYardLine || preState.yardLine),
+    liveState: createInactiveLiveState(preState, nextSpot, setup),
     driveTransition: {
       shouldEndCurrent: false,
       shouldStartNew: false,
@@ -438,7 +535,7 @@ function endPossessionFreeContext(envelope, event, preState, driveResult, trace)
   });
 }
 
-function finish({ envelope, event, liveState, driveTransition, trace, yardsGained, firstDown }) {
+function finish({ envelope, event, liveState, driveTransition, trace, yardsGained, firstDown, scoringUpdate = event.result?.scoring || null }) {
   addTrace(trace, 'down-distance', 'line-to-gain lookup', {
     input: { yardLine: liveState.yardLine, lineToGain: liveState.lineToGain, possession: liveState.possession },
     result: liveState.lineToGain ?? 'none',
@@ -454,7 +551,7 @@ function finish({ envelope, event, liveState, driveTransition, trace, yardsGaine
     driveTransition,
     yardsGained,
     firstDown,
-    scoringUpdate: event.result?.scoring || null,
+    scoringUpdate,
     trace,
   };
 }
@@ -477,7 +574,7 @@ function normalizePreState(envelope, event) {
   };
 }
 
-function createInactiveLiveState(preState, yardLine) {
+function createInactiveLiveState(preState, yardLine, setup = {}) {
   return {
     possession: null,
     down: null,
@@ -488,7 +585,10 @@ function createInactiveLiveState(preState, yardLine) {
     redZone: false,
     driveId: null,
     driveNumber: preState.driveNumber ?? 0,
+    pendingTryTeam: null,
+    kickoffTeam: null,
     nextPlayContext: null,
+    ...setup,
   };
 }
 
@@ -525,6 +625,14 @@ function continueDrive(driveId) {
 }
 
 function resultYards(event, preState, endYardLine, possession) {
+  if (event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.finalSpot)) {
+    return calculateYardsGained(preState.yardLine, endYardLine, possession);
+  }
+
+  if (event.penalties?.some((penalty) => penalty.status === 'offsetting' && penalty.replayDown)) {
+    return 0;
+  }
+
   if (typeof event.result?.yards === 'number') {
     return event.result.yards;
   }
@@ -532,31 +640,78 @@ function resultYards(event, preState, endYardLine, possession) {
   return calculateYardsGained(preState.yardLine, endYardLine, possession);
 }
 
+function penaltyAdjustedEndYardLine(event, preState) {
+  const acceptedFinalSpot = [...(event.penalties || [])]
+    .reverse()
+    .find((penalty) => penalty.status === 'accepted' && penalty.finalSpot)?.finalSpot;
+  if (acceptedFinalSpot) return acceptedFinalSpot;
+
+  if (event.penalties?.some((penalty) => penalty.status === 'offsetting' && penalty.replayDown)) {
+    return preState.yardLine;
+  }
+
+  return null;
+}
+
+function acceptedSpotOfFoul(event) {
+  return [...(event.penalties || [])]
+    .reverse()
+    .find((penalty) => (
+      penalty.status === 'accepted'
+      && penalty.spotOfFoul
+      && (penalty.enforcedFrom === 'SPOT' || penalty.enforcedFrom === 'spotOfFoul')
+    ))?.spotOfFoul || null;
+}
+
+function acceptedPreviousSpotPenalty(event) {
+  return (event.penalties || []).some((penalty) => (
+    penalty.status === 'accepted'
+    && (penalty.enforcedFrom === 'PREVIOUS' || penalty.enforcedFrom === 'previousSpot')
+  ));
+}
+
 function hasAutomaticFirstDown(event) {
   return Boolean(event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.automaticFirstDown));
 }
 
+function hasReplayDown(event) {
+  return Boolean(event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.replayDown));
+}
+
 function penaltyDownAdjustment(event) {
-  if (event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.replayDown)) {
+  if (hasReplayDown(event)) {
     return 0;
   }
 
   return 1;
 }
 
-function isTouchdownEvent(event, endYardLine, possession) {
-  if (event.result?.scoring?.type === 'touchdown') {
-    return true;
+function isTouchdownEvent(event, endYardLine, possession, explicitScoringCounts = true) {
+  if (explicitScoringCounts && event.result?.scoring?.type) {
+    return event.result.scoring.type === 'touchdown';
   }
+  if (event.result?.code === 'safety' || event.result?.code === 'touchback') return false;
 
   return spotToPossessionRelative(endYardLine, possession) >= 100;
 }
 
-function isSafetyEvent(event) {
-  return event.result?.scoring?.type === 'safety' || event.result?.code === 'safety';
+function isSafetyEvent(event, endYardLine, possession, explicitScoringCounts = true) {
+  if (explicitScoringCounts && event.result?.scoring?.type) return event.result.scoring.type === 'safety';
+  if (explicitScoringCounts && event.result?.code === 'safety') return true;
+  if (event.result?.code === 'touchdown' || event.result?.code === 'touchback') return false;
+  return spotToPossessionRelative(endYardLine, possession) === 0;
+}
+
+function ruleSpotForTeam(spot, team, fieldSide) {
+  const parsed = parseSpot(spot);
+  const normalizedTeam = normalizeTeamCode(team);
+  if (!parsed.valid || parsed.goal || parsed.side === '50' || !normalizedTeam) return parsed.valid ? parsed.raw : spot;
+  const side = fieldSide === 'opponent' ? oppositeTeam(normalizedTeam) : normalizedTeam;
+  return `${side}${String(parsed.yard).padStart(2, '0')}`;
 }
 
 function turnoverEndSpot(result, fallbackSpot) {
+  if (result.code === 'touchback' && result.endYardLine) return result.endYardLine;
   return result.turnover?.returnEndYardLine || result.endYardLine || fallbackSpot;
 }
 

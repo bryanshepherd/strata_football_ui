@@ -1,0 +1,961 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  elementFormDefault="unqualified"
+  attributeFormDefault="unqualified"
+  version="0.1">
+
+  <xs:annotation>
+    <xs:documentation xml:lang="en">
+      Draft Strata Football XML structure modeled from the supplied 40749.XML
+      NCAA In-Arena Utility fbgame document.
+
+      This is an instance-derived starting contract. It captures every observed
+      element family and attribute while leaving context-dependent play and
+      player fields optional. Additional provider samples should be compared
+      before this draft is treated as a complete interchange specification.
+
+      Live status is carried by the downtogo element. The supplied downtogo is
+      complete even though the conditional flag and review attributes are
+      absent. Each attribute is emitted with value "Y" only while its condition
+      is active; absence means false, and a serialized "N" is invalid.
+    </xs:documentation>
+  </xs:annotation>
+
+  <xs:simpleType name="YesNoType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Y"/>
+      <xs:enumeration value="N"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="HomeVisitorType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="H"/>
+      <xs:enumeration value="V"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="PresentYesType">
+    <xs:annotation>
+      <xs:documentation>
+        Presence means true. The only serializable value is Y; false is
+        represented by omitting the attribute.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Y"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="PlayContextType">
+    <xs:annotation>
+      <xs:documentation>
+        Four-item CSV in this order: possession team, down, yards to go, spot.
+        Possession and spot are strictly side-relative V/H values; the spot is
+        V or H followed by the yardline, such as H24. This differs from the
+        standalone spot attribute, which uses a team abbreviation and yardline.
+        play@context is the state before the play; play@newcontext is the state
+        after the play. downtogo@context is the current live state.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[^,]+,[^,]+,[^,]+,[^,]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TeamYardlineSpotType">
+    <xs:annotation>
+      <xs:documentation>
+        Team abbreviation followed by the yardline, such as WVS24 or FAI35.
+        Unlike a context spot, this value does not use the V/H side indicator.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="PlayIdentifierType">
+    <xs:annotation>
+      <xs:documentation>
+        Three-item CSV in this order: drive number, play number within that
+        drive, cumulative play number for the game.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+,[0-9]+,[0-9]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="LegacyTokensType">
+    <xs:annotation>
+      <xs:documentation>
+        Legacy StatCrew token stream retained for backward compatibility. The
+        token grammar is difficult to recreate and is not defined by this XSD;
+        consumers should treat this value as opaque compatibility data.
+
+        Confirmed legacy token vocabulary, Set 1:
+        - CMT:{Text} is non-conformative free text.
+        - Q:{QuarterNumber} marks the start of the specified quarter.
+        - T:{Clock} records the time on the game clock.
+        - KO:{KickerNum},{ToYardline} records a kickoff.
+        - RET:{ReturnerNum},{EndYardline} records a return.
+        - TACK:{Num}[,{SecondNum}] records one or two tacklers.
+        - RUSH:{Num},{EndYardline}[,{Direction}] records a rush; direction is
+          optional.
+        - PEN:{Team},{PenaltyAbbreviation},{Disposition},{PlayerOrTM},
+          {FinalYardline},{DownCode} records a penalty. Disposition is A for
+          accepted, D for declined, or O for off-setting. FinalYardline is the
+          resulting V/H-relative yardline after enforcement. DownCode is N for
+          normal/repeat down in Strata, + for loss of down, or 1 for an
+          automatic first down.
+        - D:{Down},{ToGo} forces a specific down and distance when ambiguous.
+        - {DRIVE}:{Clock} records the drive start time.
+
+        Confirmed legacy token vocabulary, Set 2:
+        - PASS:{Passer},{Disposition},{ReceiverOrIntendedReceiver},
+          {FinalYardlineOrAsterisk}[,{Direction}] records a passing play.
+          Disposition is C for complete, I for incomplete, S for sack, F for
+          fumble, or X for intercepted. An incomplete pass uses * instead of a
+          final yardline. Direction is optional.
+        - PAT records a point-after attempt. Type is K for kick, R for rush, or
+          P for pass. Disposition is G for good, M for missed, B for blocked, F
+          for fumbled, or X for intercepted. PAT misses do not encode a miss
+          direction.
+          Kick forms are PAT:K,{Kicker},G, PAT:K,{Kicker},M, and
+          PAT:K,{Kicker},B. A blocked kick also emits BLOCK:{Blocker}.
+          A successful pass uses PAT:P,{Passer}/{Receiver},G. A failed pass uses
+          PAT:P,{Passer},M. A pass intercepted without a return attempt uses
+          PAT:P,{Passer},X.
+          A failed interception return uses
+          PAT:P,{Passer},X,{Returner},N. A successful interception return uses
+          PAT:P,{Passer},X,{Returner},Y.
+          Rush forms are PAT:R,{Rusher},G, PAT:R,{Rusher},M, and
+          PAT:R,{Rusher},F. Return attempts after a fumble use the same optional
+          {Returner},{YOrN} suffix as an interception.
+        - BRUP:{Number} records a pass breakup.
+        - PUNT:{Punter},{EndYardline} records a punt. A blocked punt uses
+          PUNT:{Punter},{EndYardline},B, where B is the blocked disposition.
+          Every blocked punt also emits BLOCK:{Blocker} to identify the player
+          credited with the block.
+        - BLOCK:{Number} records the player who blocked a kick or punt.
+        - OB: marks an out-of-bounds result and has no value after the colon.
+        - NOPLAY: marks a penalty that negates the entire play, corresponding
+          to a previous-spot foul in Strata, and has no value after the colon.
+        - FGA:{Kicker},{Distance},{Disposition} records a field-goal attempt.
+          Disposition is G for good, M for missed, B for blocked, or R for
+          returned.
+          A miss continues as FGA:{Kicker},{Distance},M,{BallSpotAfterMiss},
+          {MissLocation}. StatCrew prompts for BallSpotAfterMiss. MissLocation
+          is L for wide left, R for wide right, S for short, C for crossbar, 1
+          for left upright, or 2 for right upright.
+          A block continues as FGA:{Kicker},{Distance},B,{RecoveredAt},
+          {RecoveringTeam},{RecoveringPlayer}. RecoveringPlayer is TM when the
+          recovery is credited to the team. A blocked attempt also emits
+          BLOCK:{Blocker}.
+
+        Confirmed legacy token vocabulary, Set 3:
+        - DN: means the punt was downed and has no value after the colon.
+        - FC:{Number} identifies the player who fair caught the kick.
+        - FORCE:{Number} identifies the player who forced the fumble.
+        - FUMB:{RecoveringTeam},{RecoverySpot},{RecoveringPlayer} records the
+          team, spot, and player associated with a fumble recovery.
+        - HALF: marks the end of a half and has no value after the colon.
+        - QBH:{Team},{Player} records a quarterback hurry.
+        - SACK:{Number}[,{SecondNumber}] records one or two players credited
+          with a sack. SACK is used in place of TACK on a sack play.
+        - SPOT:{TeamInPossession},{BallSpot},{DriveStartYN} explicitly places
+          the ball. All five occurrences in 40749.XML follow this structure: N
+          accompanies a quarter start and Y accompanies an explicit drive-start
+          ball placement.
+        - TB: means touchback and has no value after the colon.
+        - TOUT:{HOrV} records a timeout taken by the home or visiting team.
+        - +:{Player},{FinalYardline} records a lateral.
+
+        One blocked punt in 40749.XML includes BLOCK but omits the required B
+        disposition from PUNT. Treat that record as malformed/inconsistent
+        GeniusSports/NLS legacy output, not as a valid blocked-punt alternative.
+        Strata producers must emit both the PUNT B disposition and BLOCK token.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="PlayTypeCodeType">
+    <xs:annotation>
+      <xs:documentation>
+        Play category: R rush, P pass, K kickoff, X point-after attempt,
+        # game-control information, E penalty, U punt, and F field-goal
+        attempt. F is included because every type F record in 40749.XML is a
+        field-goal attempt with a legacy FGA token.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="R"/>
+      <xs:enumeration value="P"/>
+      <xs:enumeration value="K"/>
+      <xs:enumeration value="X"/>
+      <xs:enumeration value="#"/>
+      <xs:enumeration value="E"/>
+      <xs:enumeration value="U"/>
+      <xs:enumeration value="F"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="EmptyType"/>
+
+  <xs:complexType name="FirstDownsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="rush" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="pass" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="penalty" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PenaltiesType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ConversionsType">
+    <xs:attribute name="thirdconv" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="thirdatt" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fourthconv" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fourthatt" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="MiscStatsType">
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="top" type="xs:string" use="required"/>
+    <xs:attribute name="ptsto" type="xs:nonNegativeInteger" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="RedZoneType">
+    <xs:attribute name="att" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="scores" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="points" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tdrush" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tdpass" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fgmade" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="endfga" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="enddowns" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="endint" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="endfumb" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="endhalf" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="endgame" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="RushStatsType">
+    <xs:attribute name="att" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="gain" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="loss" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PassStatsType">
+    <xs:attribute name="comp" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="att" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="int" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+    <xs:attribute name="sacks" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="sackyds" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ReceivingStatsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PuntStatsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+    <xs:attribute name="blkd" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tb" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fc" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="plus50" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="inside20" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="avg" type="xs:decimal" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="KickoffStatsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="ob" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tb" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fcyds" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="FieldGoalStatsType">
+    <xs:attribute name="made" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="att" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+    <xs:attribute name="blkd" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PatStatsType">
+    <xs:attribute name="kickatt" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="kickmade" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="passatt" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="passmade" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="rcvatt" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="rcvmade" type="xs:nonNegativeInteger" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DefenseStatsType">
+    <xs:attribute name="tackua" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tacka" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tot_tack" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tflua" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tfla" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tflyds" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="sacks" type="xs:decimal" use="required"/>
+    <xs:attribute name="sackyds" type="xs:integer" use="required"/>
+    <xs:attribute name="ff" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fr" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fryds" type="xs:integer" use="required"/>
+    <xs:attribute name="brup" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="int" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="intyds" type="xs:integer" use="required"/>
+    <xs:attribute name="qbh" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="blkd" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="saf" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="sacka" type="xs:decimal" use="required"/>
+    <xs:attribute name="sackua" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ReturnStatsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:integer" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="long" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="FumblesStatsType">
+    <xs:attribute name="no" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="lost" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ScoringStatsType">
+    <xs:attribute name="fg" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patkick" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patrush" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patrcv" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="saf" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patretkick" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patretfumb" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:group name="CompleteTeamStatsGroup">
+    <xs:sequence>
+      <xs:element name="firstdowns" type="FirstDownsType"/>
+      <xs:element name="penalties" type="PenaltiesType"/>
+      <xs:element name="conversions" type="ConversionsType"/>
+      <xs:element name="misc" type="MiscStatsType"/>
+      <xs:element name="redzone" type="RedZoneType"/>
+      <xs:element name="rush" type="RushStatsType"/>
+      <xs:element name="pass" type="PassStatsType"/>
+      <xs:element name="rcv" type="ReceivingStatsType"/>
+      <xs:element name="punt" type="PuntStatsType"/>
+      <xs:element name="ko" type="KickoffStatsType"/>
+      <xs:element name="fg" type="FieldGoalStatsType"/>
+      <xs:element name="pat" type="PatStatsType"/>
+      <xs:element name="defense" type="DefenseStatsType"/>
+      <xs:element name="kr" type="ReturnStatsType"/>
+      <xs:element name="pr" type="ReturnStatsType"/>
+      <xs:element name="ir" type="ReturnStatsType"/>
+      <xs:element name="fr" type="ReturnStatsType"/>
+      <xs:element name="fumbles" type="FumblesStatsType"/>
+      <xs:element name="scoring" type="ScoringStatsType"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:complexType name="OfficialsType">
+    <xs:attribute name="ref" type="xs:string" use="required"/>
+    <xs:attribute name="ump" type="xs:string" use="required"/>
+    <xs:attribute name="line" type="xs:string" use="required"/>
+    <xs:attribute name="lj" type="xs:string" use="required"/>
+    <xs:attribute name="bj" type="xs:string" use="required"/>
+    <xs:attribute name="fj" type="xs:string" use="required"/>
+    <xs:attribute name="sj" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="RulesType">
+    <xs:attribute name="qtrs" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="mins" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="downs" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="yds" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="kospot" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="tbspot" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="kotbspot" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patspot" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="safspot" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="td" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="fg" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="pat" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="patx" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="saf" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="defpat" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="rouge" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="field" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="toh" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="sackrush" type="YesNoType" use="required"/>
+    <xs:attribute name="fgaplay" type="YesNoType" use="required"/>
+    <xs:attribute name="netpunttb" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="VenueType">
+    <xs:sequence>
+      <xs:element name="officials" type="OfficialsType"/>
+      <xs:element name="rules" type="RulesType"/>
+    </xs:sequence>
+    <xs:attribute name="gameid" type="xs:string" use="required"/>
+    <xs:attribute name="visid" type="xs:string" use="required"/>
+    <xs:attribute name="homeid" type="xs:string" use="required"/>
+    <xs:attribute name="visname" type="xs:string" use="required"/>
+    <xs:attribute name="homename" type="xs:string" use="required"/>
+    <xs:attribute name="date" type="xs:string" use="required"/>
+    <xs:attribute name="location" type="xs:string" use="required"/>
+    <xs:attribute name="stadium" type="xs:string" use="required"/>
+    <xs:attribute name="start" type="xs:string" use="required"/>
+    <xs:attribute name="end" type="xs:string" use="required"/>
+    <xs:attribute name="leaguegame" type="YesNoType" use="required"/>
+    <xs:attribute name="duration" type="xs:string" use="required"/>
+    <xs:attribute name="attend" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="temp" type="xs:integer" use="required"/>
+    <xs:attribute name="wind" type="xs:string" use="required"/>
+    <xs:attribute name="weather" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="LinePeriodType">
+    <xs:attribute name="prd" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="score" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="LineScoreType">
+    <xs:sequence>
+      <xs:element name="lineprd" type="LinePeriodType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="prds" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="line" type="xs:string" use="required"/>
+    <xs:attribute name="score" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TotalsType">
+    <xs:group ref="CompleteTeamStatsGroup"/>
+    <xs:attribute name="totoff_plays" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="totoff_yards" type="xs:integer" use="required"/>
+    <xs:attribute name="totoff_avg" type="xs:decimal" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TeamPlayerType">
+    <xs:all>
+      <xs:element name="rush" type="RushStatsType" minOccurs="0"/>
+      <xs:element name="pass" type="PassStatsType" minOccurs="0"/>
+      <xs:element name="rcv" type="ReceivingStatsType" minOccurs="0"/>
+      <xs:element name="punt" type="PuntStatsType" minOccurs="0"/>
+      <xs:element name="ko" type="KickoffStatsType" minOccurs="0"/>
+      <xs:element name="fg" type="FieldGoalStatsType" minOccurs="0"/>
+      <xs:element name="pat" type="PatStatsType" minOccurs="0"/>
+      <xs:element name="defense" type="DefenseStatsType" minOccurs="0"/>
+      <xs:element name="kr" type="ReturnStatsType" minOccurs="0"/>
+      <xs:element name="pr" type="ReturnStatsType" minOccurs="0"/>
+      <xs:element name="ir" type="ReturnStatsType" minOccurs="0"/>
+      <xs:element name="fr" type="ReturnStatsType" minOccurs="0"/>
+      <xs:element name="fumbles" type="FumblesStatsType" minOccurs="0"/>
+      <xs:element name="scoring" type="ScoringStatsType" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="uni" type="xs:string" use="required"/>
+    <xs:attribute name="code" type="xs:string" use="optional"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="shortname" type="xs:string" use="required"/>
+    <xs:attribute name="checkname" type="xs:string" use="required"/>
+    <xs:attribute name="gs" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="gp" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="startpos" type="xs:string" use="optional"/>
+    <xs:attribute name="class" type="xs:string" use="required"/>
+    <xs:attribute name="opos" type="xs:string" use="optional"/>
+    <xs:attribute name="dpos" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="TeamType">
+    <xs:sequence>
+      <xs:element name="linescore" type="LineScoreType"/>
+      <xs:element name="totals" type="TotalsType"/>
+      <xs:element name="player" type="TeamPlayerType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="code" type="xs:string" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="record" type="xs:string" use="required"/>
+    <xs:attribute name="abb" type="xs:string" use="required"/>
+    <xs:attribute name="conf-record" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ScoreType">
+    <xs:attribute name="V" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="H" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="vh" type="HomeVisitorType" use="optional"/>
+    <xs:attribute name="team" type="xs:string" use="optional"/>
+    <xs:attribute name="qtr" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="clock" type="xs:string" use="optional"/>
+    <xs:attribute name="type" type="xs:string" use="optional"/>
+    <xs:attribute name="scorer" type="xs:string" use="optional"/>
+    <xs:attribute name="yds" type="xs:integer" use="optional"/>
+    <xs:attribute name="passer" type="xs:string" use="optional"/>
+    <xs:attribute name="pattype" type="xs:string" use="optional"/>
+    <xs:attribute name="patres" type="xs:string" use="optional"/>
+    <xs:attribute name="patby" type="xs:string" use="optional"/>
+    <xs:attribute name="how" type="xs:string" use="optional"/>
+    <xs:attribute name="plays" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="top" type="xs:string" use="optional"/>
+    <xs:attribute name="drive" type="xs:string" use="optional"/>
+    <xs:attribute name="driveindex" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="vscore" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="hscore" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="final" type="YesNoType" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="ScoresType">
+    <xs:sequence>
+      <xs:element name="score" type="ScoreType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FieldGoalAttemptType">
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="team" type="xs:string" use="required"/>
+    <xs:attribute name="qtr" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="clock" type="xs:string" use="required"/>
+    <xs:attribute name="kicker" type="xs:string" use="required"/>
+    <xs:attribute name="distance" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="FieldGoalAttemptsType">
+    <xs:sequence>
+      <xs:element name="fga" type="FieldGoalAttemptType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="DriveType">
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="team" type="xs:string" use="required"/>
+    <xs:attribute name="driveindex" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="start" type="xs:string" use="required"/>
+    <xs:attribute name="end" type="xs:string" use="required"/>
+    <xs:attribute name="plays" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yards" type="xs:integer" use="required"/>
+    <xs:attribute name="top" type="xs:string" use="required"/>
+    <xs:attribute name="start_qtr" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="start_time" type="xs:string" use="required"/>
+    <xs:attribute name="start_spot" type="xs:string" use="required"/>
+    <xs:attribute name="start_how" type="xs:string" use="required"/>
+    <xs:attribute name="end_qtr" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="end_time" type="xs:string" use="required"/>
+    <xs:attribute name="end_spot" type="xs:string" use="required"/>
+    <xs:attribute name="end_how" type="xs:string" use="required"/>
+    <xs:attribute name="rz" type="xs:nonNegativeInteger" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DrivesType">
+    <xs:sequence>
+      <xs:element name="drive" type="DriveType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="BreakupPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_bu; bu means pass breakup. Identifies the defender credited
+        with breaking up the pass.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="FieldGoalPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_fg; fg means field goal. Identifies the kicker, attempt
+        distance, result, and whether the attempt produced a score.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="distance" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+    <xs:attribute name="score" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="FumblePlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_fumb; fumb means fumble. Identifies the player who fumbled,
+        the fumble spot, and the recovering player and team when known.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="at" type="xs:string" use="optional"/>
+    <xs:attribute name="frvh" type="HomeVisitorType" use="optional"/>
+    <xs:attribute name="frname" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="KickoffPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_ko; ko means kickoff. Identifies the kicker, kick distance,
+        result, and fair-catch player when applicable.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="gain" type="xs:integer" use="required"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+    <xs:attribute name="fc" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="ReturnPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_kr and p_pr. kr means kickoff return and pr means punt return.
+        Identifies the returner and return gain.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="gain" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PassPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_pa; pa means passer. Identifies the passer and, when known,
+        the receiver, result, and gain associated with the passing action.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="qb" type="xs:string" use="required"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+    <xs:attribute name="rcv" type="xs:string" use="optional"/>
+    <xs:attribute name="gain" type="xs:integer" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="PatPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_pat; pat means point-after attempt. Identifies the credited
+        player, attempt type, quarterback when applicable, result, and whether
+        the attempt produced a score.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="type" type="xs:string" use="required"/>
+    <xs:attribute name="qb" type="xs:string" use="optional"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+    <xs:attribute name="score" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PenaltyPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_pn; pn means penalty. Identifies the penalized team and, when
+        known, player along with the penalty code, enforcement result, spot,
+        and yards.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="code" type="xs:string" use="required"/>
+    <xs:attribute name="type" type="xs:string" use="required"/>
+    <xs:attribute name="result" type="xs:string" use="required"/>
+    <xs:attribute name="at" type="xs:string" use="required"/>
+    <xs:attribute name="yards" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PuntPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_pu; pu means punt. Identifies the punter and punt distance,
+        including inside-the-20, touchback, and out-of-bounds indicators.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="gain" type="xs:integer" use="required"/>
+    <xs:attribute name="in20" type="YesNoType" use="required"/>
+    <xs:attribute name="tb" type="YesNoType" use="required"/>
+    <xs:attribute name="ob" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="NamedPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_qbh; qbh means quarterback hurry. Identifies the defender
+        credited with hurrying the quarterback.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="RushPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_ru; ru means rusher. Identifies the ball carrier and rushing
+        gain associated with the play.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="gain" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TacklePlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_tk; tk means tackler. Identifies a tackling actor and whether
+        the credit is an assist, sack, tackle for loss, or forced fumble.
+        Multiple p_tk elements may identify multiple credited tacklers.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="sack" type="YesNoType" use="required"/>
+    <xs:attribute name="tfl" type="YesNoType" use="required"/>
+    <xs:attribute name="ff" type="YesNoType" use="required"/>
+    <xs:attribute name="assist" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TimeoutPlayType">
+    <xs:annotation>
+      <xs:documentation>
+        Used by p_to; to means timeout. Identifies the team charged with the
+        timeout.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="team" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:group name="PlayActionGroup">
+    <xs:annotation>
+      <xs:documentation>
+        Optional actor-detail enhancements attached to a play. These children
+        describe the people or teams involved and what each did; they complement
+        the parent play record rather than replace it. StatBroadcast uses these
+        details to associate a player with every play in which that player was
+        involved, enabling player-to-play navigation. A play may contain several
+        actor-detail children, including repeated roles such as tacklers.
+
+        Confirmed abbreviations: p_bu pass breakup, p_fg field goal, p_fumb
+        fumble, p_ko kickoff, p_kr kickoff return, p_pa passer, p_pat
+        point-after attempt, p_pn penalty, p_pr punt return, p_pu punt, p_qbh
+        quarterback hurry, p_ru rusher, p_tk tackler, and p_to timeout.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:choice>
+      <xs:element name="p_bu" type="BreakupPlayType"/>
+      <xs:element name="p_fg" type="FieldGoalPlayType"/>
+      <xs:element name="p_fumb" type="FumblePlayType"/>
+      <xs:element name="p_ko" type="KickoffPlayType"/>
+      <xs:element name="p_kr" type="ReturnPlayType"/>
+      <xs:element name="p_pa" type="PassPlayType"/>
+      <xs:element name="p_pat" type="PatPlayType"/>
+      <xs:element name="p_pn" type="PenaltyPlayType"/>
+      <xs:element name="p_pr" type="ReturnPlayType"/>
+      <xs:element name="p_pu" type="PuntPlayType"/>
+      <xs:element name="p_qbh" type="NamedPlayType"/>
+      <xs:element name="p_ru" type="RushPlayType"/>
+      <xs:element name="p_tk" type="TacklePlayType"/>
+      <xs:element name="p_to" type="TimeoutPlayType"/>
+    </xs:choice>
+  </xs:group>
+
+  <xs:complexType name="PlayType">
+    <xs:group ref="PlayActionGroup" minOccurs="0" maxOccurs="unbounded"/>
+    <xs:attribute name="hasball" type="xs:string" use="required"/>
+    <xs:attribute name="down" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="togo" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="spot" type="TeamYardlineSpotType" use="required"/>
+    <xs:attribute name="context" type="PlayContextType" use="required"/>
+    <xs:attribute name="playid" type="PlayIdentifierType" use="required"/>
+    <xs:attribute name="type" type="PlayTypeCodeType" use="required"/>
+    <xs:attribute name="clock" type="xs:string" use="optional"/>
+    <xs:attribute name="tokens" type="LegacyTokensType" use="required"/>
+    <xs:attribute name="text" type="xs:string" use="required"/>
+    <xs:attribute name="newcontext" type="PlayContextType" use="required"/>
+    <xs:attribute name="first" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>
+          Legacy GeniusSports/NLS first-down classification. Intended values
+          appear to be R for rush, P for pass, and E for penalty, but 40749.XML
+          also contains first="O" and marks several rushing first downs as
+          first="P". Consumers must not treat this field as authoritative.
+          Strata producers should omit it unless a reliable external contract
+          is established. It remains optional and unrestricted only so legacy
+          source documents can be imported and validated without data loss.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="score" type="YesNoType" use="optional"/>
+    <xs:attribute name="vscore" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="hscore" type="xs:nonNegativeInteger" use="optional"/>
+    <xs:attribute name="ob" type="YesNoType" use="optional"/>
+    <xs:attribute name="turnover" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DriveStartType">
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="spot" type="TeamYardlineSpotType" use="required"/>
+    <xs:attribute name="clock" type="xs:string" use="required"/>
+    <xs:attribute name="driveIndex" type="xs:string" use="required"/>
+    <xs:attribute name="poss" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="DriveSummaryType">
+    <xs:attribute name="plays" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="yards" type="xs:integer" use="required"/>
+    <xs:attribute name="top" type="xs:string" use="required"/>
+    <xs:attribute name="driveindex" type="xs:positiveInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="CommentType">
+    <xs:attribute name="text" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="QuarterSummaryType">
+    <xs:group ref="CompleteTeamStatsGroup"/>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="QuarterType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="comment" type="CommentType"/>
+      <xs:element name="drivestart" type="DriveStartType"/>
+      <xs:element name="play" type="PlayType"/>
+      <xs:element name="drivesum" type="DriveSummaryType"/>
+      <xs:element name="score" type="ScoreType"/>
+      <xs:element name="endqtr" type="EmptyType"/>
+      <xs:element name="qtrsummary" type="QuarterSummaryType"/>
+    </xs:choice>
+    <xs:attribute name="number" type="xs:positiveInteger" use="required"/>
+    <xs:attribute name="text" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DownToGoType">
+    <xs:annotation>
+      <xs:documentation>
+        Current live status. flag="Y" means a queued penalty is waiting or the
+        operator is working on an immediate penalty. review="Y" means the
+        previous play is under coach's-challenge or booth review. Both
+        attributes are omitted when false; flag="N" and review="N" are invalid.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="hasball" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>
+          Code of the team currently possessing the ball. hasball identifies
+          the same team by its V/H side.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="down" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="togo" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="spot" type="TeamYardlineSpotType" use="required"/>
+    <xs:attribute name="context" type="PlayContextType" use="required"/>
+    <xs:attribute name="qtr" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="clock" type="xs:string" use="required"/>
+    <xs:attribute name="vtoh" type="xs:nonNegativeInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>
+          Running count of timeouts called by the visiting team in the current
+          half. The value counts upward; it is not the number of timeouts
+          remaining. TOH means timeout half.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="htoh" type="xs:nonNegativeInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>
+          Running count of timeouts called by the home team in the current half.
+          The value counts upward; it is not the number of timeouts remaining.
+          TOH means timeout half.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lastplay" type="xs:string" use="required"/>
+    <xs:attribute name="flag" type="PresentYesType" use="optional"/>
+    <xs:attribute name="review" type="PresentYesType" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="PlaysType">
+    <xs:sequence>
+      <xs:element name="qtr" type="QuarterType" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="downtogo" type="DownToGoType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="format" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="DnpPlayerType">
+    <xs:attribute name="uni" type="xs:string" use="required"/>
+    <xs:attribute name="code" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="checkname" type="xs:string" use="required"/>
+    <xs:attribute name="gp" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="class" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="DnpType">
+    <xs:sequence>
+      <xs:element name="player" type="DnpPlayerType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="LongPlayType">
+    <xs:attribute name="vh" type="HomeVisitorType" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="yds" type="xs:nonNegativeInteger" use="required"/>
+    <xs:attribute name="play" type="xs:string" use="required"/>
+    <xs:attribute name="players" type="xs:string" use="required"/>
+    <xs:attribute name="td" type="YesNoType" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="LongPlaysType">
+    <xs:sequence>
+      <xs:element name="longplays" type="LongPlayType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="threshold" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:element name="fbgame">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="venue" type="VenueType"/>
+        <xs:element name="team" type="TeamType" minOccurs="2" maxOccurs="2"/>
+        <xs:element name="scores" type="ScoresType"/>
+        <xs:element name="fgas" type="FieldGoalAttemptsType"/>
+        <xs:element name="drives" type="DrivesType"/>
+        <xs:element name="plays" type="PlaysType"/>
+        <xs:element name="dnp" type="DnpType" minOccurs="0" maxOccurs="2"/>
+        <xs:element name="longplays" type="LongPlaysType"/>
+      </xs:sequence>
+      <xs:attribute name="source" type="xs:string" use="required"/>
+      <xs:attribute name="version" type="xs:string" use="required"/>
+      <xs:attribute name="generated" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

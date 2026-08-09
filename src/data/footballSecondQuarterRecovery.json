@@ -1,0 +1,2826 @@
+{
+  "updatedAt": "2026-08-08T19:01:47.076Z",
+  "teams": {
+    "H": {
+      "teamId": "TEAM-WVS",
+      "name": "West Virginia St.",
+      "abbr": "WVSU",
+      "score": 3
+    },
+    "V": {
+      "teamId": "TEAM-FAI",
+      "name": "Fairmont St.",
+      "abbr": "FAIR",
+      "score": 7
+    }
+  },
+  "clock": {
+    "period": 2,
+    "clock": "15:00",
+    "clockTenths": 9000,
+    "isRunning": false,
+    "playClock": null,
+    "lastStartedAt": null
+  },
+  "liveState": {
+    "possession": "H",
+    "down": 2,
+    "distance": 10,
+    "yardLine": "H26",
+    "lineToGain": "H36",
+    "goalToGo": false,
+    "redZone": false,
+    "driveId": "DRV-0007",
+    "driveNumber": 7,
+    "nextPlayContext": "H,2,10,H26",
+    "pendingTryTeam": null,
+    "kickoffTeam": null,
+    "timeouts": {
+      "H": 3,
+      "V": 3
+    },
+    "challenges": {
+      "H": 2,
+      "V": 2
+    }
+  },
+  "drives": {
+    "current": {
+      "driveId": "DRV-0007",
+      "driveNumber": 7,
+      "team": "H",
+      "startYardLine": "H26",
+      "startReason": "punt",
+      "plays": 1,
+      "yards": 0,
+      "result": null,
+      "startPeriod": 1,
+      "startClock": "00:35"
+    },
+    "completed": [
+      {
+        "driveId": "DRV-0001",
+        "driveNumber": 1,
+        "team": "H",
+        "startYardLine": "H26",
+        "startReason": "kickoff",
+        "plays": 5,
+        "yards": -12,
+        "result": "punt",
+        "startPeriod": 1,
+        "startClock": "14:54",
+        "endPeriod": 1,
+        "endClock": "13:32"
+      },
+      {
+        "driveId": "DRV-0002",
+        "driveNumber": 2,
+        "team": "V",
+        "startYardLine": "V47",
+        "startReason": "punt",
+        "plays": 7,
+        "yards": 53,
+        "result": "touchdown",
+        "startPeriod": 1,
+        "startClock": "13:32",
+        "endPeriod": 1,
+        "endClock": "09:49"
+      },
+      {
+        "driveId": "DRV-0003",
+        "driveNumber": 3,
+        "team": "H",
+        "startYardLine": "H23",
+        "startReason": "kickoff",
+        "plays": 4,
+        "yards": 4,
+        "result": "punt",
+        "startPeriod": 1,
+        "startClock": "09:42",
+        "endPeriod": 1,
+        "endClock": "08:09"
+      },
+      {
+        "driveId": "DRV-0004",
+        "driveNumber": 4,
+        "team": "V",
+        "startYardLine": "V18",
+        "startReason": "punt",
+        "plays": 4,
+        "yards": 5,
+        "result": "punt",
+        "startPeriod": 1,
+        "startClock": "08:09",
+        "endPeriod": 1,
+        "endClock": "06:43"
+      },
+      {
+        "driveId": "DRV-0005",
+        "driveNumber": 5,
+        "team": "H",
+        "startYardLine": "H45",
+        "startReason": "punt",
+        "plays": 10,
+        "yards": 42,
+        "result": "fieldGoal",
+        "startPeriod": 1,
+        "startClock": "06:43",
+        "endPeriod": 1,
+        "endClock": "02:02"
+      },
+      {
+        "driveId": "DRV-0006",
+        "driveNumber": 6,
+        "team": "V",
+        "startYardLine": "V36",
+        "startReason": "kickoff",
+        "plays": 4,
+        "yards": 8,
+        "result": "punt",
+        "startPeriod": 1,
+        "startClock": "02:00",
+        "endPeriod": 1,
+        "endClock": "00:35"
+      }
+    ]
+  },
+  "events": [
+    {
+      "clientEventId": "fcqi-kick-2-client",
+      "type": "kickoff",
+      "subtype": "returned",
+      "period": 1,
+      "clock": "15:00",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "V35",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 0
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-30",
+          "team": "V",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-7",
+            "team": "V",
+            "role": "tackler"
+          }
+        ],
+        "returner": {
+          "playerId": "H-9",
+          "team": "H",
+          "role": "returner"
+        },
+        "kicker": {
+          "playerId": "V-30",
+          "team": "V",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "returned",
+        "endYardLine": "H26",
+        "nextPossession": "H",
+        "driveEnds": false,
+        "kick": {
+          "catchYardLine": "H00",
+          "kickYards": 65,
+          "receiveResultCode": "R"
+        },
+        "return": {
+          "type": "Kickoff",
+          "returnerPlayerId": "H-9",
+          "returnYards": 26,
+          "returnStartYardLine": "H00",
+          "returnEndYardLine": "H26",
+          "resultCode": "T",
+          "tackledByPlayerIds": [
+            "V-7"
+          ]
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #30 Connor Mollohan kickoff 65 yards to the H goal line, #9 Devin Washington return for 26 yards to the H26, tackled by #7 Jolann Alston.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-kick-2-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:47:06.780Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #30 Connor Mollohan kickoff 65 yards to the H goal line, #9 Devin Washington return for 26 yards to the H26, tackled by #7 Jolann Alston.",
+        "confirmedAt": "2026-08-08T18:47:06.780Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000001",
+      "sequence": 1,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:47:06.780Z",
+      "createdAt": "2026-08-08T18:47:06.780Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-3-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:47:29.382Z",
+      "period": 1,
+      "clock": "14:54",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H26",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0001",
+        "driveNumber": 1
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-23",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-23",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "H26"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #23 Jojo Restall.",
+      "eventId": "LOCAL-000002",
+      "sequence": 2,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:47:29.382Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-4-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:47:40.308Z",
+      "period": 1,
+      "clock": "14:54",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "H26",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0001",
+        "driveNumber": 1
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-23",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-19",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 1,
+        "endYardLine": "H27"
+      },
+      "penalties": [],
+      "description": "WVSU #23 Jojo Restall rush for 1 yard to the H27, tackled by #19 Larrey Williams III.",
+      "eventId": "LOCAL-000003",
+      "sequence": 3,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:47:40.308Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-5-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:48:15.507Z",
+      "period": 1,
+      "clock": "14:54",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 3,
+        "distance": 9,
+        "yardLine": "H27",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0001",
+        "driveNumber": 1
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-66",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 8,
+        "endYardLine": "H35"
+      },
+      "penalties": [
+        {
+          "penaltyId": "fcqi-penalty-6-client-pen-1",
+          "code": "IBW",
+          "team": "H",
+          "timing": "liveBall",
+          "status": "accepted",
+          "yards": 10,
+          "enforcedFrom": "spotOfFoul",
+          "spotOfFoul": "H24",
+          "finalSpot": "H14",
+          "replayDown": true
+        }
+      ],
+      "description": "WVSU #10 Kaleb Jackson rush for 8 yards to the H35, tackled by #66 Nemo Roberts, PENALTY Illegal Block Below the Waist, enforced 10 yards from the H24 to the H14, replay down.",
+      "eventId": "LOCAL-000004",
+      "sequence": 4,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:48:15.507Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-7-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:48:30.817Z",
+      "period": 1,
+      "clock": "14:54",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 3,
+        "distance": 22,
+        "yardLine": "H14",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0001",
+        "driveNumber": 1
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "H14"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #1 Amare Ary.",
+      "eventId": "LOCAL-000005",
+      "sequence": 5,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:48:30.817Z"
+    },
+    {
+      "clientEventId": "fcqi-punt-8-client",
+      "type": "punt",
+      "subtype": "fairCatch",
+      "period": 1,
+      "clock": "14:54",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 4,
+        "distance": 22,
+        "yardLine": "H14",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0001",
+        "driveNumber": 1
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-38",
+          "team": "H",
+          "role": "punter"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": {
+          "playerId": "V-43",
+          "team": "V",
+          "role": "returner"
+        },
+        "kicker": null,
+        "punter": {
+          "playerId": "H-38",
+          "team": "H",
+          "role": "punter"
+        },
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "fairCatch",
+        "endYardLine": "V47",
+        "nextPossession": "V",
+        "driveEnds": true,
+        "kick": {
+          "catchYardLine": "V47",
+          "kickYards": 39,
+          "receiveResultCode": "C"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #38 Joseph Shrader punt 39 yards to the V47, fair catch by #43 Jack Stanislawczyk.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-punt-8-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:48:42.223Z"
+      },
+      "confirmation": {
+        "summaryText": "WVSU #38 Joseph Shrader punt 39 yards to the V47, fair catch by #43 Jack Stanislawczyk.",
+        "confirmedAt": "2026-08-08T18:48:42.223Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000006",
+      "sequence": 6,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:48:42.223Z",
+      "createdAt": "2026-08-08T18:48:42.223Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-9-client",
+      "type": "pass",
+      "subtype": "sack",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V47",
+        "lineToGain": "H43",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "sackVictim"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-31",
+            "team": "H",
+            "role": "sack"
+          }
+        ],
+        "returner": null,
+        "kicker": null,
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "sack",
+        "yards": -9,
+        "endYardLine": "V38",
+        "driveEnds": false
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo sacked by #31 Gemel Smith for loss of 9 yards to the V38.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-pass-9-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:49:25.707Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #11 Nino Marzullo sacked by #31 Gemel Smith for loss of 9 yards to the V38.",
+        "confirmedAt": "2026-08-08T18:49:25.707Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000007",
+      "sequence": 7,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:49:25.707Z",
+      "createdAt": "2026-08-08T18:49:25.707Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-10-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:49:39.891Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 2,
+        "distance": 19,
+        "yardLine": "V38",
+        "lineToGain": "H43",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-2",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-18",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 3,
+        "endYardLine": "V41"
+      },
+      "penalties": [],
+      "description": "FAIR #2 LeJay Hatcher rush for 3 yards to the V41, tackled by #18 Malik Brown.",
+      "eventId": "LOCAL-000008",
+      "sequence": 8,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:49:39.891Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-11-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:50:21.139Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 3,
+        "distance": 16,
+        "yardLine": "V41",
+        "lineToGain": "H43",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-5",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-5",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "V41"
+        }
+      },
+      "penalties": [
+        {
+          "penaltyId": "fcqi-penalty-12-client-pen-1",
+          "code": "DH",
+          "team": "H",
+          "playerId": "H-1F",
+          "timing": "liveBall",
+          "status": "accepted",
+          "yards": 10,
+          "enforcedFrom": "previousSpot",
+          "finalSpot": "H49",
+          "automaticFirstDown": true
+        }
+      ],
+      "description": "FAIR #11 Nino Marzullo pass incomplete intended for #5 Winston Page, PENALTY Defensive Holding, 10 yards to the H49, automatic first down.",
+      "eventId": "LOCAL-000009",
+      "sequence": 9,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:50:21.139Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-13-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:50:40.611Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H49",
+        "lineToGain": "H39",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-2",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-4M",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 3,
+        "endYardLine": "H46"
+      },
+      "penalties": [],
+      "description": "FAIR #2 LeJay Hatcher rush for 3 yards to the H46, tackled by #4 Amir Muhammad.",
+      "eventId": "LOCAL-000010",
+      "sequence": 10,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:50:40.611Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-14-client",
+      "type": "pass",
+      "subtype": "complete",
+      "createdAt": "2026-08-08T18:51:10.206Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 2,
+        "distance": 7,
+        "yardLine": "H46",
+        "lineToGain": "H39",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-4",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-4",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": {
+          "playerId": "V-4",
+          "team": "V",
+          "role": "receiver"
+        },
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "complete",
+        "pass": {
+          "outcome": "complete",
+          "startYardLine": "H46",
+          "catchYardLine": "H45",
+          "terminalYardLine": "H35",
+          "passingYards": 11,
+          "receivingYards": 11,
+          "outOfBounds": false
+        },
+        "yards": 11,
+        "endYardLine": "H35"
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo pass complete to #4 Davin Driskell for 11 yards to the H35, tackled by #13 Daryl Fletcher and #4 Amir Muhammad.",
+      "eventId": "LOCAL-000011",
+      "sequence": 11,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:51:10.206Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-15-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:51:22.690Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H35",
+        "lineToGain": "H25",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-2",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-1F",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 5,
+        "endYardLine": "H30"
+      },
+      "penalties": [],
+      "description": "FAIR #2 LeJay Hatcher rush for 5 yards to the H30, tackled by #13 Daryl Fletcher.",
+      "eventId": "LOCAL-000012",
+      "sequence": 12,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:51:22.690Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-16-client",
+      "type": "pass",
+      "subtype": "complete",
+      "createdAt": "2026-08-08T18:51:42.613Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 2,
+        "distance": 5,
+        "yardLine": "H30",
+        "lineToGain": "H25",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-18",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-18",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": {
+          "playerId": "V-18",
+          "team": "V",
+          "role": "receiver"
+        },
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "complete",
+        "pass": {
+          "outcome": "complete",
+          "startYardLine": "H30",
+          "catchYardLine": "H18",
+          "terminalYardLine": "H05",
+          "passingYards": 25,
+          "receivingYards": 25,
+          "outOfBounds": false
+        },
+        "yards": 25,
+        "endYardLine": "H05"
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo pass complete to #18 Joey Ramsey for 25 yards to the H5, tackled by #2 Marshawn Mankins.",
+      "eventId": "LOCAL-000013",
+      "sequence": 13,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:51:42.613Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-17-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:51:49.073Z",
+      "period": 1,
+      "clock": "13:32",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 5,
+        "yardLine": "H05",
+        "lineToGain": "goal",
+        "goalToGo": true,
+        "redZone": true,
+        "driveId": "DRV-0002",
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-2",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "touchdown",
+        "yards": 5,
+        "scoring": {
+          "team": "V",
+          "points": 6,
+          "type": "touchdown"
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #2 LeJay Hatcher rush for 5 yards to the goal line for a touchdown.",
+      "eventId": "LOCAL-000014",
+      "sequence": 14,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:51:49.073Z"
+    },
+    {
+      "clientEventId": "fcqi-pat-18-client",
+      "type": "try",
+      "subtype": "kick",
+      "period": 1,
+      "clock": "09:49",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "H03",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-93",
+          "team": "V",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": {
+          "playerId": "V-93",
+          "team": "V",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "made",
+        "driveEnds": true,
+        "kick": {
+          "kickSpot": "H03"
+        },
+        "scoring": {
+          "team": "V",
+          "points": 1,
+          "type": "patKick"
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #93 Emmanuel Richardson extra point good.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-pat-18-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:52:02.405Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #93 Emmanuel Richardson extra point good.",
+        "confirmedAt": "2026-08-08T18:52:02.405Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000015",
+      "sequence": 15,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:52:02.405Z",
+      "createdAt": "2026-08-08T18:52:02.405Z"
+    },
+    {
+      "clientEventId": "fcqi-game-control-19-client",
+      "type": "gameControl",
+      "subtype": "timeout",
+      "period": 1,
+      "clock": "09:49",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "V35",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": null,
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": null,
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "noPlay",
+        "gameControl": {
+          "action": "timeout",
+          "period": 1,
+          "clock": "09:49",
+          "isRunning": false,
+          "timeoutType": "media"
+        }
+      },
+      "penalties": [],
+      "description": "Media timeout.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-game-control-19-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:52:11.578Z"
+      },
+      "confirmation": {
+        "summaryText": "Media timeout.",
+        "confirmedAt": "2026-08-08T18:52:11.578Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000016",
+      "sequence": 16,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:52:11.578Z",
+      "createdAt": "2026-08-08T18:52:11.578Z"
+    },
+    {
+      "clientEventId": "fcqi-kick-20-client",
+      "type": "kickoff",
+      "subtype": "returned",
+      "period": 1,
+      "clock": "09:49",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "V35",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 2
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-30",
+          "team": "V",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-50",
+            "team": "V",
+            "role": "tackler"
+          }
+        ],
+        "returner": {
+          "playerId": "H-9",
+          "team": "H",
+          "role": "returner"
+        },
+        "kicker": {
+          "playerId": "V-30",
+          "team": "V",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "returned",
+        "endYardLine": "H23",
+        "nextPossession": "H",
+        "driveEnds": false,
+        "kick": {
+          "catchYardLine": "H02",
+          "kickYards": 63,
+          "receiveResultCode": "R"
+        },
+        "return": {
+          "type": "Kickoff",
+          "returnerPlayerId": "H-9",
+          "returnYards": 21,
+          "returnStartYardLine": "H02",
+          "returnEndYardLine": "H23",
+          "resultCode": "T",
+          "tackledByPlayerIds": [
+            "V-50"
+          ]
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #30 Connor Mollohan kickoff 63 yards to the H2, #9 Devin Washington return for 21 yards to the H23, tackled by #50 Montel Sims.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-kick-20-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:52:40.732Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #30 Connor Mollohan kickoff 63 yards to the H2, #9 Devin Washington return for 21 yards to the H23, tackled by #50 Montel Sims.",
+        "confirmedAt": "2026-08-08T18:52:40.732Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000017",
+      "sequence": 17,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:52:40.732Z",
+      "createdAt": "2026-08-08T18:52:40.732Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-21-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:52:56.766Z",
+      "period": 1,
+      "clock": "09:42",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H23",
+        "lineToGain": "H33",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0003",
+        "driveNumber": 3
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-50",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": -4,
+        "endYardLine": "H19"
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson rush for loss of 4 yards to the H19, tackled by #50 Montel Sims.",
+      "eventId": "LOCAL-000018",
+      "sequence": 18,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:52:56.766Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-24-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:53:24.713Z",
+      "period": 1,
+      "clock": "09:42",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 14,
+        "yardLine": "H19",
+        "lineToGain": "H33",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0003",
+        "driveNumber": 3
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-3",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-3",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "H19"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #3 Todd Gregory, Jr., broken up by #19 Larrey Williams III.",
+      "eventId": "LOCAL-000019",
+      "sequence": 19,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:53:24.713Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-25-client",
+      "type": "pass",
+      "subtype": "complete",
+      "createdAt": "2026-08-08T18:53:57.642Z",
+      "period": 1,
+      "clock": "09:42",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 3,
+        "distance": 14,
+        "yardLine": "H19",
+        "lineToGain": "H33",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0003",
+        "driveNumber": 3
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-4",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-4",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": {
+          "playerId": "H-4",
+          "team": "H",
+          "role": "receiver"
+        },
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "complete",
+        "pass": {
+          "outcome": "complete",
+          "startYardLine": "H19",
+          "catchYardLine": "H24",
+          "terminalYardLine": "H27",
+          "passingYards": 8,
+          "receivingYards": 8,
+          "outOfBounds": false
+        },
+        "yards": 8,
+        "endYardLine": "H27"
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass complete to #4 Adrien Mosley for 8 yards to the H27, tackled by #24 Gavin Smith and #11 Nick Longo.",
+      "eventId": "LOCAL-000020",
+      "sequence": 20,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:53:57.642Z"
+    },
+    {
+      "clientEventId": "fcqi-punt-26-client",
+      "type": "punt",
+      "subtype": "outOfBounds",
+      "period": 1,
+      "clock": "09:42",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 4,
+        "distance": 6,
+        "yardLine": "H27",
+        "lineToGain": "H33",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0003",
+        "driveNumber": 3
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-38",
+          "team": "H",
+          "role": "punter"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": null,
+        "punter": {
+          "playerId": "H-38",
+          "team": "H",
+          "role": "punter"
+        },
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "outOfBounds",
+        "endYardLine": "V18",
+        "nextPossession": "V",
+        "driveEnds": true,
+        "kick": {
+          "catchYardLine": "V18",
+          "kickYards": 55,
+          "receiveResultCode": "O"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #38 Joseph Shrader punt 55 yards out-of-bounds at the V18.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-punt-26-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:54:12.163Z"
+      },
+      "confirmation": {
+        "summaryText": "WVSU #38 Joseph Shrader punt 55 yards out-of-bounds at the V18.",
+        "confirmedAt": "2026-08-08T18:54:12.163Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000021",
+      "sequence": 21,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:54:12.163Z",
+      "createdAt": "2026-08-08T18:54:12.163Z"
+    },
+    {
+      "clientEventId": "fcqi-game-control-27-client",
+      "type": "gameControl",
+      "subtype": "timeout",
+      "period": 1,
+      "clock": "08:09",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V18",
+        "lineToGain": "V28",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0004",
+        "driveNumber": 4
+      },
+      "participants": {
+        "primary": null,
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": null,
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "noPlay",
+        "gameControl": {
+          "action": "timeout",
+          "period": 1,
+          "clock": "08:09",
+          "isRunning": false,
+          "timeoutType": "media"
+        }
+      },
+      "penalties": [],
+      "description": "Media timeout.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-game-control-27-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:54:16.260Z"
+      },
+      "confirmation": {
+        "summaryText": "Media timeout.",
+        "confirmedAt": "2026-08-08T18:54:16.260Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000022",
+      "sequence": 22,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:54:16.260Z",
+      "createdAt": "2026-08-08T18:54:16.260Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-28-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:54:40.772Z",
+      "period": 1,
+      "clock": "08:09",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V18",
+        "lineToGain": "V28",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0004",
+        "driveNumber": 4
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-2",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-31",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 0,
+        "endYardLine": "V18"
+      },
+      "penalties": [],
+      "description": "FAIR #2 LeJay Hatcher rush for no gain to the V18, tackled by #31 Gemel Smith.",
+      "eventId": "LOCAL-000023",
+      "sequence": 23,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:54:40.772Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-29-client",
+      "type": "pass",
+      "subtype": "complete",
+      "createdAt": "2026-08-08T18:55:03.905Z",
+      "period": 1,
+      "clock": "08:09",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "V18",
+        "lineToGain": "V28",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0004",
+        "driveNumber": 4
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-80",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-80",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": {
+          "playerId": "V-80",
+          "team": "V",
+          "role": "receiver"
+        },
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "complete",
+        "pass": {
+          "outcome": "complete",
+          "startYardLine": "V18",
+          "catchYardLine": "V20",
+          "terminalYardLine": "V23",
+          "passingYards": 5,
+          "receivingYards": 5,
+          "outOfBounds": false
+        },
+        "yards": 5,
+        "endYardLine": "V23"
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo pass complete to #80 Kimothy Massie for 5 yards to the V23, tackled by #1 Jacob Camacho.",
+      "eventId": "LOCAL-000024",
+      "sequence": 24,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:55:03.905Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-30-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:55:20.004Z",
+      "period": 1,
+      "clock": "08:09",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 3,
+        "distance": 5,
+        "yardLine": "V23",
+        "lineToGain": "V28",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0004",
+        "driveNumber": 4
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-4",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-4",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "V23"
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo pass incomplete intended for #4 Davin Driskell, broken up by #2 Marshawn Mankins.",
+      "eventId": "LOCAL-000025",
+      "sequence": 25,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:55:20.004Z"
+    },
+    {
+      "clientEventId": "fcqi-punt-31-client",
+      "type": "punt",
+      "subtype": "outOfBounds",
+      "period": 1,
+      "clock": "08:09",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 4,
+        "distance": 5,
+        "yardLine": "V23",
+        "lineToGain": "V28",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0004",
+        "driveNumber": 4
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-31",
+          "team": "V",
+          "role": "punter"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-9",
+            "team": "H",
+            "role": "blocker"
+          }
+        ],
+        "returner": null,
+        "kicker": null,
+        "punter": {
+          "playerId": "V-31",
+          "team": "V",
+          "role": "punter"
+        },
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "outOfBounds",
+        "endYardLine": "H45",
+        "nextPossession": "H",
+        "driveEnds": true,
+        "kick": {
+          "catchYardLine": "H45",
+          "kickYards": 32,
+          "receiveResultCode": "O",
+          "blockedByPlayerId": "H-9"
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #31 Ethan Vargo-Thomas punt blocked by #9 Devin Washington, 32 yards out-of-bounds at the H45.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-punt-31-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:55:40.222Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #31 Ethan Vargo-Thomas punt blocked by #9 Devin Washington, 32 yards out-of-bounds at the H45.",
+        "confirmedAt": "2026-08-08T18:55:40.222Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000026",
+      "sequence": 26,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:55:40.222Z",
+      "createdAt": "2026-08-08T18:55:40.222Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-32-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:55:57.573Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H45",
+        "lineToGain": "V45",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "H45"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #1 Amare Ary.",
+      "eventId": "LOCAL-000027",
+      "sequence": 27,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:55:57.573Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-33-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:56:13.046Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "H45",
+        "lineToGain": "V45",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-5",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-99",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 0,
+        "endYardLine": "H45"
+      },
+      "penalties": [],
+      "description": "WVSU #5 Justin Pessoa rush for no gain to the H45, tackled by #99 Darrick Badley.",
+      "eventId": "LOCAL-000028",
+      "sequence": 28,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:56:13.046Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-34-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:56:29.704Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 3,
+        "distance": 10,
+        "yardLine": "H45",
+        "lineToGain": "V45",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-58",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 11,
+        "endYardLine": "V44"
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson rush for 11 yards to the V44, tackled by #58 Saumir Deshields.",
+      "eventId": "LOCAL-000029",
+      "sequence": 29,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:56:29.704Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-35-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:56:47.187Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V44",
+        "lineToGain": "V34",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-5",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-66",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 4,
+        "endYardLine": "V40"
+      },
+      "penalties": [],
+      "description": "WVSU #5 Justin Pessoa rush for 4 yards to the V40, tackled by #66 Nemo Roberts.",
+      "eventId": "LOCAL-000030",
+      "sequence": 30,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:56:47.187Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-36-client",
+      "type": "pass",
+      "subtype": "complete",
+      "createdAt": "2026-08-08T18:57:11.209Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 6,
+        "yardLine": "V40",
+        "lineToGain": "V34",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "receiver"
+        },
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "complete",
+        "pass": {
+          "outcome": "complete",
+          "startYardLine": "V40",
+          "catchYardLine": "V36",
+          "terminalYardLine": "V31",
+          "passingYards": 9,
+          "receivingYards": 9,
+          "outOfBounds": false
+        },
+        "yards": 9,
+        "endYardLine": "V31"
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass complete to #7 Malik Baker II for 9 yards to the V31, tackled by #6 Quadir Lockett-Smith.",
+      "eventId": "LOCAL-000031",
+      "sequence": 31,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:57:11.209Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-37-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:57:35.019Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V31",
+        "lineToGain": "V21",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-5",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-10",
+            "team": "V",
+            "role": "tackler"
+          },
+          {
+            "playerId": "V-58",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 0,
+        "endYardLine": "V31"
+      },
+      "penalties": [],
+      "description": "WVSU #5 Justin Pessoa rush for no gain to the V31, tackled by #10 Tyrees Smith and #58 Saumir Deshields.",
+      "eventId": "LOCAL-000032",
+      "sequence": 32,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:57:35.019Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-38-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:58:04.963Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "V31",
+        "lineToGain": "V21",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "V31"
+        }
+      },
+      "penalties": [
+        {
+          "penaltyId": "fcqi-penalty-39-client-pen-1",
+          "code": "DPI",
+          "team": "V",
+          "playerId": "V-12",
+          "timing": "liveBall",
+          "status": "accepted",
+          "yards": 15,
+          "enforcedFrom": "previousSpot",
+          "finalSpot": "V16",
+          "automaticFirstDown": true
+        }
+      ],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #7 Malik Baker II, PENALTY Defensive Pass Interference, 15 yards to the V16, automatic first down.",
+      "eventId": "LOCAL-000033",
+      "sequence": 33,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:58:04.963Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-40-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:58:24.506Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V16",
+        "lineToGain": "V06",
+        "goalToGo": false,
+        "redZone": true,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-5",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-50",
+            "team": "V",
+            "role": "tackler"
+          },
+          {
+            "playerId": "V-58",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 3,
+        "endYardLine": "V13"
+      },
+      "penalties": [],
+      "description": "WVSU #5 Justin Pessoa rush for 3 yards to the V13, tackled by #50 Montel Sims and #58 Saumir Deshields.",
+      "eventId": "LOCAL-000034",
+      "sequence": 34,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:58:24.506Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-41-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T18:58:37.760Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 7,
+        "yardLine": "V13",
+        "lineToGain": "V06",
+        "goalToGo": false,
+        "redZone": true,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "H-1",
+          "team": "H",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "V13"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson pass incomplete intended for #1 Amare Ary.",
+      "eventId": "LOCAL-000035",
+      "sequence": 35,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:58:37.760Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-42-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T18:58:51.262Z",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 3,
+        "distance": 7,
+        "yardLine": "V13",
+        "lineToGain": "V06",
+        "goalToGo": false,
+        "redZone": true,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-10",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-10",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "outOfBounds",
+        "yards": 0,
+        "endYardLine": "V13"
+      },
+      "penalties": [],
+      "description": "WVSU #10 Kaleb Jackson rush for no gain to the V13, out-of-bounds, tackled by #10 Tyrees Smith.",
+      "eventId": "LOCAL-000036",
+      "sequence": 36,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:58:51.262Z"
+    },
+    {
+      "clientEventId": "fcqi-kick-43-client",
+      "type": "fieldGoal",
+      "subtype": "made",
+      "period": 1,
+      "clock": "06:43",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 4,
+        "distance": 7,
+        "yardLine": "V13",
+        "lineToGain": "V06",
+        "goalToGo": false,
+        "redZone": true,
+        "driveId": "DRV-0005",
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-36",
+          "team": "H",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": {
+          "playerId": "H-36",
+          "team": "H",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "made",
+        "endYardLine": "V20",
+        "driveEnds": true,
+        "kick": {
+          "kickSpot": "V20",
+          "attemptYards": 30
+        },
+        "scoring": {
+          "team": "H",
+          "points": 3,
+          "type": "fieldGoal"
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #36 Tony Hornbuckle 30-yard field goal good.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-kick-43-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:59:06.638Z"
+      },
+      "confirmation": {
+        "summaryText": "WVSU #36 Tony Hornbuckle 30-yard field goal good.",
+        "confirmedAt": "2026-08-08T18:59:06.638Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000037",
+      "sequence": 37,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:59:06.638Z",
+      "createdAt": "2026-08-08T18:59:06.638Z"
+    },
+    {
+      "clientEventId": "fcqi-kick-44-client",
+      "type": "kickoff",
+      "subtype": "returned",
+      "period": 1,
+      "clock": "02:02",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "H35",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 5
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-36",
+          "team": "H",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": {
+          "playerId": "V-18",
+          "team": "V",
+          "role": "returner"
+        },
+        "kicker": {
+          "playerId": "H-36",
+          "team": "H",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "returned",
+        "endYardLine": "V36",
+        "nextPossession": "V",
+        "driveEnds": false,
+        "kick": {
+          "catchYardLine": "V30",
+          "kickYards": 35,
+          "receiveResultCode": "R"
+        },
+        "return": {
+          "type": "Kickoff",
+          "returnerPlayerId": "V-18",
+          "returnYards": 6,
+          "returnStartYardLine": "V30",
+          "returnEndYardLine": "V36",
+          "resultCode": ".",
+          "tackledByPlayerIds": []
+        }
+      },
+      "penalties": [],
+      "description": "WVSU #36 Tony Hornbuckle kickoff 35 yards to the V30, #18 Joey Ramsey return for 6 yards to the V36.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-kick-44-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T18:59:46.305Z"
+      },
+      "confirmation": {
+        "summaryText": "WVSU #36 Tony Hornbuckle kickoff 35 yards to the V30, #18 Joey Ramsey return for 6 yards to the V36.",
+        "confirmedAt": "2026-08-08T18:59:46.305Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000038",
+      "sequence": 38,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T18:59:46.305Z",
+      "createdAt": "2026-08-08T18:59:46.305Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-45-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T19:00:08.665Z",
+      "period": 1,
+      "clock": "02:00",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "V36",
+        "lineToGain": "V46",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0006",
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-0",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-7B",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 6,
+        "endYardLine": "V42"
+      },
+      "penalties": [],
+      "description": "FAIR #0 Leonard Farrow rush for 6 yards to the V42, tackled by #7 Adrian Bowers.",
+      "eventId": "LOCAL-000039",
+      "sequence": 39,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:00:08.665Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-46-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T19:00:25.347Z",
+      "period": 1,
+      "clock": "02:00",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 2,
+        "distance": 4,
+        "yardLine": "V42",
+        "lineToGain": "V46",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0006",
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-0",
+          "team": "V",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "H-18",
+            "team": "H",
+            "role": "tackler"
+          },
+          {
+            "playerId": "H-41",
+            "team": "H",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 2,
+        "endYardLine": "V44"
+      },
+      "penalties": [],
+      "description": "FAIR #0 Leonard Farrow rush for 2 yards to the V44, tackled by #18 Malik Brown and #41 Jabari Henry.",
+      "eventId": "LOCAL-000040",
+      "sequence": 40,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:00:25.347Z"
+    },
+    {
+      "clientEventId": "fcqi-pass-47-client",
+      "type": "pass",
+      "subtype": "incomplete",
+      "createdAt": "2026-08-08T19:00:43.548Z",
+      "period": 1,
+      "clock": "02:00",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 3,
+        "distance": 2,
+        "yardLine": "V44",
+        "lineToGain": "V46",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0006",
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-11",
+          "team": "V",
+          "role": "passer"
+        },
+        "secondary": {
+          "playerId": "V-87",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "target": {
+          "playerId": "V-87",
+          "team": "V",
+          "role": "intendedReceiver"
+        },
+        "receiver": null,
+        "interceptor": null,
+        "defenders": []
+      },
+      "result": {
+        "code": "incomplete",
+        "pass": {
+          "outcome": "incomplete",
+          "startYardLine": "V44"
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #11 Nino Marzullo pass incomplete intended for #87 Cole Vonkaenel.",
+      "eventId": "LOCAL-000041",
+      "sequence": 41,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:00:43.548Z"
+    },
+    {
+      "clientEventId": "fcqi-punt-48-client",
+      "type": "punt",
+      "subtype": "returned",
+      "period": 1,
+      "clock": "02:00",
+      "possession": "V",
+      "preState": {
+        "possession": "V",
+        "down": 4,
+        "distance": 2,
+        "yardLine": "V44",
+        "lineToGain": "V46",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0006",
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "V-31",
+          "team": "V",
+          "role": "punter"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-24",
+            "team": "V",
+            "role": "tackler"
+          }
+        ],
+        "returner": {
+          "playerId": "H-7",
+          "team": "H",
+          "role": "returner"
+        },
+        "kicker": null,
+        "punter": {
+          "playerId": "V-31",
+          "team": "V",
+          "role": "punter"
+        },
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "returned",
+        "endYardLine": "H26",
+        "nextPossession": "H",
+        "driveEnds": true,
+        "kick": {
+          "catchYardLine": "H16",
+          "kickYards": 40,
+          "receiveResultCode": "R"
+        },
+        "return": {
+          "type": "Punt",
+          "returnerPlayerId": "H-7",
+          "returnYards": 10,
+          "returnStartYardLine": "H16",
+          "returnEndYardLine": "H26",
+          "resultCode": "T",
+          "tackledByPlayerIds": [
+            "V-24"
+          ]
+        }
+      },
+      "penalties": [],
+      "description": "FAIR #31 Ethan Vargo-Thomas punt 40 yards to the H16, #7 Malik Baker II return for 10 yards to the H26, tackled by #24 Gavin Smith.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-punt-48-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T19:01:04.120Z"
+      },
+      "confirmation": {
+        "summaryText": "FAIR #31 Ethan Vargo-Thomas punt 40 yards to the H16, #7 Malik Baker II return for 10 yards to the H26, tackled by #24 Gavin Smith.",
+        "confirmedAt": "2026-08-08T19:01:04.120Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000042",
+      "sequence": 42,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:01:04.120Z",
+      "createdAt": "2026-08-08T19:01:04.120Z"
+    },
+    {
+      "clientEventId": "fcqi-rush-49-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-08-08T19:01:26.602Z",
+      "period": 1,
+      "clock": "00:35",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 1,
+        "distance": 10,
+        "yardLine": "H26",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0007",
+        "driveNumber": 7
+      },
+      "participants": {
+        "primary": {
+          "playerId": "H-23",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "V-58",
+            "team": "V",
+            "role": "tackler"
+          }
+        ]
+      },
+      "result": {
+        "code": "tackle",
+        "yards": 0,
+        "endYardLine": "H26"
+      },
+      "penalties": [],
+      "description": "WVSU #23 Jojo Restall rush for no gain to the H26, tackled by #58 Saumir Deshields.",
+      "eventId": "LOCAL-000043",
+      "sequence": 43,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:01:26.602Z"
+    },
+    {
+      "clientEventId": "fcqi-game-control-51-client",
+      "type": "gameControl",
+      "subtype": "endQuarter",
+      "period": 1,
+      "clock": "00:35",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "H26",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0007",
+        "driveNumber": 7
+      },
+      "participants": {
+        "primary": null,
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": null,
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "periodUpdate",
+        "period": 1,
+        "gameControl": {
+          "action": "endQuarter",
+          "period": 1,
+          "clock": "00:35",
+          "isRunning": false
+        }
+      },
+      "penalties": [],
+      "description": "End quarter 1.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-game-control-51-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T19:01:38.710Z"
+      },
+      "confirmation": {
+        "summaryText": "End quarter 1.",
+        "confirmedAt": "2026-08-08T19:01:38.710Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000044",
+      "sequence": 44,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:01:38.710Z",
+      "createdAt": "2026-08-08T19:01:38.710Z"
+    },
+    {
+      "clientEventId": "fcqi-game-control-52-client",
+      "type": "gameControl",
+      "subtype": "startQuarter",
+      "period": 1,
+      "clock": "00:00",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 2,
+        "distance": 10,
+        "yardLine": "H26",
+        "lineToGain": "H36",
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": "DRV-0007",
+        "driveNumber": 7
+      },
+      "participants": {
+        "primary": null,
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": null,
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "periodUpdate",
+        "period": 2,
+        "gameControl": {
+          "action": "startQuarter",
+          "period": 2,
+          "clock": "00:00",
+          "isRunning": false
+        }
+      },
+      "penalties": [],
+      "description": "Start quarter 2.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-game-control-52-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-08-08T19:01:47.076Z"
+      },
+      "confirmation": {
+        "summaryText": "Start quarter 2.",
+        "confirmedAt": "2026-08-08T19:01:47.076Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000045",
+      "sequence": 45,
+      "status": "accepted",
+      "acceptedAt": "2026-08-08T19:01:47.076Z",
+      "createdAt": "2026-08-08T19:01:47.076Z"
+    }
+  ]
+}

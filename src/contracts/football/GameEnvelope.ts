@@ -137,7 +137,10 @@ export interface Rules {
   fieldLength?: number;
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
+  nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
+  safetyKickSpot?: Spot;
+  patReturns?: boolean;
   overtimeEnabled?: boolean;
 }
 /**
@@ -167,6 +170,8 @@ export interface LiveState {
   driveId: string | null;
   driveNumber: number;
   nextPlayContext?: string;
+  pendingTryTeam?: TeamCode;
+  kickoffTeam?: TeamCode;
 }
 export interface RosterEnvelope {
   schemaVersion: 'football.rosterEnvelope.v1';

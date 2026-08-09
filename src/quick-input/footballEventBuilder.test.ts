@@ -45,6 +45,76 @@ describe('footballEventBuilder', () => {
   });
 
   it.each([
+    ['rush', null, participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'), undefined, { code: 'tackle', yards: 7, endYardLine: 'V49' }],
+    ['pass', 'complete', participant('passer', 'H', 'H-12', '12', 'Mason Reed'), participant('receiver', 'H', 'H-88', '88', 'Eli Grant'), { code: 'complete', yards: 7, endYardLine: 'V49', pass: { targetPlayerId: 'H-88', completed: true } }],
+  ] as const)('builds canonical %s with an accepted queued penalty', (family, subtype, primary, secondary, resultShape) => {
+    const result = expectBuilt(baseIntent({
+      family,
+      subtype,
+      primary,
+      secondary,
+      result: resultShape,
+      penalties: [{
+        penaltyId: `pen-${family}`,
+        team: 'H',
+        code: 'HOLD',
+        name: 'Holding',
+        yards: 10,
+        enforcedFrom: 'SPOT',
+        spotOfFoul: 'V45',
+        finalSpot: 'H45',
+        downConsequence: 'REPEAT',
+        source: 'queued',
+        status: 'accepted',
+        accepted: true,
+        liveBall: true,
+      }],
+    }));
+
+    expect(result.event.penalties).toEqual([{
+      penaltyId: `pen-${family}`,
+      code: 'HOLD',
+      team: 'H',
+      timing: 'liveBall',
+      status: 'accepted',
+      yards: 10,
+      enforcedFrom: 'spotOfFoul',
+      spotOfFoul: 'V45',
+      finalSpot: 'H45',
+      replayDown: true,
+    }]);
+  });
+
+  it('preserves an ejection marker in canonical penalty notes for reports', () => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      result: { code: 'tackle', yards: 2, endYardLine: 'H37' },
+      penalties: [{
+        penaltyId: 'pen-ejection',
+        team: 'H',
+        code: 'TH',
+        name: 'Targeting',
+        yards: 15,
+        enforcedFrom: 'END',
+        finalSpot: 'H22',
+        downConsequence: 'REPEAT',
+        source: 'queued',
+        status: 'accepted',
+        accepted: true,
+        liveBall: true,
+        ejectionable: true,
+        ejected: true,
+        ejectedPlayerId: 'H-44',
+        playerId: 'H-44',
+      }],
+    }));
+
+    expect(result.event.penalties[0].notes).toBe('EJECTION: H-44 ejected from the game.');
+  });
+
+  it.each([
     ['normal', { code: 'tackle' as const, yards: 4, endYardLine: 'H48' as const }],
     ['loss', { code: 'tackle' as const, yards: -2, endYardLine: 'H42' as const }],
     ['out of bounds', { code: 'outOfBounds' as const, yards: 5, endYardLine: 'H49' as const }],
@@ -57,6 +127,25 @@ describe('footballEventBuilder', () => {
     }));
 
     expect(result.event.result).toMatchObject(resultShape);
+  });
+
+  it('builds a canonical safety with points for the defense', () => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      prePlay: {
+        possession: 'H', down: 2, distance: 10, yardLine: 'H05', lineToGain: 'H15', driveId: 'DRV-0002', driveNumber: 2,
+      },
+      result: { code: 'safety', yards: -5, endYardLine: 'H00' },
+    }));
+
+    expect(result.event.result).toMatchObject({
+      code: 'safety',
+      yards: -5,
+      endYardLine: 'H00',
+      scoring: { team: 'V', points: 2, type: 'safety' },
+    });
   });
 
   it('builds complete pass', () => {
@@ -80,6 +169,31 @@ describe('footballEventBuilder', () => {
     expect(result.event.participants.primary).toEqual({ playerId: 'H-12', team: 'H', role: 'passer' });
     expect(result.event.participants.secondary).toEqual({ playerId: 'H-88', team: 'H', role: 'receiver' });
     expect(result.event.result.pass).toEqual({ targetPlayerId: 'H-88', completed: true });
+  });
+
+  it('builds a completed pass for negative yardage', () => {
+    const result = expectBuilt(
+      baseIntent({
+        family: 'pass',
+        subtype: 'complete',
+        primary: participant('passer', 'H', 'H-12', '12', 'Mason Reed'),
+        secondary: participant('receiver', 'H', 'H-88', '88', 'Eli Grant'),
+        result: {
+          code: 'complete',
+          yards: -1,
+          endYardLine: 'H43',
+          pass: { targetPlayerId: 'H-88', completed: true },
+        },
+      }),
+    );
+
+    expect(result.event.result).toMatchObject({
+      code: 'complete',
+      yards: -1,
+      endYardLine: 'H43',
+      pass: { targetPlayerId: 'H-88', completed: true },
+    });
+    expect(result.event.description).toContain('for loss of 1 yard');
   });
 
   it('builds incomplete pass', () => {
@@ -284,17 +398,13 @@ describe('footballEventBuilder', () => {
     expect(result.event.penalties).toEqual([
       {
         penaltyId: 'pen-1',
-        team: 'V',
         code: 'OFF',
-        name: 'Offside',
-        yards: 5,
-        resolution: 'accepted',
-        enforcedFrom: 'PREVIOUS',
-        finalSpot: 'H49',
-        downConsequence: 'REPEAT',
-        source: 'immediate',
+        team: 'V',
         status: 'accepted',
-        accepted: true,
+        yards: 5,
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'H49',
+        replayDown: true,
       },
     ]);
   });

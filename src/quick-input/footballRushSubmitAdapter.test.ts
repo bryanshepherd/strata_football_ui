@@ -28,6 +28,18 @@ describe('footballRushSubmitAdapter', () => {
     }
   });
 
+  it('accepts canonical H00 and V00 end-zone spots', async () => {
+    const request = makeRequest();
+    request.event.preState.yardLine = 'H00';
+    request.event.result.endYardLine = 'V00';
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(makeResponse(request)));
+
+    const result = await submitCanonicalRushEvent(request, { fetchImpl });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['ok', 'event', 'envelope', 'projection'])('rejects the legacy %s response alias', async (alias) => {
     const request = makeRequest();
     const payload = { ...makeResponse(request), [alias]: {} };

@@ -208,7 +208,7 @@ function validateResponseEnvelope(payload: unknown, request: SubmitEventRequest)
 }
 
 function isCanonicalSpot(value: string): boolean {
-  return value === '50' || /^(?:H|V)(?:0[1-9]|[1-4][0-9])$/.test(value);
+  return value === '50' || /^(?:H|V)[0-4][0-9]$/.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

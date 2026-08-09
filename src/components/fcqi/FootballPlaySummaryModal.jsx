@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import FootballFlowProgress from './FootballFlowProgress';
 
 export default function FootballPlaySummaryModal({
@@ -14,23 +14,45 @@ export default function FootballPlaySummaryModal({
   summary,
   unresolvedQueuedPenalty = false,
 }) {
-  if (!summary) return null;
-
   const submitDisabled = isSubmitting || unresolvedQueuedPenalty;
   const submitTitle = unresolvedQueuedPenalty
     ? 'Resolve queued penalty before submitting'
     : undefined;
+
+  useEffect(() => {
+    if (!summary || isSubmitting) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.key !== 'Enter') return;
+      if (event.target?.closest?.('button, input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      if (unresolvedQueuedPenalty) {
+        onEnterPenalty();
+      } else {
+        onConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSubmitting, onConfirm, onEnterPenalty, summary, unresolvedQueuedPenalty]);
+
+  if (!summary) return null;
 
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-zinc-950/55 p-4" role="presentation">
       <section
         aria-label="Play summary review"
         aria-modal="true"
-        className="w-full max-w-xl rounded border border-zinc-300 bg-white shadow-xl"
+        className={`w-full max-w-xl rounded border shadow-xl ${
+          unresolvedQueuedPenalty
+            ? 'border-amber-400 bg-amber-50'
+            : 'border-zinc-300 bg-white'
+        }`}
         role="dialog"
       >
-        <div className="border-b border-zinc-200 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+        <div className={`border-b px-5 py-4 ${unresolvedQueuedPenalty ? 'border-amber-300' : 'border-zinc-200'}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wide ${unresolvedQueuedPenalty ? 'text-amber-800' : 'text-emerald-700'}`}>
             Review before build
           </p>
           <h2 className="mt-1 text-lg font-semibold text-zinc-950">Play Summary</h2>
@@ -67,7 +89,11 @@ export default function FootballPlaySummaryModal({
           )}
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 px-5 py-4">
+        <div className={`flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4 ${unresolvedQueuedPenalty ? 'border-amber-300' : 'border-zinc-200'}`}>
+          <span className="text-xs font-black uppercase tracking-wide text-amber-900">
+            Shift+E for Flag on the Play
+          </span>
+          <div className="flex flex-wrap justify-end gap-2">
           <button
             className={`rounded border px-3 py-2 text-sm font-semibold ${
               unresolvedQueuedPenalty
@@ -110,6 +136,7 @@ export default function FootballPlaySummaryModal({
           >
             {isSubmitting ? 'Submitting...' : 'Submit Play'}
           </button>
+          </div>
         </div>
       </section>
     </div>

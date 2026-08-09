@@ -57,11 +57,14 @@ describe('football pregame coin toss domain', () => {
       kickingTeam: 'V',
       receivingTeam: 'H',
     });
+    expect(awaitingKickoffState({ minutesPerPeriod: 12, kickoffSpot: 'H35' }, toss).liveState.yardLine).toBe('V35');
   });
 
   it('gates FCQI play families by phase and flags consequential post-kick edits', () => {
     expect(isPlayFamilyAvailable('pregame', 'rush')).toBe(false);
+    expect(isPlayFamilyAvailable('pregame', 'gameControl')).toBe(true);
     expect(isPlayFamilyAvailable('awaitingKickoff', 'kickoff')).toBe(true);
+    expect(isPlayFamilyAvailable('awaitingKickoff', 'gameControl')).toBe(true);
     expect(isPlayFamilyAvailable('awaitingKickoff', 'rush')).toBe(false);
     const before = complete({ winnerInitialChoice: 'kick', direction: 'north' });
     expect(isConsequentialTossEdit(before, { ...before, direction: 'south' }, true)).toBe(true);

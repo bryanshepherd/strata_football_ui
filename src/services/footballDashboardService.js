@@ -2,10 +2,18 @@ import {
   defaultFixtureKey,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import {
+  applyFootballEventToEnvelope,
+  calculateYardsGained,
+  calculateYardsToGain,
+  createLiveState,
+} from '../utils/footballRulesEngine';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
+export const FOOTBALL_SYNC_QUEUE_STORAGE_KEY = 'strata.football.syncQueue.v1';
 export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/strata_football/api/football/games/envelope.php';
 export const FOOTBALL_PREGAME_ENDPOINT = '/strata_football/api/football/games/pregame.php';
+export const FOOTBALL_EVENT_ENDPOINT = '/strata_football/api/football/events/submit.php';
 
 export const footballTeamOptions = [
   { teamId: 'TEAM-H', name: 'Home State', abbr: 'HOM' },
@@ -40,6 +48,27 @@ const writeStore = (store) => {
   window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, JSON.stringify({
     version: 1,
     games: store.games || {},
+  }));
+};
+
+const readSyncQueue = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch (error) {
+    console.warn('Unable to read football server sync queue', error);
+    return [];
+  }
+};
+
+const writeSyncQueue = (items) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
+    version: 1,
+    items,
   }));
 };
 
@@ -174,17 +203,32 @@ export function getDashboardSeededFootballEnvelopeRecord(gameId) {
 }
 
 /**
- * Dashboard-created games intentionally keep their canonical full envelope in
- * the dashboard store until they are handed to the backend. This updates that
- * same envelope record; it does not create a separate pregame/roster cache.
+ * The browser copy is the authoritative scoring envelope. A dashboard-created
+ * game already has a record here; a server-hydrated game creates one exactly
+ * once during startup and uses it for every later reload.
  */
 export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
+  if (!gameId || !envelope) return null;
   const store = readStore();
-  const record = store.games?.[String(gameId)];
-  if (!record || !envelope) return null;
+  const record = store.games?.[String(gameId)] || null;
   const updatedAt = new Date().toISOString();
+  const home = envelope.game?.teams?.H || {};
+  const visitor = envelope.game?.teams?.V || {};
   const nextRecord = {
     ...record,
+    gameId: String(gameId),
+    createdAt: record?.createdAt || updatedAt,
+    gameDate: record?.gameDate || String(envelope.game?.scheduledAt || '').slice(0, 10),
+    startTime: record?.startTime || String(envelope.game?.scheduledAt || '').slice(11, 16),
+    venue: record?.venue || envelope.game?.venue?.name || '',
+    homeTeamId: record?.homeTeamId || home.teamId || '',
+    visitorTeamId: record?.visitorTeamId || visitor.teamId || '',
+    homeTeam: record?.homeTeam || { teamId: home.teamId || '', name: home.name || '', abbr: home.abbr || 'H' },
+    visitorTeam: record?.visitorTeam || { teamId: visitor.teamId || '', name: visitor.name || '', abbr: visitor.abbr || 'V' },
+    rosterStatus: {
+      H: Object.keys(envelope.rosters?.teams?.H?.players || {}).length,
+      V: Object.keys(envelope.rosters?.teams?.V?.players || {}).length,
+    },
     updatedAt,
     envelope: {
       ...envelope,
@@ -200,28 +244,118 @@ export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
   return clone(nextRecord.envelope);
 }
 
-export async function persistFootballPregameEnvelope(gameId, envelope, { fetchImpl = globalThis.fetch } = {}) {
-  const dashboardEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
-  if (dashboardEnvelope) return dashboardEnvelope;
-  if (typeof fetchImpl !== 'function') throw new Error('No fetch implementation is available to save pregame configuration.');
-  const response = await fetchImpl(FOOTBALL_PREGAME_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      gameId,
-      baseEnvelopeVersion: envelope.updatedAt,
-      pregame: envelope.pregame,
-      rosters: envelope.rosters,
-    }),
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.schemaVersion) {
-    throw new Error(payload?.errors?.map((error) => error.message || error.code).join(' ') || 'Pregame configuration was rejected.');
+const footballSyncItemId = ({ kind, payload }) => {
+  if (kind === 'event' && payload?.event?.clientEventId) {
+    return `event:${payload.event.clientEventId}`;
   }
-  return payload;
+  return `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const footballSyncEndpoint = (item) => {
+  if (item.dashboardGameId) {
+    const gameId = encodeURIComponent(String(item.dashboardGameId));
+    return item.kind === 'event'
+      ? `/api/football/games/${gameId}/events`
+      : `/api/football/games/${gameId}/pregame`;
+  }
+  return item.kind === 'event' ? FOOTBALL_EVENT_ENDPOINT : FOOTBALL_PREGAME_ENDPOINT;
+};
+
+export function getPendingFootballSyncCount(gameId = '') {
+  return readSyncQueue().filter((item) => !gameId || item.gameId === String(gameId)).length;
 }
 
-export async function fetchFootballEnvelope(gameId, { signal, fetchImpl = globalThis.fetch } = {}) {
+export function enqueueFootballServerSync({ gameId, dashboardGameId = '', kind, payload }) {
+  if (!gameId || !payload || !['event', 'pregame'].includes(kind)) return null;
+  const items = readSyncQueue();
+  const item = {
+    id: footballSyncItemId({ kind, payload }),
+    gameId: String(gameId),
+    dashboardGameId: dashboardGameId ? String(dashboardGameId) : '',
+    kind,
+    payload: clone(payload),
+    attempts: 0,
+    createdAt: new Date().toISOString(),
+    lastAttemptAt: null,
+    lastError: '',
+  };
+  if (items.some((existing) => existing.id === item.id)) return clone(item);
+  writeSyncQueue([...items, item]);
+  return clone(item);
+}
+
+let activeFootballSync = null;
+
+export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } = {}) {
+  if (activeFootballSync) return activeFootballSync;
+  activeFootballSync = (async () => {
+    if (typeof fetchImpl !== 'function') {
+      return { pendingCount: readSyncQueue().length, syncedCount: 0, error: 'No network connection is available.' };
+    }
+    let items = readSyncQueue();
+    let syncedCount = 0;
+    let error = '';
+    while (items.length > 0) {
+      const item = items[0];
+      let response;
+      try {
+        response = await fetchImpl(footballSyncEndpoint(item), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(item.payload),
+        });
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : 'Server sync failed.';
+      }
+      if (response?.ok) {
+        items = items.slice(1);
+        writeSyncQueue(items);
+        syncedCount += 1;
+        continue;
+      }
+      if (!error) error = `Server sync failed (${response?.status || 'network'}).`;
+      items = [
+        {
+          ...item,
+          attempts: Number(item.attempts || 0) + 1,
+          lastAttemptAt: new Date().toISOString(),
+          lastError: error,
+        },
+        ...items.slice(1),
+      ];
+      writeSyncQueue(items);
+      break;
+    }
+    return { pendingCount: items.length, syncedCount, error };
+  })();
+  try {
+    return await activeFootballSync;
+  } finally {
+    activeFootballSync = null;
+  }
+}
+
+export async function persistFootballPregameEnvelope(gameId, envelope, { dashboardGameId = '' } = {}) {
+  const localEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
+  if (!localEnvelope) throw new Error('Pregame configuration could not be saved to this browser.');
+  if (dashboardGameId) {
+    enqueueFootballServerSync({
+      gameId,
+      dashboardGameId,
+      kind: 'pregame',
+      payload: {
+        gameId,
+        baseEnvelopeVersion: envelope.updatedAt,
+        pregame: envelope.pregame,
+        rosters: envelope.rosters,
+      },
+    });
+  }
+  return localEnvelope;
+}
+
+export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', signal, fetchImpl = globalThis.fetch } = {}) {
   if (!gameId) {
     throw new Error('A valid gameId is required to load a football envelope.');
   }
@@ -229,10 +363,13 @@ export async function fetchFootballEnvelope(gameId, { signal, fetchImpl = global
     throw new Error('No fetch implementation is available to load a football envelope.');
   }
 
-  const url = `${FOOTBALL_ENVELOPE_ENDPOINT_PREFIX}?gameId=${encodeURIComponent(String(gameId))}`;
+  const url = dashboardGameId
+    ? `/api/football/games/${encodeURIComponent(String(dashboardGameId))}/envelope`
+    : `${FOOTBALL_ENVELOPE_ENDPOINT_PREFIX}?gameId=${encodeURIComponent(String(gameId))}`;
   const response = await fetchImpl(url, {
     method: 'GET',
     headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
     cache: 'no-store',
     signal,
   });
@@ -246,4 +383,1000 @@ export async function fetchFootballEnvelope(gameId, { signal, fetchImpl = global
   }
 
   return payload;
+}
+
+const nextAcceptedEventSequence = (envelope, event) => {
+  if (Number.isInteger(event?.sequence)) return event.sequence;
+  return (envelope?.events || []).reduce(
+    (maximum, existing) => Math.max(maximum, Number(existing?.sequence || 0)),
+    0,
+  ) + 1;
+};
+
+const normalizeAcceptedEvent = (envelope, event, acceptedAt = new Date().toISOString()) => {
+  const sequence = nextAcceptedEventSequence(envelope, event);
+  return {
+    ...event,
+    eventId: event.eventId || `LOCAL-${String(sequence).padStart(6, '0')}`,
+    sequence,
+    status: 'accepted',
+    acceptedAt: event.acceptedAt || acceptedAt,
+    createdAt: event.createdAt || acceptedAt,
+  };
+};
+
+const appendEvent = (events = [], event) => {
+  const duplicate = events.some((existing) => (
+    (event.eventId && existing.eventId === event.eventId)
+    || (event.clientEventId && existing.clientEventId === event.clientEventId)
+  ));
+  return duplicate ? events : [...events, event];
+};
+
+const comparableSubmittedEvent = (event = {}) => {
+  const {
+    eventId: _eventId,
+    sequence: _sequence,
+    status: _status,
+    acceptedAt: _acceptedAt,
+    createdAt: _createdAt,
+    ...submittedFields
+  } = event;
+  return submittedFields;
+};
+
+const isSameSubmittedEvent = (existing, submitted) => (
+  JSON.stringify(comparableSubmittedEvent(existing))
+  === JSON.stringify(comparableSubmittedEvent(submitted))
+);
+
+const applyScoringUpdate = (teams, scoring) => {
+  if (!scoring?.team || typeof scoring.points !== 'number') return teams;
+  return {
+    ...teams,
+    [scoring.team]: {
+      ...teams[scoring.team],
+      score: Number(teams[scoring.team]?.score || 0) + scoring.points,
+    },
+  };
+};
+
+const finiteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const validTeamCode = (team) => team === 'H' || team === 'V';
+
+const ownTeamRuleSpot = (spot, team) => {
+  if (!validTeamCode(team) || !spot) return spot || null;
+  if (spot === '50' || spot === 'H50' || spot === 'V50') return '50';
+  const yard = String(spot).match(/^[HV](\d{1,2})$/)?.[1];
+  return yard ? `${team}${yard.padStart(2, '0')}` : spot;
+};
+
+export function normalizeFootballScoringSetupEnvelope(envelope) {
+  const replayedStats = repairFootballStatsFromCompleteEventLog(envelope);
+  const repairedStats = repairFootballPossessionTimeFromDrives(envelope, replayedStats);
+  const normalizedEnvelope = repairedStats === envelope?.stats
+    ? envelope
+    : { ...envelope, stats: repairedStats };
+  const latestEvent = [...(normalizedEnvelope?.events || [])]
+    .reverse()
+    .find((event) => !event.status || event.status === 'accepted');
+  const completedScoringSequence = latestEvent?.type === 'try'
+    || (
+      latestEvent?.type === 'fieldGoal'
+      && (latestEvent.subtype === 'made' || latestEvent.result?.code === 'made')
+    );
+  if (!completedScoringSequence || normalizedEnvelope?.liveState?.possession) return normalizedEnvelope;
+
+  const kickoffTeam = latestEvent?.result?.scoring?.team
+    || latestEvent?.participants?.primary?.team
+    || latestEvent?.participants?.kicker?.team
+    || latestEvent?.possession;
+  if (!validTeamCode(kickoffTeam)) return normalizedEnvelope;
+
+  const kickoffSpot = ownTeamRuleSpot(normalizedEnvelope?.game?.rules?.kickoffSpot || 'H35', kickoffTeam);
+  if (
+    normalizedEnvelope.liveState?.nextPlayContext === 'awaitingKickoff'
+    && normalizedEnvelope.liveState?.kickoffTeam === kickoffTeam
+    && normalizedEnvelope.liveState?.pendingTryTeam == null
+    && normalizedEnvelope.liveState?.yardLine === kickoffSpot
+  ) return normalizedEnvelope;
+
+  return {
+    ...normalizedEnvelope,
+    liveState: {
+      ...normalizedEnvelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: kickoffSpot,
+      lineToGain: null,
+      goalToGo: false,
+      redZone: false,
+      driveId: null,
+      pendingTryTeam: null,
+      kickoffTeam,
+      nextPlayContext: 'awaitingKickoff',
+    },
+  };
+}
+
+const updateTeamStat = (teams, team, updater) => {
+  if (!validTeamCode(team)) return teams;
+  return {
+    ...teams,
+    [team]: updater({ ...(teams[team] || {}) }),
+  };
+};
+
+const updatePlayerStat = (players, playerId, team, updater) => {
+  if (!playerId) return players;
+  return {
+    ...players,
+    [playerId]: updater({ ...(players[playerId] || {}), playerId, team }),
+  };
+};
+
+const hasAcceptedSpotOfFoulPenalty = (event) => (event?.penalties || []).some((penalty) => (
+  penalty.status === 'accepted'
+  && penalty.spotOfFoul
+  && (penalty.enforcedFrom === 'SPOT' || penalty.enforcedFrom === 'spotOfFoul')
+));
+
+const hasAcceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some((penalty) => (
+  penalty.status === 'accepted'
+  && (penalty.enforcedFrom === 'PREVIOUS' || penalty.enforcedFrom === 'previousSpot')
+));
+
+const hasReplayDownPenalty = (event) => (event?.penalties || []).some((penalty) => (
+  (penalty.status === 'accepted' || penalty.status === 'offsetting')
+  && penalty.replayDown
+));
+
+const hasAcceptedAutomaticFirstDownPenalty = (event) => (event?.penalties || []).some((penalty) => (
+  penalty.status === 'accepted' && penalty.automaticFirstDown
+));
+
+const playEarnedFirstDown = (event, projection) => {
+  if (
+    !['rush', 'pass'].includes(event?.type)
+    || hasAcceptedPreviousSpotPenalty(event)
+    || hasReplayDownPenalty(event)
+  ) return false;
+  if (event?.result?.firstDown === true || event?.result?.scoring?.type === 'touchdown') return true;
+  const yardsToGain = calculateYardsToGain(
+    event?.preState?.yardLine,
+    event?.preState?.lineToGain,
+    event?.possession,
+  );
+  return Number.isFinite(projection?.yardsGained)
+    && Number.isFinite(yardsToGain)
+    && projection.yardsGained >= yardsToGain;
+};
+
+const projectFootballStats = (stats = {}, event, projection) => {
+  let teams = { ...(stats.teams || {}) };
+  let players = { ...(stats.players || {}) };
+  const offense = event?.possession;
+  const result = event?.result || {};
+  const primary = event?.participants?.primary;
+  const secondary = event?.participants?.receiver || event?.participants?.secondary || event?.participants?.target;
+  const suppressPlayStats = hasAcceptedPreviousSpotPenalty(event);
+
+  if (validTeamCode(offense) && event.type === 'rush' && !suppressPlayStats) {
+    const yards = hasAcceptedSpotOfFoulPenalty(event)
+      ? finiteNumber(projection?.yardsGained, result.yards)
+      : finiteNumber(result.yards, projection?.yardsGained);
+    teams = updateTeamStat(teams, offense, (current) => ({
+      ...current,
+      rushAttempts: finiteNumber(current.rushAttempts) + 1,
+      rushYards: finiteNumber(current.rushYards) + yards,
+      plays: finiteNumber(current.plays) + 1,
+      yards: finiteNumber(current.yards) + yards,
+    }));
+    players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
+      ...current,
+      rushAttempts: finiteNumber(current.rushAttempts) + 1,
+      rushYards: finiteNumber(current.rushYards) + yards,
+    }));
+  }
+
+  if (validTeamCode(offense) && event.type === 'pass' && !suppressPlayStats) {
+    const outcome = result.pass?.outcome || event.subtype;
+    const isAttempt = ['complete', 'incomplete', 'interception'].includes(outcome);
+    const passingYards = outcome === 'complete'
+      ? hasAcceptedSpotOfFoulPenalty(event)
+        ? finiteNumber(projection?.yardsGained, result.pass?.passingYards ?? result.yards)
+        : finiteNumber(result.pass?.passingYards ?? result.yards, projection?.yardsGained)
+      : event.subtype === 'sack'
+        ? finiteNumber(result.yards)
+        : 0;
+    teams = updateTeamStat(teams, offense, (current) => {
+      const pass = { ...(current.pass || {}) };
+      return {
+        ...current,
+        pass: {
+          ...pass,
+          att: finiteNumber(pass.att) + (isAttempt ? 1 : 0),
+          cmp: finiteNumber(pass.cmp) + (outcome === 'complete' ? 1 : 0),
+          int: finiteNumber(pass.int) + (outcome === 'interception' ? 1 : 0),
+          yds: finiteNumber(pass.yds) + (outcome === 'complete' ? passingYards : 0),
+        },
+        plays: finiteNumber(current.plays) + 1,
+        yards: finiteNumber(current.yards) + passingYards,
+      };
+    });
+    players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
+      ...current,
+      passAttempts: finiteNumber(current.passAttempts) + (isAttempt ? 1 : 0),
+      passCompletions: finiteNumber(current.passCompletions) + (outcome === 'complete' ? 1 : 0),
+      passInterceptions: finiteNumber(current.passInterceptions) + (outcome === 'interception' ? 1 : 0),
+      passYards: finiteNumber(current.passYards) + (outcome === 'complete' ? passingYards : 0),
+    }));
+    players = updatePlayerStat(players, secondary?.playerId, secondary?.team || offense, (current) => ({
+      ...current,
+      targets: finiteNumber(current.targets) + (isAttempt ? 1 : 0),
+      receptions: finiteNumber(current.receptions) + (outcome === 'complete' ? 1 : 0),
+      receivingYards: finiteNumber(current.receivingYards) + (outcome === 'complete' ? passingYards : 0),
+    }));
+
+    if (event.subtype === 'sack' || outcome === 'sack') {
+      const sackYards = finiteNumber(result.yards, projection?.yardsGained);
+      teams = updateTeamStat(teams, offense, (current) => ({
+        ...current,
+        rushAttempts: finiteNumber(current.rushAttempts) + 1,
+        rushYards: finiteNumber(current.rushYards) + sackYards,
+      }));
+      players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
+        ...current,
+        rushAttempts: finiteNumber(current.rushAttempts) + 1,
+        rushYards: finiteNumber(current.rushYards) + sackYards,
+      }));
+    }
+  }
+
+  if (result.fumble && !suppressPlayStats) {
+    const fumblerPlayerId = result.fumble.fumblerPlayerId;
+    const fumbler = event?.participants?.fumbler
+      || [
+        event?.participants?.returner,
+        event?.participants?.receiver,
+        event?.participants?.secondary,
+        event?.participants?.primary,
+      ].find((participant) => participant?.playerId === fumblerPlayerId);
+    const fumbleTeam = fumbler?.team;
+    teams = updateTeamStat(teams, fumbleTeam, (current) => ({
+      ...current,
+      fumbles: {
+        ...(typeof current.fumbles === 'object' ? current.fumbles : {}),
+        num: finiteNumber(current.fumbles?.num ?? current.fumbles) + 1,
+        lost: finiteNumber(current.fumbles?.lost ?? current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
+      },
+    }));
+    players = updatePlayerStat(players, fumblerPlayerId, fumbleTeam, (current) => ({
+      ...current,
+      fumbles: finiteNumber(current.fumbles) + 1,
+      fumblesLost: finiteNumber(current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
+    }));
+  }
+
+  if (event.type === 'kickoff' && result.return?.type === 'Kickoff') {
+    const returner = event?.participants?.returner;
+    const returnTeam = returner?.team || result.nextPossession;
+    const returnYards = finiteNumber(result.return?.returnYards);
+    teams = updateTeamStat(teams, returnTeam, (current) => ({
+      ...current,
+      kickReturns: {
+        ...(typeof current.kickReturns === 'object' ? current.kickReturns : {}),
+        num: finiteNumber(current.kickReturns?.num ?? current.kickReturnCount) + 1,
+        yds: finiteNumber(current.kickReturns?.yds ?? current.kickReturnYds) + returnYards,
+      },
+    }));
+    players = updatePlayerStat(players, returner?.playerId, returnTeam, (current) => ({
+      ...current,
+      kickReturns: finiteNumber(current.kickReturns) + 1,
+      kickReturnYards: finiteNumber(current.kickReturnYards) + returnYards,
+    }));
+  }
+
+  if (validTeamCode(offense) && event.type === 'punt') {
+    const puntYards = finiteNumber(result.kick?.kickYards ?? result.kickYards);
+    teams = updateTeamStat(teams, offense, (current) => {
+      const count = finiteNumber(current.punts?.num ?? current.punts) + 1;
+      const yards = finiteNumber(current.punts?.yds ?? current.puntYards) + puntYards;
+      return {
+        ...current,
+        punts: {
+          ...(typeof current.punts === 'object' ? current.punts : {}),
+          num: count,
+          yds: yards,
+          avg: count > 0 ? yards / count : 0,
+        },
+      };
+    });
+    const punter = event?.participants?.punter || primary;
+    players = updatePlayerStat(players, punter?.playerId, offense, (current) => ({
+      ...current,
+      punts: finiteNumber(current.punts) + 1,
+      puntYards: finiteNumber(current.puntYards) + puntYards,
+    }));
+  }
+
+  if (event.type === 'punt' && result.return?.type === 'Punt') {
+    const returner = event?.participants?.returner;
+    const returnTeam = returner?.team || result.nextPossession;
+    const returnYards = finiteNumber(result.return?.returnYards);
+    teams = updateTeamStat(teams, returnTeam, (current) => ({
+      ...current,
+      puntReturns: {
+        ...(typeof current.puntReturns === 'object' ? current.puntReturns : {}),
+        num: finiteNumber(current.puntReturns?.num ?? current.puntReturnCount) + 1,
+        yds: finiteNumber(current.puntReturns?.yds ?? current.puntReturnYds) + returnYards,
+      },
+    }));
+    players = updatePlayerStat(players, returner?.playerId, returnTeam, (current) => ({
+      ...current,
+      puntReturns: finiteNumber(current.puntReturns) + 1,
+      puntReturnYards: finiteNumber(current.puntReturnYards) + returnYards,
+    }));
+  }
+
+  const prePlayDown = Number(event?.preState?.down);
+  if (
+    validTeamCode(offense)
+    && (prePlayDown === 3 || prePlayDown === 4)
+    && ['rush', 'pass'].includes(event?.type)
+    && !suppressPlayStats
+    && !hasReplayDownPenalty(event)
+  ) {
+    const converted = Boolean(
+      projection?.firstDown
+      || result.firstDown
+      || result.scoring?.type === 'touchdown',
+    );
+    const statKey = prePlayDown === 3 ? 'thirdDown' : 'fourthDown';
+    teams = updateTeamStat(teams, offense, (current) => ({
+      ...current,
+      [statKey]: {
+        ...(typeof current[statKey] === 'object' ? current[statKey] : {}),
+        att: finiteNumber(current[statKey]?.att) + 1,
+        made: finiteNumber(current[statKey]?.made) + (converted ? 1 : 0),
+      },
+    }));
+  }
+
+  const baseFirstDownCredit = Boolean(
+    projection?.firstDown
+    || result.firstDown
+    || result.scoring?.type === 'touchdown'
+  );
+  const additionalAutomaticFirstDownCredit = (
+    playEarnedFirstDown(event, projection)
+    && hasAcceptedAutomaticFirstDownPenalty(event)
+  );
+  const firstDownCredits = Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
+  if (validTeamCode(offense) && firstDownCredits > 0 && ['rush', 'pass', 'penalty'].includes(event?.type)) {
+    teams = updateTeamStat(teams, offense, (current) => ({
+      ...current,
+      firstDowns: finiteNumber(current.firstDowns) + firstDownCredits,
+    }));
+  }
+
+  for (const penalty of event?.penalties || []) {
+    if (penalty.status !== 'accepted' || !validTeamCode(penalty.team)) continue;
+    teams = updateTeamStat(teams, penalty.team, (current) => ({
+      ...current,
+      penalties: {
+        ...(typeof current.penalties === 'object' ? current.penalties : {}),
+        num: finiteNumber(current.penalties?.num ?? current.penalties) + 1,
+        yds: finiteNumber(current.penalties?.yds ?? current.penaltyYds) + Math.abs(finiteNumber(penalty.yards)),
+      },
+    }));
+  }
+
+  return {
+    ...stats,
+    sourceEventSequence: event.sequence,
+    teams,
+    players,
+  };
+};
+
+const PROJECTED_TEAM_STAT_KEYS = [
+  'firstDowns',
+  'rushAttempts',
+  'rushYards',
+  'pass',
+  'plays',
+  'yards',
+  'kickReturns',
+  'puntReturns',
+  'punts',
+  'thirdDown',
+  'fourthDown',
+  'penalties',
+  'fumbles',
+];
+
+const PROJECTED_PLAYER_STAT_KEYS = [
+  'rushAttempts',
+  'rushYards',
+  'passAttempts',
+  'passCompletions',
+  'passInterceptions',
+  'passYards',
+  'targets',
+  'receptions',
+  'receivingYards',
+  'kickReturns',
+  'kickReturnYards',
+  'puntReturns',
+  'puntReturnYards',
+  'punts',
+  'puntYards',
+  'fumbles',
+  'fumblesLost',
+];
+
+const replaceProjectedKeys = (current = {}, projected = {}, keys = []) => {
+  const preserved = { ...current };
+  keys.forEach((key) => delete preserved[key]);
+  return { ...preserved, ...projected };
+};
+
+function repairFootballStatsFromCompleteEventLog(envelope) {
+  const acceptedEvents = [...(envelope?.events || [])]
+    .filter((event) => (!event.status || event.status === 'accepted') && Number.isFinite(Number(event.sequence)))
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  if (
+    acceptedEvents.length === 0
+    || acceptedEvents.some((event, index) => Number(event.sequence) !== index + 1)
+  ) return envelope?.stats;
+
+  let replayedStats = {
+    ...(envelope.stats || {}),
+    sourceEventSequence: 0,
+    teams: {},
+    players: {},
+  };
+  acceptedEvents.forEach((event) => {
+    const replayEnvelope = {
+      ...envelope,
+      liveState: { ...(envelope.liveState || {}), ...(event.preState || {}) },
+    };
+    const projection = applyFootballEventToEnvelope(replayEnvelope, event);
+    replayedStats = projectFootballStats(replayedStats, event, projection);
+  });
+
+  const currentTeams = envelope.stats?.teams || {};
+  const currentPlayers = envelope.stats?.players || {};
+  const teams = { ...currentTeams };
+  for (const team of ['H', 'V']) {
+    teams[team] = replaceProjectedKeys(currentTeams[team], replayedStats.teams?.[team], PROJECTED_TEAM_STAT_KEYS);
+  }
+  const players = { ...currentPlayers };
+  const playerIds = new Set([...Object.keys(currentPlayers), ...Object.keys(replayedStats.players || {})]);
+  playerIds.forEach((playerId) => {
+    players[playerId] = replaceProjectedKeys(
+      currentPlayers[playerId],
+      replayedStats.players?.[playerId],
+      PROJECTED_PLAYER_STAT_KEYS,
+    );
+  });
+
+  const repaired = {
+    ...(envelope.stats || {}),
+    sourceEventSequence: Number(acceptedEvents.at(-1).sequence),
+    teams,
+    players,
+  };
+  return JSON.stringify(repaired) === JSON.stringify(envelope.stats) ? envelope.stats : repaired;
+}
+
+function repairFootballPossessionTimeFromDrives(envelope, stats) {
+  const periodSeconds = Math.max(
+    60,
+    finiteNumber(envelope?.game?.rules?.minutesPerPeriod || envelope?.game?.rules?.minutes, 15) * 60,
+  );
+  const segments = { H: [], V: [] };
+  for (const drive of envelope?.drives?.completed || []) {
+    if (!validTeamCode(drive?.team) || !drive.startClock || !drive.endClock) continue;
+    segments[drive.team].push({
+      startPeriod: finiteNumber(drive.startPeriod, 1),
+      startClock: drive.startClock,
+      endPeriod: finiteNumber(drive.endPeriod, drive.startPeriod || 1),
+      endClock: drive.endClock,
+    });
+  }
+
+  const currentDrive = envelope?.drives?.current;
+  if (validTeamCode(currentDrive?.team) && currentDrive.startClock) {
+    segments[currentDrive.team].push({
+      startPeriod: finiteNumber(currentDrive.startPeriod, envelope?.clock?.period || 1),
+      startClock: currentDrive.startClock,
+    });
+  }
+
+  if (segments.H.length === 0 && segments.V.length === 0) return stats;
+  const teams = { ...(stats?.teams || {}) };
+  for (const team of ['H', 'V']) {
+    if (segments[team].length === 0) continue;
+    const timeOfPossession = segments[team].reduce((total, segment) => {
+      const timedSegment = segment.endClock
+        ? segment
+        : {
+            ...segment,
+            endPeriod: finiteNumber(envelope?.clock?.period, segment.startPeriod),
+            endClock: envelope?.clock?.clock,
+          };
+      return total + elapsedPossessionSeconds(timedSegment, periodSeconds);
+    }, 0);
+    teams[team] = {
+      ...(teams[team] || {}),
+      possessionBaseSeconds: 0,
+      possessionSegments: segments[team],
+      timeOfPossession,
+    };
+  }
+  return { ...(stats || {}), teams };
+}
+
+const acceptedPenaltyFinalSpot = (event) => [...(event?.penalties || [])]
+  .reverse()
+  .find((penalty) => penalty.status === 'accepted' && penalty.finalSpot)
+  ?.finalSpot;
+
+const driveEndSpot = (current, projection, event) => {
+  const transition = projection?.driveTransition;
+  const driveResult = transition?.driveResult;
+  if (driveResult === 'touchdown') return 'goal';
+  if (driveResult === 'safety') {
+    return acceptedPenaltyFinalSpot(event)
+      || event?.result?.endYardLine
+      || event?.preState?.yardLine;
+  }
+  if (['punt', 'fieldGoal', 'missedFieldGoal'].includes(driveResult)) {
+    return event?.preState?.yardLine;
+  }
+  if (driveResult === 'turnover') {
+    return event?.result?.turnover?.spot
+      || event?.result?.fumble?.recoverySpot
+      || acceptedPenaltyFinalSpot(event)
+      || event?.result?.endYardLine;
+  }
+  if (!transition?.shouldEndCurrent && projection?.liveState?.possession === current?.team) {
+    return projection.liveState.yardLine;
+  }
+  return acceptedPenaltyFinalSpot(event)
+    || event?.result?.endYardLine
+    || projection?.liveState?.yardLine;
+};
+
+const positionalDriveYards = (current, projection, event) => {
+  if (!current?.startYardLine || !current.team) return null;
+  const endSpot = driveEndSpot(current, projection, event);
+  const yards = calculateYardsGained(current.startYardLine, endSpot, current.team);
+  return typeof yards === 'number' ? yards : null;
+};
+
+const updateDrives = (drives = {}, projection, event) => {
+  const transition = projection?.driveTransition;
+  if (!transition) return drives;
+  const current = drives.current || null;
+  const completed = Array.isArray(drives.completed) ? drives.completed : [];
+  const countsAsDrivePlay = ['rush', 'pass', 'punt', 'fieldGoal'].includes(event?.type)
+    && !hasAcceptedPreviousSpotPenalty(event);
+  const positionedYards = positionalDriveYards(current, projection, event);
+  const playedCurrent = current
+    ? {
+        ...current,
+        plays: finiteNumber(current.plays) + (countsAsDrivePlay ? 1 : 0),
+        yards: positionedYards ?? (
+          finiteNumber(current.yards) + (countsAsDrivePlay ? finiteNumber(projection.yardsGained) : 0)
+        ),
+      }
+    : current;
+  const completedNext = transition.shouldEndCurrent && playedCurrent
+    ? [...completed, {
+        ...playedCurrent,
+        result: transition.driveResult || playedCurrent.result,
+        endPeriod: event?.period ?? playedCurrent.endPeriod ?? null,
+        endClock: event?.clock ?? playedCurrent.endClock ?? null,
+      }]
+    : completed;
+  return {
+    ...drives,
+    current: transition.shouldStartNew ? transition.startedDrive : transition.shouldEndCurrent ? null : playedCurrent,
+    completed: completedNext,
+  };
+};
+
+const normalizeClockText = (clock) => {
+  const match = String(clock || '').trim().match(/^(\d{1,2}):([0-5]\d)$/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+};
+
+const clockSeconds = (clock) => {
+  const normalized = normalizeClockText(clock);
+  if (!normalized) return null;
+  const [minutes, seconds] = normalized.split(':').map(Number);
+  return (minutes * 60) + seconds;
+};
+
+const elapsedPossessionSeconds = (segment, periodSeconds) => {
+  const start = clockSeconds(segment.startClock);
+  const end = clockSeconds(segment.endClock);
+  const startPeriod = finiteNumber(segment.startPeriod, 1);
+  const endPeriod = finiteNumber(segment.endPeriod, startPeriod);
+  if (start === null || end === null || endPeriod < startPeriod) return 0;
+  if (startPeriod === endPeriod) return Math.max(0, start - end);
+  const fullPeriods = Math.max(0, endPeriod - startPeriod - 1);
+  return Math.max(0, start) + (fullPeriods * periodSeconds) + Math.max(0, periodSeconds - end);
+};
+
+const possessionValueSeconds = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  return clockSeconds(value) ?? 0;
+};
+
+export function recordFootballPossessionClock(envelope, {
+  previousPossession,
+  nextPossession,
+  period,
+  clock,
+}) {
+  const normalizedClock = normalizeClockText(clock);
+  if (!envelope || !normalizedClock) throw new Error('Possession clock must use MM:SS format.');
+  const periodNumber = Math.max(1, finiteNumber(period, envelope.clock?.period || envelope.game?.period || 1));
+  const periodSeconds = Math.max(60, finiteNumber(envelope.game?.rules?.minutesPerPeriod || envelope.game?.rules?.minutes, 15) * 60);
+  let teams = { ...(envelope.stats?.teams || {}) };
+
+  if (validTeamCode(previousPossession) && previousPossession !== nextPossession) {
+    const current = { ...(teams[previousPossession] || {}) };
+    const segments = Array.isArray(current.possessionSegments)
+      ? current.possessionSegments.map((segment) => ({ ...segment }))
+      : [];
+    let openIndex = -1;
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      if (!segments[index].endClock) {
+        openIndex = index;
+        break;
+      }
+    }
+    if (openIndex < 0) {
+      const activePriorDrive = envelope.drives?.current?.team === previousPossession
+        ? envelope.drives.current
+        : null;
+      const priorDrive = activePriorDrive?.startClock
+        ? activePriorDrive
+        : [...(envelope.drives?.completed || [])]
+            .reverse()
+            .find((drive) => drive.team === previousPossession && drive.startClock);
+      segments.push({
+        startPeriod: periodNumber,
+        startClock: priorDrive?.startClock || envelope.clock?.clock || normalizedClock,
+      });
+      openIndex = segments.length - 1;
+    }
+    segments[openIndex] = {
+      ...segments[openIndex],
+      endPeriod: periodNumber,
+      endClock: normalizedClock,
+    };
+    const baseSeconds = current.possessionBaseSeconds ?? (
+      current.possessionSegments?.length
+        ? 0
+        : possessionValueSeconds(current.timeOfPossession ?? current.possession)
+    );
+    const elapsedSeconds = segments.reduce(
+      (total, segment) => total + elapsedPossessionSeconds(segment, periodSeconds),
+      0,
+    );
+    teams = {
+      ...teams,
+      [previousPossession]: {
+        ...current,
+        possessionBaseSeconds: baseSeconds,
+        possessionSegments: segments,
+        timeOfPossession: baseSeconds + elapsedSeconds,
+      },
+    };
+  }
+
+  if (validTeamCode(nextPossession) && previousPossession !== nextPossession) {
+    const current = { ...(teams[nextPossession] || {}) };
+    const segments = Array.isArray(current.possessionSegments)
+      ? current.possessionSegments.map((segment) => ({ ...segment }))
+      : [];
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment?.endClock || !lastSegment) {
+      segments.push({ startPeriod: periodNumber, startClock: normalizedClock });
+    }
+    teams = {
+      ...teams,
+      [nextPossession]: {
+        ...current,
+        possessionSegments: segments,
+      },
+    };
+  }
+
+  const completedDrives = Array.isArray(envelope.drives?.completed)
+    ? envelope.drives.completed.map((drive) => ({ ...drive }))
+    : [];
+  if (validTeamCode(previousPossession) && previousPossession !== nextPossession) {
+    for (let index = completedDrives.length - 1; index >= 0; index -= 1) {
+      if (completedDrives[index].team === previousPossession) {
+        completedDrives[index] = {
+          ...completedDrives[index],
+          endPeriod: periodNumber,
+          endClock: normalizedClock,
+        };
+        break;
+      }
+    }
+  }
+
+  return {
+    ...envelope,
+    clock: {
+      ...envelope.clock,
+      period: periodNumber,
+      clock: normalizedClock,
+      clockTenths: clockTextToTenths(normalizedClock),
+      isRunning: false,
+    },
+    drives: {
+      ...envelope.drives,
+      current: envelope.drives?.current && envelope.drives.current.team === nextPossession
+        ? { ...envelope.drives.current, startPeriod: periodNumber, startClock: normalizedClock }
+        : envelope.drives?.current || null,
+      completed: completedDrives,
+    },
+    stats: {
+      ...envelope.stats,
+      teams,
+    },
+  };
+}
+
+const resolveTimeoutLimit = (rules = {}) => {
+  const configured = Number(rules.timeouts ?? rules.timeoutsPerHalf ?? rules.timeoutsPerGame ?? rules.timeoutFull ?? rules.timeout_full);
+  return Number.isFinite(configured) && configured >= 0 ? configured : 3;
+};
+
+const resolveChallengeRules = (rules = {}) => {
+  const configured = Number(rules.challenge?.numberOfChallenges ?? rules.challenges ?? rules.challengesPerGame ?? rules.challengeCount);
+  return {
+    numberOfChallenges: Number.isFinite(configured) && configured >= 0 ? configured : 2,
+    failedChallengeDecreasesTimeout: Boolean(rules.challenge?.failedChallengeDecreasesTimeout),
+    successfulChallengeDecreasesChallenge: Boolean(rules.challenge?.successfulChallengeDecreasesChallenge),
+  };
+};
+
+const initializeTeamCounts = (existing = {}, limit) => ({
+  H: Number.isFinite(Number(existing?.H)) ? Number(existing.H) : limit,
+  V: Number.isFinite(Number(existing?.V)) ? Number(existing.V) : limit,
+});
+
+const decrementTeamCount = (counts, team) => ({
+  ...counts,
+  [team]: Math.max(0, Number(counts[team] || 0) - 1),
+});
+
+const applyGameControlProjection = (envelope, event) => {
+  const control = event?.result?.gameControl;
+  if (!control?.action) return null;
+  const rules = envelope.game?.rules || {};
+  const team = control.teamSide || control.possession;
+  const currentPeriod = Number(envelope.clock?.period || envelope.game?.period || event.period || 1);
+  const periods = Number(rules.periods || 4);
+  const period = Number(control.period || currentPeriod);
+  const updatedAt = event.acceptedAt;
+  const withEvent = (patch) => ({
+    ...envelope,
+    ...patch,
+    updatedAt,
+    events: appendEvent(envelope.events, event),
+    stats: { ...envelope.stats, sourceEventSequence: event.sequence },
+  });
+
+  if (control.action === 'setClock' || control.action === 'emergency') {
+    const clock = control.clock || event.result.clock || envelope.clock.clock;
+    return withEvent({
+      clock: {
+        ...envelope.clock,
+        clock,
+        clockTenths: event.result.clockTenths ?? clockTextToTenths(clock),
+        isRunning: false,
+      },
+    });
+  }
+
+  if (control.action === 'timeout') {
+    const limit = resolveTimeoutLimit(rules);
+    const timeouts = initializeTeamCounts(envelope.liveState?.timeouts, limit);
+    return withEvent({
+      liveState: { ...envelope.liveState, timeouts: team ? decrementTeamCount(timeouts, team) : timeouts },
+    });
+  }
+
+  if (control.action === 'challenge') {
+    const challengeRules = resolveChallengeRules(rules);
+    let timeouts = initializeTeamCounts(envelope.liveState?.timeouts, resolveTimeoutLimit(rules));
+    let challenges = initializeTeamCounts(envelope.liveState?.challenges, challengeRules.numberOfChallenges);
+    const successful = ['successful', 'callOverturned'].includes(control.challengeStatus);
+    const failed = ['unsuccessful', 'callStands', 'callConfirmed'].includes(control.challengeStatus);
+    if (team && successful && challengeRules.successfulChallengeDecreasesChallenge) challenges = decrementTeamCount(challenges, team);
+    if (team && failed && challengeRules.failedChallengeDecreasesTimeout) timeouts = decrementTeamCount(timeouts, team);
+    return withEvent({
+      liveState: {
+        ...envelope.liveState,
+        timeouts,
+        challenges,
+        challengeLog: [...(envelope.liveState?.challengeLog || []), { teamSide: team, status: control.challengeStatus }],
+      },
+    });
+  }
+
+  if (control.action === 'endQuarter') {
+    const status = period >= periods ? 'final' : period === Math.floor(periods / 2) ? 'halftime' : envelope.game.status;
+    return withEvent({
+      game: { ...envelope.game, period, status },
+      clock: { ...envelope.clock, period, clock: '00:00', clockTenths: 0, isRunning: false },
+      pregame: envelope.pregame ? { ...envelope.pregame, gamePhase: status === 'final' ? 'final' : status === 'halftime' ? 'halftime' : 'live' } : envelope.pregame,
+    });
+  }
+
+  if (control.action === 'startQuarter') {
+    const minutes = Number(rules.minutesPerPeriod || rules.minutes || 15);
+    const resetTimeouts = period === Math.floor(periods / 2) + 1;
+    return withEvent({
+      game: { ...envelope.game, period, status: 'inProgress' },
+      clock: { ...envelope.clock, period, clock: `${String(minutes).padStart(2, '0')}:00`, clockTenths: minutes * 600, isRunning: false },
+      liveState: resetTimeouts
+        ? { ...envelope.liveState, timeouts: initializeTeamCounts({}, resolveTimeoutLimit(rules)) }
+        : envelope.liveState,
+      pregame: envelope.pregame ? { ...envelope.pregame, gamePhase: 'live' } : envelope.pregame,
+    });
+  }
+
+  if (control.action === 'setBallContext') {
+    const possession = envelope.liveState?.possession || team;
+    const liveState = createLiveState({
+      possession,
+      down: control.down,
+      distance: control.distance,
+      yardLine: control.spot,
+      lineToGain: control.lineToGain,
+      driveId: envelope.liveState?.driveId,
+      driveNumber: envelope.liveState?.driveNumber,
+    });
+    return withEvent({ liveState: { ...envelope.liveState, ...liveState } });
+  }
+
+  if (control.action === 'setPossession') {
+    const spot = envelope.liveState?.yardLine || control.spot;
+    const liveState = createLiveState({
+      possession: control.possession,
+      down: envelope.liveState?.down || 1,
+      distance: envelope.liveState?.distance,
+      yardLine: spot,
+      lineToGain: envelope.liveState?.lineToGain,
+      driveId: envelope.liveState?.driveId,
+      driveNumber: envelope.liveState?.driveNumber,
+    });
+    return withEvent({ liveState: { ...envelope.liveState, ...liveState } });
+  }
+
+  if (control.action === 'startDrive') {
+    const driveNumber = Math.max(Number(envelope.liveState?.driveNumber || 0), Number(envelope.drives?.current?.driveNumber || 0)) + 1;
+    const drive = {
+      driveId: `DRV-${String(driveNumber).padStart(4, '0')}`,
+      driveNumber,
+      team: control.possession,
+      startYardLine: control.spot,
+      startReason: 'manualControl',
+      plays: 0,
+      yards: 0,
+      result: null,
+    };
+    const liveState = createLiveState({ possession: control.possession, down: 1, yardLine: control.spot, driveId: drive.driveId, driveNumber });
+    return withEvent({
+      liveState: { ...envelope.liveState, ...liveState },
+      drives: { ...envelope.drives, current: drive },
+    });
+  }
+
+  return withEvent({});
+};
+
+const clockTextToTenths = (clock) => {
+  const [minutes, seconds] = String(clock || '00:00').split(':').map(Number);
+  return ((minutes * 60) + seconds) * 10;
+};
+
+export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) {
+  const event = normalizeAcceptedEvent(baseEnvelope, acceptedEvent, acceptedEvent.acceptedAt);
+  const gameControlEnvelope = applyGameControlProjection(baseEnvelope, event);
+  if (gameControlEnvelope) return { envelope: gameControlEnvelope, projection: null, diagnostics: [] };
+
+  let projection;
+  try {
+    projection = applyFootballEventToEnvelope(baseEnvelope, event, {
+      nextDriveId: `DRV-${String((baseEnvelope.liveState?.driveNumber || 0) + 1).padStart(4, '0')}`,
+    });
+  } catch (error) {
+    return {
+      envelope: { ...baseEnvelope, updatedAt: event.acceptedAt, events: appendEvent(baseEnvelope.events, event) },
+      projection: null,
+      diagnostics: [{ code: 'PROJECTION_FAILED', message: error instanceof Error ? error.message : 'Local projection failed.' }],
+    };
+  }
+
+  const scoring = projection.scoringUpdate ?? null;
+  return {
+    envelope: {
+      ...baseEnvelope,
+      updatedAt: event.acceptedAt,
+      game: {
+        ...baseEnvelope.game,
+        status: baseEnvelope.game.status === 'pregame' ? 'inProgress' : baseEnvelope.game.status,
+        teams: applyScoringUpdate(baseEnvelope.game.teams, scoring),
+      },
+      pregame: baseEnvelope.pregame ? { ...baseEnvelope.pregame, gamePhase: 'live' } : baseEnvelope.pregame,
+      liveState: { ...baseEnvelope.liveState, ...projection.liveState },
+      drives: updateDrives(baseEnvelope.drives, projection, event),
+      events: appendEvent(baseEnvelope.events, event),
+      stats: projectFootballStats(baseEnvelope.stats, event, projection),
+    },
+    projection,
+    diagnostics: [],
+  };
+}
+
+export async function submitFootballEventLocally(baseEnvelope, submitRequest) {
+  if (!baseEnvelope || !submitRequest?.event) {
+    return { ok: false, errors: [{ code: 'INVALID_LOCAL_SUBMIT', message: 'Local test-game submit requires an envelope and event.' }], warnings: [] };
+  }
+  const duplicate = (baseEnvelope.events || []).find((event) => event.clientEventId === submitRequest.event.clientEventId);
+  if (duplicate && !isSameSubmittedEvent(duplicate, submitRequest.event)) {
+    return {
+      ok: false,
+      status: 'rejected',
+      acceptedEvent: null,
+      gameEnvelope: baseEnvelope,
+      envelope: baseEnvelope,
+      projection: null,
+      errors: [{
+        code: 'CLIENT_EVENT_ID_CONFLICT',
+        field: 'event.clientEventId',
+        message: 'This submission ID already belongs to a different play. Start the play again to create a new submission ID.',
+      }],
+      warnings: [],
+    };
+  }
+  const acceptedEvent = duplicate || normalizeAcceptedEvent(
+    baseEnvelope,
+    submitRequest.event,
+    submitRequest.clientContext?.submittedAt || new Date().toISOString(),
+  );
+  const projected = duplicate
+    ? { envelope: baseEnvelope, projection: null, diagnostics: [] }
+    : applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent);
+  saveDashboardSeededFootballEnvelope(baseEnvelope.gameId, projected.envelope);
+  const status = duplicate ? 'duplicateAccepted' : 'accepted';
+  return {
+    ok: true,
+    status,
+    acceptedEvent,
+    gameEnvelope: projected.envelope,
+    envelope: projected.envelope,
+    projection: projected.projection,
+    warnings: projected.diagnostics.map((diagnostic) => ({ ...diagnostic, severity: 'warning', source: 'localTestGame' })),
+    rawResponse: { schemaVersion: 'football.submitEventResponse.v1', success: true, status, acceptedEvent, gameEnvelope: projected.envelope, warnings: [], errors: [] },
+  };
 }

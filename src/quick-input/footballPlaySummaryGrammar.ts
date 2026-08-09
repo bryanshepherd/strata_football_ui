@@ -66,13 +66,17 @@ function rushSummary(context: SummaryContext): string {
   const rusher = requiredPlayer(context, primaryParticipant(intent), 'participants.primary');
   const team = teamAbbr(intent, intent.play.actionTeam);
   const scoring = intent.result.scoring?.type === 'touchdown' || intent.result.code === 'touchdown';
+  const safety = intent.result.scoring?.type === 'safety' || intent.result.code === 'safety';
   const base = `${team} ${formatPlayer(rusher)} rush`;
 
   const resultPhrase = scoring
-    ? `${yardagePhrase(context, intent.result.yards, 'result.yards')} for a touchdown`
+    ? `${yardagePhrase(context, intent.result.yards, 'result.yards')}${intent.result.endYardLine ? ` ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}` : ''} for a touchdown`
+    : safety
+      ? `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')} for a safety`
     : `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}`;
 
   const clauses = [`${base} ${resultPhrase}`];
+  clauses.push(...lateralClauses(context));
   if (intent.result.firstDown && !scoring) clauses.push('for a first down');
   if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
   const tacklers = tacklerPhrase(intent.participants.defenders);
@@ -119,6 +123,7 @@ function passSummary(context: SummaryContext): string {
     : `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}`;
 
   const clauses = [`${team} ${formatPlayer(passer)} pass complete${targetPhrase} ${resultPhrase}`];
+  clauses.push(...lateralClauses(context));
   if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
   const tacklers = tacklerPhrase(intent.participants.defenders);
   if (tacklers) clauses.push(tacklers);
@@ -177,12 +182,16 @@ function interceptionSummary(context: SummaryContext): string {
   const returnYards = intent.result.turnover?.returnYards ?? intent.result.return?.returnYards;
   const returnEnd = intent.result.turnover?.returnEndYardLine ?? intent.result.return?.returnEndYardLine ?? intent.result.endYardLine;
   const clauses = [base];
+  clauses.push(...lateralClauses(context));
 
   if (typeof returnYards === 'number' || returnEnd || intent.result.scoring?.type === 'touchdown') {
     if (intent.result.scoring?.type === 'touchdown') {
       clauses.push(`returned ${yardagePhrase(context, returnYards, 'result.turnover.returnYards')} for a touchdown`);
+    } else if (intent.result.scoring?.type === 'safety') {
+      clauses.push(`returned ${yardagePhrase(context, returnYards, 'result.turnover.returnYards')} for a safety`);
     } else {
       clauses.push(`returned ${yardagePhrase(context, returnYards, 'result.turnover.returnYards')} ${spotPhrase(context, 'to', returnEnd, 'result.turnover.returnEndYardLine')}`);
+      if (intent.result.code === 'touchback') clauses.push('touchback');
     }
   }
 
@@ -216,8 +225,11 @@ function fumbleSummary(context: SummaryContext): string {
     const returnEnd = intent.result.fumble?.returnEndYardLine ?? intent.result.endYardLine;
     if (intent.result.scoring?.type === 'touchdown') {
       clauses.push(`returned ${yardagePhrase(context, intent.result.fumble?.returnYards, 'result.fumble.returnYards')} for a touchdown`);
+    } else if (intent.result.scoring?.type === 'safety') {
+      clauses.push(`returned ${yardagePhrase(context, intent.result.fumble?.returnYards, 'result.fumble.returnYards')} for a safety`);
     } else {
       clauses.push(`returned ${yardagePhrase(context, intent.result.fumble?.returnYards, 'result.fumble.returnYards')} ${spotPhrase(context, 'to', returnEnd, 'result.fumble.returnEndYardLine')}`);
+      if (intent.result.code === 'touchback') clauses.push('touchback');
     }
   }
 
@@ -231,13 +243,17 @@ function puntSummary(context: SummaryContext): string {
   const distance = distancePhrase(context, intent.result.kick?.kickYards, 'result.kick.kickYards');
   const catchSpot = intent.result.kick?.catchYardLine;
   const returner = intent.participants.returner ?? participantByPlayerId(intent, intent.result.return?.returnerPlayerId);
+  const blockedBy = intent.result.kick?.blockedByPlayerId
+    ? participantByPlayerId(intent, intent.result.kick.blockedByPlayerId)
+    : undefined;
+  const puntLead = `${team} ${formatPlayer(punter)} punt${blockedBy ? ` blocked by ${formatPlayer(blockedBy)},` : ''}`;
 
-  if (intent.result.code === 'touchback' || intent.play.subtype === 'touchback') {
-    return sentence(`${team} ${formatPlayer(punter)} punt ${distance} into the end zone, touchback`);
+  if ((intent.result.code === 'touchback' || intent.play.subtype === 'touchback') && !intent.result.return && !intent.result.fumble) {
+    return sentence(`${puntLead} ${distance} into the end zone, touchback`);
   }
 
   if ((intent.result.code === 'outOfBounds' || intent.play.subtype === 'outOfBounds') && !intent.result.return) {
-    return sentence(`${team} ${formatPlayer(punter)} punt ${distance} out-of-bounds ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
+    return sentence(`${puntLead} ${distance} out-of-bounds ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
   }
 
   if (intent.result.code === 'blocked' || intent.play.subtype === 'blocked') {
@@ -245,7 +261,7 @@ function puntSummary(context: SummaryContext): string {
     return sentence(`${team} ${formatPlayer(punter)} punt blocked${blocker ? ` by ${formatPlayer(blocker)}` : ''} ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
   }
 
-  const clauses = [`${team} ${formatPlayer(punter)} punt ${distance} ${spotPhrase(context, 'to', catchSpot, 'result.kick.catchYardLine')}`];
+  const clauses = [`${puntLead} ${distance} ${spotPhrase(context, 'to', catchSpot, 'result.kick.catchYardLine')}`];
 
   if (intent.result.code === 'fairCatch' || intent.play.subtype === 'fairCatch') {
     clauses.push(returner ? `fair catch by ${formatPlayer(returner)}` : 'fair catch');
@@ -254,12 +270,21 @@ function puntSummary(context: SummaryContext): string {
     clauses.push(downingPlayer ? `downed by ${formatPlayer(downingPlayer)}` : 'downed');
   } else if (intent.result.code === 'muffed' || intent.play.subtype === 'muffed') {
     clauses.push(returner ? `muffed by ${formatPlayer(returner)}` : 'muffed');
+    appendRecoveryClause(context, clauses);
   } else if (returner || intent.result.return) {
-    clauses.push(`${formatPlayer(returner)} return ${yardagePhrase(context, intent.result.return?.returnYards, 'result.return.returnYards')} ${spotPhrase(context, 'to', intent.result.return?.returnEndYardLine ?? intent.result.endYardLine, 'result.return.returnEndYardLine')}`);
+    const returnLead = `${formatPlayer(returner)} return ${yardagePhrase(context, intent.result.return?.returnYards, 'result.return.returnYards')}`;
+    if (intent.result.scoring?.type === 'touchdown') clauses.push(`${returnLead} for a touchdown`);
+    else if (intent.result.scoring?.type === 'safety') clauses.push(`${returnLead} for a safety`);
+    else {
+      clauses.push(`${returnLead} ${spotPhrase(context, 'to', intent.result.return?.returnEndYardLine ?? intent.result.endYardLine, 'result.return.returnEndYardLine')}`);
+      if (intent.result.code === 'touchback') clauses.push('touchback');
+    }
     if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
     const tacklers = tacklerPhrase(defendersByRoles(intent, ['tackler', 'assistTackler']));
     if (tacklers) clauses.push(tacklers);
+    appendReturnFumbleClauses(context, clauses);
   }
+  clauses.push(...lateralClauses(context));
 
   return sentence(joinClauses(clauses));
 }
@@ -269,12 +294,24 @@ function kickoffSummary(context: SummaryContext): string {
   const kicker = requiredPlayer(context, participantByRole(intent, 'kicker') ?? primaryParticipant(intent), 'participants.primary');
   const team = teamAbbr(intent, intent.play.actionTeam);
 
-  if (intent.result.code === 'touchback' || intent.play.subtype === 'touchback') {
+  if ((intent.result.code === 'touchback' || intent.play.subtype === 'touchback') && !intent.result.return && !intent.result.fumble) {
     return sentence(`${team} ${formatPlayer(kicker)} kickoff into the end zone, touchback`);
   }
 
   if ((intent.result.code === 'outOfBounds' || intent.play.subtype === 'outOfBounds') && !intent.result.return) {
-    return sentence(`${team} ${formatPlayer(kicker)} kickoff out-of-bounds ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
+    const rekick = intent.penalties.some((penalty) => (
+      penalty.code === 'FKI'
+      && penalty.status === 'accepted'
+      && (penalty.replayDown || penalty.downConsequence === 'REPEAT')
+    ));
+    const outOfBoundsSpot = intent.result.kick?.outOfBoundsYardLine ?? intent.result.endYardLine;
+    const outOfBoundsPhrase = canonicalSpotPhrase(context, 'at', outOfBoundsSpot, 'result.kick.outOfBoundsYardLine');
+    if (rekick) return sentence(`${team} ${formatPlayer(kicker)} kickoff out-of-bounds ${outOfBoundsPhrase}`);
+    const awardedSpot = intent.result.endYardLine;
+    const awardedPhrase = awardedSpot && awardedSpot !== outOfBoundsSpot
+      ? `, ball spotted ${spotPhrase(context, 'at', awardedSpot, 'result.endYardLine')}`
+      : '';
+    return sentence(`${team} ${formatPlayer(kicker)} kickoff out-of-bounds ${outOfBoundsPhrase}${awardedPhrase}`);
   }
 
   const distance = distancePhrase(context, intent.result.kick?.kickYards, 'result.kick.kickYards');
@@ -289,12 +326,21 @@ function kickoffSummary(context: SummaryContext): string {
     clauses.push(returner ? `fair catch by ${formatPlayer(returner)}` : 'fair catch');
   } else if (intent.result.code === 'muffed' || intent.play.subtype === 'muffed') {
     clauses.push(returner ? `muffed by ${formatPlayer(returner)}` : 'muffed');
+    appendRecoveryClause(context, clauses);
   } else if (returner || intent.result.return) {
-    clauses.push(`${formatPlayer(returner)} return ${yardagePhrase(context, intent.result.return?.returnYards, 'result.return.returnYards')} ${spotPhrase(context, 'to', intent.result.return?.returnEndYardLine ?? intent.result.endYardLine, 'result.return.returnEndYardLine')}`);
+    const returnLead = `${formatPlayer(returner)} return ${yardagePhrase(context, intent.result.return?.returnYards, 'result.return.returnYards')}`;
+    if (intent.result.scoring?.type === 'touchdown') clauses.push(`${returnLead} for a touchdown`);
+    else if (intent.result.scoring?.type === 'safety') clauses.push(`${returnLead} for a safety`);
+    else {
+      clauses.push(`${returnLead} ${spotPhrase(context, 'to', intent.result.return?.returnEndYardLine ?? intent.result.endYardLine, 'result.return.returnEndYardLine')}`);
+      if (intent.result.code === 'touchback') clauses.push('touchback');
+    }
     if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
     const tacklers = tacklerPhrase(intent.participants.defenders);
     if (tacklers) clauses.push(tacklers);
+    appendReturnFumbleClauses(context, clauses);
   }
+  clauses.push(...lateralClauses(context));
 
   return sentence(joinClauses(clauses));
 }
@@ -304,6 +350,15 @@ function fieldGoalSummary(context: SummaryContext): string {
   const kicker = requiredPlayer(context, participantByRole(intent, 'kicker') ?? primaryParticipant(intent), 'participants.primary');
   const team = teamAbbr(intent, intent.play.actionTeam);
   const distance = attemptDistance(context, intent.result.kick?.attemptYards, 'result.kick.attemptYards');
+
+  if (intent.result.return) {
+    const attemptResult = intent.result.kick?.blockedByPlayerId ? 'blocked' : 'no good';
+    const returner = intent.participants.returner ?? participantByPlayerId(intent, intent.result.return.returnerPlayerId);
+    const returnResult = intent.result.scoring?.type === 'touchdown'
+      ? 'for a touchdown'
+      : `${yardagePhrase(context, intent.result.return.returnYards, 'result.return.returnYards')} ${spotPhrase(context, 'to', intent.result.return.returnEndYardLine, 'result.return.returnEndYardLine')}`;
+    return sentence(`${team} ${formatPlayer(kicker)} ${distance} field goal ${attemptResult}, returned by ${formatPlayer(returner)} ${returnResult}`);
+  }
 
   if (intent.result.code === 'blocked' || intent.play.subtype === 'blocked') {
     const blocker = participantByRole(intent, 'blocker') ?? intent.participants.defenders[0];
@@ -338,11 +393,21 @@ function gameControlSummary(context: SummaryContext): string {
     return sentence(`Possession set to ${teamAbbr(intent, control.possession)}`);
   }
 
+  if (control.action === 'setClock') return sentence(`Game clock set to ${control.clock ?? intent.play.clock ?? '00:00'}`);
+  if (control.action === 'timeout') {
+    if (control.timeoutType === 'officials') return sentence('Officials timeout');
+    if (control.timeoutType === 'media') return sentence('Media timeout');
+    return sentence(`${teamAbbr(intent, control.teamSide ?? intent.play.actionTeam)} timeout`);
+  }
+  if (control.action === 'challenge') {
+    const status = String(control.challengeStatus ?? 'initiated').replace(/([a-z])([A-Z])/g, '$1 $2');
+    return sentence(`${teamAbbr(intent, control.teamSide ?? intent.play.actionTeam)} challenge ${status}`);
+  }
   if (control.action === 'startQuarter') return sentence(`Start quarter ${control.period ?? intent.play.period}`);
   if (control.action === 'endQuarter') return sentence(`End quarter ${control.period ?? intent.play.period}`);
-  if (control.action === 'startDrive') return sentence(`${team} drive start control`);
+  if (control.action === 'startDrive') return sentence(`${teamAbbr(intent, control.possession ?? intent.play.actionTeam)} drive starts at ${formatSpot(control.spot)}`);
   if (control.action === 'coinToss') return sentence('Coin toss control');
-  if (control.action === 'emergency') return sentence('Emergency game control');
+  if (control.action === 'emergency') return sentence(`Emergency clock stop at ${control.clock ?? intent.play.clock ?? '00:00'}`);
   if (control.action === 'rosterFunction') return sentence('Roster function control');
 
   return sentence(`${team} game control update`);
@@ -351,6 +416,14 @@ function gameControlSummary(context: SummaryContext): string {
 function trySummary(context: SummaryContext): string {
   const { intent } = context;
   const team = teamAbbr(intent, intent.play.actionTeam);
+
+  if (intent.result.return) {
+    const returner = intent.participants.returner ?? participantByPlayerId(intent, intent.result.return.returnerPlayerId);
+    const returnResult = intent.result.scoring?.type === 'defensiveConversion'
+      ? 'for a defensive conversion'
+      : `${yardagePhrase(context, intent.result.return.returnYards, 'result.return.returnYards')} ${spotPhrase(context, 'to', intent.result.return.returnEndYardLine, 'result.return.returnEndYardLine')}`;
+    return sentence(`${team} try ${intent.result.code}, returned by ${formatPlayer(returner)} ${returnResult}`);
+  }
 
   if (intent.play.subtype === 'rush') {
     const result = intent.result.code === 'made'
@@ -428,6 +501,7 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
 
   if (penalty.status === 'declined') {
     parts.push('declined');
+    appendPenaltyEjection(context, penalty, parts);
     return parts.join(', ');
   }
 
@@ -452,6 +526,7 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
   if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   parts.push(penalty.status);
+  appendPenaltyEjection(context, penalty, parts);
 
   return parts.join(', ');
 }
@@ -462,6 +537,7 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
 
   if (penalty.status === 'declined') {
     parts.push('declined');
+    appendPenaltyEjection(context, penalty, parts);
     return parts.join(', ');
   }
 
@@ -486,8 +562,16 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
   if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
+  appendPenaltyEjection(context, penalty, parts);
 
   return parts.join(', ');
+}
+
+function appendPenaltyEjection(context: SummaryContext, penalty: DraftPenalty, parts: string[]): void {
+  if (!penalty.ejected) return;
+  const playerId = penalty.ejectedPlayerId ?? penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
+  const participant = participantByPlayerId(context.intent, playerId);
+  parts.push(`${participant ? formatPlayer(participant) : 'penalized person'} ejected from the game`);
 }
 
 function penaltyDisplayYards(context: SummaryContext, penalty: DraftPenalty): string {
@@ -514,6 +598,37 @@ function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | und
 
 function participantByRole(intent: FootballDraftIntent, role: DraftParticipant['role']): DraftParticipant | undefined {
   return allParticipants(intent).find((participant) => participant.role === role);
+}
+
+function lateralClauses(context: SummaryContext): string[] {
+  const { intent } = context;
+  return (intent.result.laterals ?? []).map((lateral) => {
+    const recipient = participantByPlayerId(intent, lateral.toPlayerId);
+    return `lateral to ${formatPlayer(recipient)} ${spotPhrase(context, 'at', lateral.spot, 'result.laterals.spot')}`;
+  });
+}
+
+function appendRecoveryClause(context: SummaryContext, clauses: string[]): void {
+  const { intent } = context;
+  const fumble = intent.result.fumble;
+  if (!fumble) return;
+  const recovery = intent.participants.recoveredBy ?? participantByPlayerId(intent, fumble.recoveredByPlayerId);
+  if (recovery || fumble.recoveredByTeam) {
+    clauses.push(`recovered by ${formatPlayer(recovery)} for ${teamAbbr(intent, fumble.recoveredByTeam)} ${spotPhrase(context, 'at', fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
+  }
+  if (fumble.returnEndYardLine || typeof fumble.returnYards === 'number') {
+    clauses.push(`returned ${yardagePhrase(context, fumble.returnYards, 'result.fumble.returnYards')} ${spotPhrase(context, 'to', fumble.returnEndYardLine, 'result.fumble.returnEndYardLine')}`);
+  }
+}
+
+function appendReturnFumbleClauses(context: SummaryContext, clauses: string[]): void {
+  const { intent } = context;
+  const fumble = intent.result.fumble;
+  if (!fumble) return;
+  const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, fumble.forcedByPlayerId);
+  clauses.push(`fumbled ${spotPhrase(context, 'at', fumble.spot, 'result.fumble.spot')}`);
+  if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
+  appendRecoveryClause(context, clauses);
 }
 
 function participantByPlayerId(intent: FootballDraftIntent, playerId: string | undefined): DraftParticipant | undefined {
@@ -617,6 +732,23 @@ function spotPhrase(context: SummaryContext, preposition: 'to' | 'at' | 'from', 
     return `${preposition} spot pending`;
   }
   return `${preposition} ${formatted}`;
+}
+
+function canonicalSpotPhrase(context: SummaryContext, preposition: 'to' | 'at' | 'from', spot: Spot | undefined, field: string): string {
+  if (!spot) {
+    addWarning(context, 'MISSING_SPOT', 'Field position is missing', field);
+    return `${preposition} spot pending`;
+  }
+  if (spot === '50' || spot === 'H50' || spot === 'V50') return `${preposition} midfield`;
+  if (spot === 'goal') return `${preposition} the goal line`;
+  if (!isCanonicalSpot(spot)) {
+    addWarning(context, 'INVALID_SPOT', `Invalid field position: ${spot}`, field);
+    return `${preposition} spot pending`;
+  }
+  const team = spot.slice(0, 1);
+  const yard = spot.slice(1);
+  if (Number(yard) === 0) return `${preposition} the ${team} goal line`;
+  return `${preposition} the ${team}${yard}`;
 }
 
 function formatSpot(spot: Spot | undefined): string {
