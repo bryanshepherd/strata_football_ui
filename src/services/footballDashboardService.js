@@ -244,6 +244,34 @@ export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
   return clone(nextRecord.envelope);
 }
 
+const acknowledgeDashboardSeededFootballEnvelopeVersion = (gameId, serverUpdatedAt) => {
+  if (!gameId || typeof serverUpdatedAt !== 'string' || !serverUpdatedAt.trim()) return null;
+  const store = readStore();
+  const record = store.games?.[String(gameId)] || null;
+  if (!record?.envelope) return null;
+  const updatedAt = serverUpdatedAt.trim();
+  const nextRecord = {
+    ...record,
+    updatedAt,
+    envelope: {
+      ...record.envelope,
+      updatedAt,
+    },
+  };
+  writeStore({
+    games: {
+      ...store.games,
+      [String(gameId)]: nextRecord,
+    },
+  });
+  return clone(nextRecord.envelope);
+};
+
+const footballServerEnvelopeVersion = (payload) => {
+  const updatedAt = payload?.gameEnvelope?.updatedAt || payload?.updatedAt;
+  return typeof updatedAt === 'string' && updatedAt.trim() ? updatedAt.trim() : '';
+};
+
 const footballSyncItemId = ({ kind, payload }) => {
   if (kind === 'event' && payload?.event?.clientEventId) {
     return `event:${payload.event.clientEventId}`;
@@ -309,10 +337,35 @@ export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } =
         error = cause instanceof Error ? cause.message : 'Server sync failed.';
       }
       if (response?.ok) {
+        const acknowledgment = await response.json().catch(() => null);
+        const acknowledgedVersion = footballServerEnvelopeVersion(acknowledgment);
+        if (acknowledgedVersion) {
+          acknowledgeDashboardSeededFootballEnvelopeVersion(item.gameId, acknowledgedVersion);
+        }
         items = items.slice(1);
         writeSyncQueue(items);
         syncedCount += 1;
         continue;
+      }
+      if (response?.status === 409 && item.kind === 'pregame') {
+        const conflict = await response.json().catch(() => null);
+        const serverVersion = footballServerEnvelopeVersion(conflict);
+        const baseEnvelopeVersion = item.payload?.baseEnvelopeVersion;
+        if (serverVersion && serverVersion !== baseEnvelopeVersion && Number(item.versionRebases || 0) < 3) {
+          const rebasedItem = {
+            ...item,
+            payload: {
+              ...item.payload,
+              baseEnvelopeVersion: serverVersion,
+            },
+            versionRebases: Number(item.versionRebases || 0) + 1,
+            lastAttemptAt: new Date().toISOString(),
+            lastError: '',
+          };
+          items = [rebasedItem, ...items.slice(1)];
+          writeSyncQueue(items);
+          continue;
+        }
       }
       if (!error) error = `Server sync failed (${response?.status || 'network'}).`;
       items = [

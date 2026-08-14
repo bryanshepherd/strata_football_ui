@@ -137,6 +137,72 @@ describe('local-first football persistence', () => {
     expect(getPendingFootballSyncCount(envelope.gameId)).toBe(0);
   });
 
+  it('rebases a stale pregame version and retries the unchanged local envelope', async () => {
+    const envelope = clone(getGameEnvelopeFixture('pregame'));
+    envelope.gameId = 'FB-PREGAME-REBASE-001';
+    envelope.updatedAt = '2026-08-14T18:20:00.000Z';
+    envelope.pregame = {
+      gamePhase: 'awaitingKickoff',
+      coinToss: { status: 'complete', winnerTeam: 'H', winnerInitialChoice: 'receive' },
+      starters: { offense: { H: [], V: [] }, defense: { H: [], V: [] }, specialTeams: { H: [], V: [] } },
+    };
+    envelope.game.teams.H.score = 7;
+    saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+
+    const payload = {
+      gameId: envelope.gameId,
+      baseEnvelopeVersion: envelope.updatedAt,
+      pregame: clone(envelope.pregame),
+      rosters: clone(envelope.rosters),
+    };
+    enqueueFootballServerSync({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-PREGAME-REBASE-001',
+      kind: 'pregame',
+      payload,
+    });
+
+    const conflictVersion = '2026-08-14T18:34:08.000Z';
+    const acknowledgedVersion = '2026-08-14T19:02:11.000Z';
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          success: false,
+          errors: [{ code: 'STALE_ENVELOPE' }],
+          gameEnvelope: { updatedAt: conflictVersion },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ...envelope,
+          updatedAt: acknowledgedVersion,
+          pregame: { coinToss: { status: 'notStarted' } },
+          game: { ...envelope.game, teams: { H: { score: 0 }, V: { score: 0 } } },
+        }),
+      });
+
+    const result = await flushFootballServerSync({ fetchImpl });
+    const firstRequest = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    const retryRequest = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    const local = getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope;
+
+    expect(result).toMatchObject({ pendingCount: 0, syncedCount: 1, error: '' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(firstRequest).toEqual(payload);
+    expect(retryRequest).toEqual({ ...payload, baseEnvelopeVersion: conflictVersion });
+    expect(retryRequest.pregame).toEqual(firstRequest.pregame);
+    expect(retryRequest.rosters).toEqual(firstRequest.rosters);
+    expect(local.pregame).toEqual(envelope.pregame);
+    expect(local.rosters).toEqual(envelope.rosters);
+    expect(local.game.teams.H.score).toBe(7);
+    expect(local.updatedAt).toBe(acknowledgedVersion);
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(0);
+  });
+
   it('keeps a failed mirror request queued without changing the local envelope', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-OFFLINE-001';
