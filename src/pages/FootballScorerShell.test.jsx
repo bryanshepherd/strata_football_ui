@@ -376,6 +376,28 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('uses top-level dashboard routes for an embedded production launch', async () => {
+    createFootballDashboardGame({
+      gameId: 'FB-DASH-NAV',
+      gameDate: '2026-09-12',
+      startTime: '19:30',
+      venue: 'Dashboard Field',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+
+    renderScorer('/scorer?dashboardGameId=DASH-NAV&envelopeGameId=FB-DASH-NAV');
+
+    expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/sports/football');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('target', '_top');
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+      'href',
+      '/sports/football?view=reports&gameId=DASH-NAV',
+    );
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('target', '_top');
+  });
+
   it('slots routed football internals into the canonical scorer shell', () => {
     renderScorer();
 

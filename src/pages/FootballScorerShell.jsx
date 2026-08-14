@@ -443,6 +443,7 @@ export default function FootballScorerShell() {
   return (
     <main className={`flex min-h-screen flex-col bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
       <ScorerHeader
+        dashboardGameId={dashboardGameId}
         debugMode={debugMode}
         envelope={envelope}
         fixtureKey={requestedFixture}
@@ -542,6 +543,7 @@ const ShellRouteState = ({ title, message }) => (
 );
 
 const ScorerHeader = ({
+  dashboardGameId,
   debugMode,
   envelope,
   fixtureKey,
@@ -580,12 +582,22 @@ const ScorerHeader = ({
           >
             Roster
           </button>
-          <Link
-            className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            to={isGameRoute ? '/sports/football' : '/dashboard'}
-          >
-            Dashboard
-          </Link>
+          {isGameRoute && dashboardGameId ? (
+            <a
+              className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+              href="/sports/football"
+              target="_top"
+            >
+              Dashboard
+            </a>
+          ) : (
+            <Link
+              className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+              to={isGameRoute ? '/sports/football' : '/dashboard'}
+            >
+              Dashboard
+            </Link>
+          )}
           {isGameRoute ? (
             <>
               <span className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
@@ -615,12 +627,22 @@ const ScorerHeader = ({
               </select>
             </label>
           )}
-          <Link
-            className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            to={isGameRoute ? `/reports?gameId=${encodeURIComponent(gameId)}` : `/reports?fixture=${fixtureKey}`}
-          >
-            Reports
-          </Link>
+          {isGameRoute && dashboardGameId ? (
+            <a
+              className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+              href={`/sports/football?view=reports&gameId=${encodeURIComponent(dashboardGameId)}`}
+              target="_top"
+            >
+              Reports
+            </a>
+          ) : (
+            <Link
+              className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+              to={isGameRoute ? `/reports?gameId=${encodeURIComponent(gameId)}` : `/reports?fixture=${fixtureKey}`}
+            >
+              Reports
+            </Link>
+          )}
           <button
             className={`rounded border px-3 py-2 text-sm font-semibold ${
               debugMode
