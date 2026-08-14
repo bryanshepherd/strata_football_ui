@@ -1000,6 +1000,12 @@ function timeoutButtonsForAliases(aliases, teamNames) {
 function stepCopyForState(state, aliases, teamNames) {
   const step = state.currentStep;
   const copy = stepCopy[step];
+  if (copy && yardLineSteps.has(step)) {
+    return {
+      ...copy,
+      helper: `${copy.helper} Format: ${aliases.H}25 or ${aliases.V}25; canonical H/V are also accepted.`,
+    };
+  }
   if (step === 'returnerJersey' && state.tokens?.puntReceiveResult === 'fairCatch') {
     return {
       ...copy,

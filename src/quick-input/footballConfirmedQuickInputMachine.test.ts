@@ -1173,6 +1173,8 @@ describe('footballConfirmedQuickInputMachine', () => {
     ['W00', 'H00'],
     ['f00', 'V00'],
     ['W5', 'H05'],
+    ['W 5', 'H05'],
+    ['H25', 'H25'],
   ])('normalizes kickoff yard-line alias %s to canonical %s', (input, expected) => {
     const context = makeContext({ teamAliases: { H: 'W', V: 'F' } });
     const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);

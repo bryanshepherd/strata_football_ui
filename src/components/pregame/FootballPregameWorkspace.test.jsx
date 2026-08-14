@@ -180,6 +180,7 @@ describe('FootballPregameWorkspace', () => {
     expect(nextEnvelope.pregame.coinToss.status).toBe('complete');
     expect(nextEnvelope.pregame.coinToss.winnerInitialChoice).toBe('kick');
     expect(nextEnvelope.pregame.gamePhase).toBe('awaitingKickoff');
+    expect(nextEnvelope.operatorTeamAliases).toEqual({ H: 'W', V: 'F' });
   });
 
   it('uses Choose Direction consistently through the defer branch', () => {

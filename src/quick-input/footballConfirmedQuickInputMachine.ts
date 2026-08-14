@@ -5828,7 +5828,7 @@ function stepForDuplicateRole(
 }
 
 function parseSpot(value: string, context?: FootballQuickInputContext): Spot | null {
-  let normalized = value.trim().toUpperCase();
+  let normalized = value.trim().toUpperCase().replace(/\s+/g, '');
   if (normalized === 'TD') return 'goal';
   const sideAndYard = normalized.match(/^([A-Z])(\d{1,2})$/);
   if (sideAndYard && normalized[0] !== 'H' && normalized[0] !== 'V') {

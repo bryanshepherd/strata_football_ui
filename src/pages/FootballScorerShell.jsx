@@ -37,6 +37,7 @@ import {
   recordFootballPossessionClock,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
+import { footballTeamAliasesForEnvelope } from '../utils/footballTeamAliases';
 
 const formatStatus = (status) =>
   String(status || 'unknown')
@@ -683,11 +684,19 @@ export const FootballInputSlot = ({
   submitAdapter,
 }) => {
   const showPregameWorkspace = envelope.game.status === 'pregame';
-  const [teamAliases, setTeamAliases] = useState(() => envelope.operatorTeamAliases || null);
+  const [teamAliases, setTeamAliases] = useState(() => footballTeamAliasesForEnvelope(envelope));
 
   useEffect(() => {
-    setTeamAliases(envelope.operatorTeamAliases || null);
-  }, [envelope.gameId, envelope.operatorTeamAliases?.H, envelope.operatorTeamAliases?.V]);
+    setTeamAliases(footballTeamAliasesForEnvelope(envelope));
+  }, [
+    envelope.gameId,
+    envelope.game.teams.H.abbr,
+    envelope.game.teams.H.name,
+    envelope.game.teams.V.abbr,
+    envelope.game.teams.V.name,
+    envelope.operatorTeamAliases?.H,
+    envelope.operatorTeamAliases?.V,
+  ]);
 
   return (
     <div className="space-y-4 p-4">

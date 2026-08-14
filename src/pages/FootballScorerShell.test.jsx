@@ -7,6 +7,7 @@ import {
   createFootballDashboardGame,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
+  saveDashboardSeededFootballEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { getHighestFootballFcqiSeedCounter } from '../components/fcqi/FootballConfirmedQuickInput';
@@ -1239,6 +1240,55 @@ describe('FootballScorerShell', () => {
     } finally {
       submitMock.restore();
     }
+  });
+
+  it('recovers team abbreviations from a saved awaiting-kickoff envelope and accepts them in kickoff spots', async () => {
+    const envelope = JSON.parse(JSON.stringify(gameEnvelopeFixtures.pregame));
+    envelope.gameId = 'FB-AWAITING-KICKOFF-ALIASES';
+    envelope.rosters.gameId = envelope.gameId;
+    envelope.pregame = {
+      gamePhase: 'awaitingKickoff',
+      coinToss: {
+        status: 'complete',
+        firstHalfKickingTeam: 'V',
+        firstHalfReceivingTeam: 'H',
+      },
+      starters: { offense: { H: [], V: [] }, defense: { H: [], V: [] }, specialTeams: { H: [], V: [] } },
+    };
+    envelope.liveState = {
+      ...envelope.liveState,
+      kickoffTeam: 'V',
+      nextPlayContext: 'awaitingKickoff',
+      yardLine: 'V35',
+    };
+    delete envelope.operatorTeamAliases;
+    saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+
+    renderScorer(`/scorer?gameId=${envelope.gameId}`);
+    fireEvent.click(screen.getByRole('button', { name: /^kick/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^kickoff \/ free kick/i }));
+
+    const kickerInput = screen.getByLabelText(/kicker jersey/i);
+    fireEvent.change(kickerInput, { target: { value: '93' } });
+    fireEvent.submit(kickerInput.closest('form'));
+
+    const kickedToInput = screen.getByLabelText(/kicked to spot/i);
+    expect(screen.getByText(/Format: W25 or F25; canonical H\/V are also accepted/i)).toBeInTheDocument();
+    fireEvent.change(kickedToInput, { target: { value: 'W20' } });
+    fireEvent.submit(kickedToInput.closest('form'));
+
+    fireEvent.click(screen.getByRole('button', { name: /^return/i }));
+    const returnerInput = screen.getByLabelText(/returner jersey/i);
+    fireEvent.change(returnerInput, { target: { value: '34' } });
+    fireEvent.submit(returnerInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^end of play/i }));
+
+    const finalSpotInput = screen.getByLabelText(/^final spot$/i);
+    fireEvent.change(finalSpotInput, { target: { value: 'W 31' } });
+    fireEvent.submit(finalSpotInput.closest('form'));
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(within(summaryDialog).getByText(/to the H31/i)).toBeInTheDocument();
   });
 
   it('kickoff receive branches use kick receive meanings for T and C', async () => {

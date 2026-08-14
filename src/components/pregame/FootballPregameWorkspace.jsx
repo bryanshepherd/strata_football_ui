@@ -6,6 +6,7 @@ import {
   resolveCompleteToss,
   validateCoinToss,
 } from '../../pregame/footballPregame';
+import { footballTeamAliasesForEnvelope } from '../../utils/footballTeamAliases';
 import FootballCoinTossModal from './FootballCoinTossModal';
 
 export default function FootballPregameWorkspace({
@@ -45,6 +46,7 @@ export default function FootballPregameWorkspace({
       clock: { ...envelope.clock, ...kickoff.clock },
       game: { ...envelope.game, ...kickoff.game },
       liveState: { ...envelope.liveState, ...kickoff.liveState },
+      operatorTeamAliases: footballTeamAliasesForEnvelope(envelope, teamAliases),
     });
     setNotice('Coin toss complete. Awaiting Kickoff — kickoff and dead-ball penalty input are available.');
   };
