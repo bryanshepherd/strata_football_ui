@@ -92,6 +92,43 @@ describe('local-first football persistence', () => {
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.gameId).toBe(envelope.gameId);
   });
 
+  it('normalizes numeric and team-alias rule spots at the API and local-state boundaries', async () => {
+    const envelope = clone(getGameEnvelopeFixture('pregame'));
+    envelope.gameId = 'FB-WVSU-FAIRMONT-001';
+    envelope.game.teams.H = { ...envelope.game.teams.H, name: 'West Virginia St.', abbr: 'WVSU' };
+    envelope.game.teams.V = { ...envelope.game.teams.V, name: 'Fairmont St.', abbr: 'FAIR' };
+    envelope.operatorTeamAliases = { H: 'W', V: 'F' };
+    envelope.game.rules = {
+      ...envelope.game.rules,
+      kickoffSpot: 35,
+      touchbackSpot: 'F20',
+      kickoffTouchbackSpot: 'W25',
+      safetyKickSpot: { side: 'W', yard: 20 },
+      patSpot: 3,
+    };
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => envelope });
+
+    const loaded = await fetchFootballEnvelope(envelope.gameId, { fetchImpl });
+    expect(loaded.game.rules).toMatchObject({
+      kickoffSpot: 'H35',
+      touchbackSpot: 'V20',
+      kickoffTouchbackSpot: 'H25',
+      patSpot: 'V03',
+    });
+    expect(loaded.game.rules).not.toHaveProperty('safetyKickSpot');
+    expect(loaded.operatorTeamAliases).toEqual({ H: 'W', V: 'F' });
+
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      games: { [envelope.gameId]: { gameId: envelope.gameId, envelope } },
+    }));
+    const local = getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope;
+    expect(local.game.rules.kickoffSpot).toBe('H35');
+    expect(local.game.rules.touchbackSpot).toBe('V20');
+    expect(local.game.rules.safetyKickSpot).toBeUndefined();
+    expect(local.operatorTeamAliases).toEqual({ H: 'W', V: 'F' });
+  });
+
   it('saves pregame locally and queues the mirror without waiting for a server response', async () => {
     const envelope = clone(getGameEnvelopeFixture('pregame'));
     envelope.gameId = 'FB-PREGAME-LOCAL-001';

@@ -1137,6 +1137,31 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('return for loss of 5 yards to the V10');
   });
 
+  it('accepts numeric kickoff rule spots without losing W/F team aliases', () => {
+    const context = makeContext({
+      rules: {
+        kickoffSpot: 35 as unknown as FootballQuickInputContext['game']['rules']['kickoffSpot'],
+      },
+      teamAliases: { H: 'W', V: 'F' },
+    });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+
+    expect(() => commitTokenWithContext(
+      inputTokenWithContext(withKicker, 'F20', context),
+      context,
+    )).not.toThrow();
+    const withCatchSpot = commitTokenWithContext(
+      inputTokenWithContext(withKicker, 'F20', context),
+      context,
+    );
+    expect(withCatchSpot).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'kickReceiveResult',
+      tokens: { kickReturnStartSpot: 'V20' },
+    });
+  });
+
   it('kickoff return O builds request only', () => {
     const reviewing = transition(completeKickoffReturnDraft({ terminalResult: 'O', tacklers: [] }), { type: 'GENERATE_SUMMARY' });
 
