@@ -98,6 +98,21 @@ describe('FootballScoreboard', () => {
     expect(screen.queryByText('Start')).not.toBeInTheDocument();
   });
 
+  it('renders canonical spots with the game team aliases and hides malformed values', () => {
+    const fixture = getGameEnvelopeFixture('normal');
+    const envelope = {
+      ...fixture,
+      operatorTeamAliases: { H: 'W', V: 'F' },
+      liveState: { ...fixture.liveState, yardLine: 'V35', lineToGain: { side: 'V', yard: 45 } },
+    };
+
+    render(<FootballScoreboard envelope={envelope} />);
+
+    expect(screen.getByText('F35')).toBeInTheDocument();
+    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
+  });
+
   it('shows timeout ovals and challenge circles as filled availability or empty spent indicators', () => {
     const fixture = getGameEnvelopeFixture('normal');
     const envelope = {

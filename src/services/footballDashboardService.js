@@ -11,6 +11,7 @@ import {
   parseSpot,
   spotToPossessionRelative,
 } from '../utils/footballRulesEngine';
+import { normalizeFootballEnvelopeRuleSpots } from '../utils/footballSpotNormalization';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
 export const FOOTBALL_SYNC_QUEUE_STORAGE_KEY = 'strata.football.syncQueue.v1';
@@ -274,7 +275,10 @@ export function getDashboardSeededFootballEnvelopeRecord(gameId) {
   if (!gameId) return null;
   const store = readStore();
   const record = store.games?.[String(gameId)];
-  return record?.envelope ? clone(record) : null;
+  if (!record?.envelope) return null;
+  const clonedRecord = clone(record);
+  clonedRecord.envelope = normalizeFootballEnvelopeRuleSpots(clonedRecord.envelope);
+  return clonedRecord;
 }
 
 /**
@@ -284,18 +288,19 @@ export function getDashboardSeededFootballEnvelopeRecord(gameId) {
  */
 export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
   if (!gameId || !envelope) return null;
+  const normalizedEnvelope = normalizeFootballEnvelopeRuleSpots(envelope);
   const store = readStore();
   const record = store.games?.[String(gameId)] || null;
   const updatedAt = new Date().toISOString();
-  const home = envelope.game?.teams?.H || {};
-  const visitor = envelope.game?.teams?.V || {};
+  const home = normalizedEnvelope.game?.teams?.H || {};
+  const visitor = normalizedEnvelope.game?.teams?.V || {};
   const nextRecord = {
     ...record,
     gameId: String(gameId),
     createdAt: record?.createdAt || updatedAt,
-    gameDate: record?.gameDate || String(envelope.game?.scheduledAt || '').slice(0, 10),
-    startTime: record?.startTime || String(envelope.game?.scheduledAt || '').slice(11, 16),
-    venue: record?.venue || envelope.game?.venue?.name || '',
+    gameDate: record?.gameDate || String(normalizedEnvelope.game?.scheduledAt || '').slice(0, 10),
+    startTime: record?.startTime || String(normalizedEnvelope.game?.scheduledAt || '').slice(11, 16),
+    venue: record?.venue || normalizedEnvelope.game?.venue?.name || '',
     homeTeamId: record?.homeTeamId || home.teamId || '',
     visitorTeamId: record?.visitorTeamId || visitor.teamId || '',
     homeTeam: record?.homeTeam || { teamId: home.teamId || '', name: home.name || '', abbr: home.abbr || 'H' },
@@ -306,7 +311,7 @@ export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
     },
     updatedAt,
     envelope: {
-      ...envelope,
+      ...normalizedEnvelope,
       updatedAt,
     },
   };
@@ -599,7 +604,7 @@ export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', sign
     adoptMirrorIdentity(String(gameId), mirrorSourceId, mirrorRevision);
   }
 
-  return payload;
+  return normalizeFootballEnvelopeRuleSpots(payload);
 }
 
 export async function recoverFootballEnvelopeFromServer(gameId, options = {}) {
@@ -803,7 +808,8 @@ const repairReplayDownThatReachedLineToGain = (envelope) => {
 };
 
 export function normalizeFootballScoringSetupEnvelope(envelope) {
-  const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(envelope);
+  const normalizedRuleEnvelope = normalizeFootballEnvelopeRuleSpots(envelope);
+  const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
   const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedSeriesEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);

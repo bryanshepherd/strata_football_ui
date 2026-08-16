@@ -1,6 +1,7 @@
 import React from 'react';
 import { footballDriveTimeOfPossession } from '../../scoring/footballDriveSummary';
 import { formatFootballClockDisplay } from '../../utils/footballClock';
+import { formatFootballSpotForDisplay } from '../../utils/footballSpotNormalization';
 
 const formatStatus = (status) =>
   String(status || 'unknown')
@@ -19,7 +20,9 @@ const formatDownDistance = (liveState) => {
   return `${liveState.down} and ${liveState.distance}`;
 };
 
-const formatSpot = (liveState) => liveState.yardLine || 'Not set';
+const formatSpot = (liveState, envelope) => (
+  formatFootballSpotForDisplay(liveState.yardLine, envelope) || 'Not set'
+);
 
 const isTouchdownEvent = (event) => (
   event?.result?.scoring?.type === 'touchdown'
@@ -105,8 +108,11 @@ export default function FootballScoreboard({ envelope }) {
 
       <section className="grid grid-cols-2 gap-px overflow-hidden rounded border border-zinc-300 bg-zinc-300 text-sm sm:grid-cols-4 xl:grid-cols-8">
         <StripCell label="Down/Distance" value={formatDownDistance(liveState)} />
-        <StripCell label="Spot" value={formatSpot(liveState)} />
-        <StripCell label="Line To Gain" value={liveState.lineToGain || 'None'} />
+        <StripCell label="Spot" value={formatSpot(liveState, envelope)} />
+        <StripCell
+          label="Line To Gain"
+          value={formatFootballSpotForDisplay(liveState.lineToGain, envelope) || 'None'}
+        />
         <StripCell
           label="Drive"
           value={displayDrive ? `${displayDrive.driveId} · ${driveResult}` : 'None'}

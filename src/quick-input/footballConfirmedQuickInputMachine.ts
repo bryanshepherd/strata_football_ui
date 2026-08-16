@@ -30,6 +30,7 @@ import {
 import { isPlayFamilyAvailable, type FootballGamePhase } from '../pregame/footballPregame';
 import { calculateFootballPenaltyFinalSpot } from '../utils/footballPenaltyEnforcement';
 import { normalizeFootballClock } from '../utils/footballClock';
+import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
 
 export type FootballQuickInputStateName =
   | 'idle'
@@ -5668,16 +5669,28 @@ function derivePuntYards(context: FootballQuickInputContext, catchYardLine: Spot
 function deriveKickoffYards(context: FootballQuickInputContext, catchYardLine: Spot): number | undefined {
   const receivingTeam = opposingTeam(context.play.possession ?? context.play.actionTeam);
   const startYardLine = (context.prePlay.possession == null ? context.prePlay.yardLine : undefined)
-    ?? ruleSpotForTeam(context.game.rules?.kickoffSpot, context.play.actionTeam, 'own');
+    ?? ruleSpotForTeam(
+    context.game.rules?.kickoffSpot,
+    context.play.actionTeam,
+    'own',
+    context.teamAliases,
+  );
   const kickoffSpot = spotToTeamEngineYard(startYardLine, receivingTeam);
   const receiveSpot = spotToTeamEngineYard(catchYardLine, receivingTeam);
   if (typeof kickoffSpot !== 'number' || typeof receiveSpot !== 'number') return undefined;
   return kickoffSpot - receiveSpot;
 }
 
-function ruleSpotForTeam(spot: Spot | undefined, team: TeamCode, fieldSide: 'own' | 'opponent'): Spot | undefined {
-  if (!spot || spot === '50' || spot === 'goal') return spot;
-  const yard = spot.slice(1);
+function ruleSpotForTeam(
+  spot: unknown,
+  team: TeamCode,
+  fieldSide: 'own' | 'opponent',
+  teamAliases?: FootballQuickInputContext['teamAliases'],
+): Spot | undefined {
+  const normalized = normalizeFootballSpot(spot, { teamAliases, defaultSide: 'H' }) as Spot | null;
+  if (!normalized) return undefined;
+  if (normalized === '50' || normalized === 'goal') return normalized;
+  const yard = normalized.slice(1);
   const side = fieldSide === 'opponent' ? opposingTeam(team) : team;
   return `${side}${yard}` as Spot;
 }
@@ -6593,7 +6606,12 @@ function engineYardToSpot(value: number, team: TeamCode): Spot | undefined {
 
 function freeKickRekickSpot(context: FootballQuickInputContext): Spot | undefined {
   const kickingTeam = context.play.actionTeam;
-  const previousSpot = ruleSpotForTeam(context.game.rules?.kickoffSpot, kickingTeam, 'own') ?? context.prePlay.yardLine;
+  const previousSpot = ruleSpotForTeam(
+    context.game.rules?.kickoffSpot,
+    kickingTeam,
+    'own',
+    context.teamAliases,
+  ) ?? context.prePlay.yardLine;
   const previousEngineYard = spotToTeamEngineYard(previousSpot, kickingTeam);
   return typeof previousEngineYard === 'number'
     ? engineYardToSpot(previousEngineYard - 5, kickingTeam)
