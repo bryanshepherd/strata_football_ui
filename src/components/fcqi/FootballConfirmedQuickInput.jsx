@@ -634,6 +634,7 @@ export default function FootballConfirmedQuickInput({
       </div>
 
       <FootballFlowModal
+        actionTeam={context.play.actionTeam}
         onBackStep={goBackStep}
         onCancel={cancelFlow}
         onStepClick={jumpToStep}

@@ -168,6 +168,7 @@ export interface Penalty {
   automaticFirstDown?: boolean;
   lossOfDown?: boolean;
   replayDown?: boolean;
+  downCounts?: boolean;
   notes?: string;
 }
 /**

@@ -526,6 +526,7 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
   if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
+  if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   parts.push(penalty.status);
   appendPenaltyEjection(context, penalty, parts);
@@ -563,6 +564,7 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
   if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
+  if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   appendPenaltyEjection(context, penalty, parts);
 

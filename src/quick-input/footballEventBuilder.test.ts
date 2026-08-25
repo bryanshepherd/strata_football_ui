@@ -85,6 +85,42 @@ describe('footballEventBuilder', () => {
     }]);
   });
 
+  it('preserves Down Counts as a distinct canonical penalty disposition', () => {
+    const result = expectBuilt(baseIntent({
+      family: 'rush',
+      subtype: null,
+      primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+      result: { code: 'tackle', yards: 3, endYardLine: 'H47' },
+      penalties: [{
+        penaltyId: 'pen-down-counts',
+        team: 'H',
+        code: 'UNS',
+        name: 'Unsportsmanlike Conduct',
+        yards: -15,
+        enforcedFrom: 'END',
+        finalSpot: 'H32',
+        downConsequence: 'DOWN_COUNTS',
+        downCounts: true,
+        source: 'queued',
+        status: 'accepted',
+        accepted: true,
+        liveBall: true,
+      }],
+    }));
+
+    expect(result.event.penalties[0]).toMatchObject({
+      penaltyId: 'pen-down-counts',
+      enforcedFrom: 'endOfPlay',
+      downCounts: true,
+    });
+    expect(result.event.penalties[0]).not.toMatchObject({
+      replayDown: true,
+      automaticFirstDown: true,
+      lossOfDown: true,
+    });
+    expect(result.event.description).toContain('down counts');
+  });
+
   it('preserves an ejection marker in canonical penalty notes for reports', () => {
     const result = expectBuilt(baseIntent({
       family: 'rush',

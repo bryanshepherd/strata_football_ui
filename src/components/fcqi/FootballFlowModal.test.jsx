@@ -496,6 +496,50 @@ describe('FootballFlowModal team aliases', () => {
     expect(screen.queryByLabelText('Returner jersey')).not.toBeInTheDocument();
   });
 
+  it('offers Down Counts only for a succeeding-spot foul by the offensive team', () => {
+    const baseState = {
+      status: 'token.awaiting',
+      flow: 'rush',
+      currentStep: 'penaltyDown',
+      currentToken: 'D',
+      tokens: {
+        laterals: [],
+        tacklers: [],
+        hurryDefenders: [],
+        sackDefenders: [],
+        penaltyEnforcedFrom: 'END',
+        penaltyTeam: 'H',
+      },
+    };
+    const { rerender } = render(
+      <FootballFlowModal
+        actionTeam="H"
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={baseState}
+      />,
+    );
+
+    expect(screen.getByText('Down Counts')).toBeInTheDocument();
+    expect(screen.getByText('The completed play stands. Apply the normal next-down or series result, then enforce the foul from the succeeding spot.')).toBeInTheDocument();
+
+    rerender(
+      <FootballFlowModal
+        actionTeam="H"
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          ...baseState,
+          tokens: { ...baseState.tokens, penaltyTeam: 'V' },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Down Counts')).not.toBeInTheDocument();
+  });
+
   it('capitalizes team aliases immediately in yardline fields', () => {
     render(
       <FootballFlowModal

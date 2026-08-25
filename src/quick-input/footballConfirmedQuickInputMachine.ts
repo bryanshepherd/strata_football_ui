@@ -62,7 +62,7 @@ export type PatPassResultSelection = 'good' | 'missed' | 'incomplete' | 'interce
 export type PenaltySourceSelection = 'immediate' | 'queued';
 export type PenaltyResolutionSelection = 'accepted' | 'declined' | 'offsetting';
 export type PenaltyEnforcedFromSelection = 'PREVIOUS' | 'SPOT' | 'END';
-export type PenaltyDownConsequenceSelection = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST';
+export type PenaltyDownConsequenceSelection = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS';
 export type GameControlMenuSelection = 'emergency' | 'quarter' | 'clock' | 'timeout' | 'challenge' | 'ballContext' | 'driveStart' | 'setPossession' | 'editPenalties' | 'coinToss' | 'roster';
 export type GameControlQuarterSelection = 'startQuarter' | 'endQuarter';
 export type GameControlChallengeStatusSelection = 'initiated' | 'successful' | 'unsuccessful' | 'callStands' | 'callConfirmed' | 'callOverturned';
@@ -1869,7 +1869,12 @@ function commitPenaltyToken(
       : defaultPenaltyEnforcement(state.tokens.penaltyDefinition);
     const defaultDownConsequence = source === 'immediate'
       ? 'REPEAT'
-      : defaultPenaltyDownConsequence(state.tokens.penaltyDefinition);
+      : defaultPenaltyDownConsequence(
+        state.tokens.penaltyDefinition,
+        defaultEnforcedFrom,
+        state.tokens.penaltyTeam,
+        context.play.actionTeam,
+      );
     const nextStep = state.tokens.penaltyDefinition?.ejectionable
       ? 'penaltyEjected'
       : source === 'immediate' ? 'penaltyFinalSpot' : 'penaltyEnforcedFrom';
@@ -1938,6 +1943,12 @@ function commitPenaltyToken(
     const nextTokens = {
       ...cloneTokens(state.tokens),
       penaltyEnforcedFrom: enforcedFrom,
+      penaltyDownConsequence: defaultPenaltyDownConsequence(
+        state.tokens.penaltyDefinition,
+        enforcedFrom,
+        state.tokens.penaltyTeam,
+        context.play.actionTeam,
+      ),
     };
     const nextStep = enforcedFrom === 'SPOT' ? 'penaltySpotOfFoul' : 'penaltyFinalSpot';
     return {
@@ -1989,7 +2000,12 @@ function commitPenaltyToken(
       },
     };
     if (source === 'immediate') return finalizePenaltyEntry(nextState, context);
-    const downDefault = penaltyDownInputCode(nextState.tokens.penaltyDownConsequence ?? defaultPenaltyDownConsequence(nextState.tokens.penaltyDefinition));
+    const downDefault = penaltyDownInputCode(nextState.tokens.penaltyDownConsequence ?? defaultPenaltyDownConsequence(
+      nextState.tokens.penaltyDefinition,
+      nextState.tokens.penaltyEnforcedFrom,
+      nextState.tokens.penaltyTeam,
+      context.play.actionTeam,
+    ));
     return {
       state: {
         ...nextState,
@@ -2003,7 +2019,23 @@ function commitPenaltyToken(
   if (state.currentStep === 'penaltyDown') {
     const downConsequence = parsePenaltyDownConsequence(state.currentToken);
     if (!downConsequence) {
-      return { state: tokenError(state, 'INVALID_DOWN_CONSEQUENCE', 'Down must be R, L, or A.', 'penalties.downConsequence') };
+      return { state: tokenError(state, 'INVALID_DOWN_CONSEQUENCE', 'Down must be R, L, A, or D.', 'penalties.downConsequence') };
+    }
+    if (
+      downConsequence === 'DOWN_COUNTS'
+      && (
+        state.tokens.penaltyEnforcedFrom !== 'END'
+        || state.tokens.penaltyTeam !== context.play.actionTeam
+      )
+    ) {
+      return {
+        state: tokenError(
+          state,
+          'INVALID_DOWN_CONSEQUENCE',
+          'Down Counts is available only for an offensive foul enforced from the succeeding spot.',
+          'penalties.downConsequence',
+        ),
+      };
     }
     return finalizePenaltyEntry({
       ...baseActiveState(state),
@@ -5207,6 +5239,7 @@ function buildSingleDraftPenalty(
     penalty.automaticFirstDown = penalty.downConsequence === 'AUTO_FIRST';
     penalty.lossOfDown = penalty.downConsequence === 'LOSS_OF_DOWN';
     penalty.replayDown = penalty.downConsequence === 'REPEAT';
+    penalty.downCounts = penalty.downConsequence === 'DOWN_COUNTS';
   }
 
   if (penalty.ejected) {
@@ -5786,9 +5819,15 @@ function defaultPenaltyEnforcement(definition: FootballPenaltyTableEntry | undef
   return 'PREVIOUS';
 }
 
-function defaultPenaltyDownConsequence(definition: FootballPenaltyTableEntry | undefined): PenaltyDownConsequenceSelection {
+function defaultPenaltyDownConsequence(
+  definition: FootballPenaltyTableEntry | undefined,
+  enforcedFrom?: PenaltyEnforcedFromSelection,
+  penaltyTeam?: TeamCode,
+  actionTeam?: TeamCode,
+): PenaltyDownConsequenceSelection {
   if (definition?.lossOfDown) return 'LOSS_OF_DOWN';
   if (definition?.automaticFirstDown) return 'AUTO_FIRST';
+  if (enforcedFrom === 'END' && penaltyTeam && penaltyTeam === actionTeam) return 'DOWN_COUNTS';
   return 'REPEAT';
 }
 
@@ -5801,6 +5840,7 @@ function penaltyEnforcedFromInputCode(value: PenaltyEnforcedFromSelection | unde
 function penaltyDownInputCode(value: PenaltyDownConsequenceSelection | undefined): string {
   if (value === 'LOSS_OF_DOWN') return 'L';
   if (value === 'AUTO_FIRST') return 'A';
+  if (value === 'DOWN_COUNTS') return 'D';
   return 'R';
 }
 
@@ -5825,6 +5865,7 @@ function parsePenaltyDownConsequence(value: string): PenaltyDownConsequenceSelec
   if (normalized === 'R' || normalized === 'REPEAT' || normalized === 'REPEAT DOWN') return 'REPEAT';
   if (normalized === 'L' || normalized === 'LOSS' || normalized === 'LOSS OF DOWN') return 'LOSS_OF_DOWN';
   if (normalized === 'A' || normalized === 'AUTO' || normalized === 'AUTO 1ST' || normalized === 'AUTO FIRST') return 'AUTO_FIRST';
+  if (normalized === 'D' || normalized === 'DOWN COUNTS') return 'DOWN_COUNTS';
   return null;
 }
 

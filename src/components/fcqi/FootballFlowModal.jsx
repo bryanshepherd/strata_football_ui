@@ -503,7 +503,7 @@ const stepCopy = {
   penaltyDown: {
     title: 'Down',
     label: 'Down',
-    helper: 'Choose repeat down, loss of down, or automatic first down.',
+    helper: 'Choose repeat down, loss of down, automatic first down, or down counts when available.',
     placeholder: 'R',
   },
   offsettingSecondName: {
@@ -716,6 +716,13 @@ const penaltyDownButtons = [
   { label: 'Auto 1st Down', hotkey: 'A', value: 'A' },
 ];
 
+const downCountsButton = {
+  label: 'Down Counts',
+  description: 'The completed play stands. Apply the normal next-down or series result, then enforce the foul from the succeeding spot.',
+  hotkey: 'D',
+  value: 'D',
+};
+
 const offsettingPlayCountsButtons = [
   { label: 'Play Counts', hotkey: 'Y', value: 'Y' },
   { label: 'No Play', hotkey: 'N', value: 'N' },
@@ -757,6 +764,7 @@ export default function FootballFlowModal({
   onTokenCommit,
   progressSteps = [],
   penaltyRuleset = 'NCAA',
+  actionTeam,
   teamAliases,
   teamNames,
 }) {
@@ -765,7 +773,7 @@ export default function FootballFlowModal({
   const selectedPrefillRef = useRef(null);
   const aliases = normalizeTeamAliases(teamAliases);
   const activeStep = state.currentStep ? stepCopyForState(state, aliases, teamNames) : null;
-  const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state);
+  const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state, actionTeam);
   const buttonOnly = Boolean(activeButtons);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
@@ -874,7 +882,14 @@ export default function FootballFlowModal({
                 onClick={() => onTokenCommit(button.value)}
                 type="button"
               >
-                <span>{button.label}</span>
+                <span className="min-w-0">
+                  <span className="block">{button.label}</span>
+                  {button.description && (
+                    <span className="mt-1 block text-xs font-medium leading-5 text-zinc-600">
+                      {button.description}
+                    </span>
+                  )}
+                </span>
                 <span className="grid h-7 min-w-7 place-items-center rounded border border-zinc-300 bg-zinc-50 px-2 text-xs font-black">
                   {button.hotkey}
                 </span>
@@ -1002,7 +1017,7 @@ const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, q
   </div>
 );
 
-function resultButtonsForStep(step, aliases, teamNames, state) {
+function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'result') return rushResultButtons;
   if (step === 'passResult') return passResultButtons;
   if (step === 'completeResult') return completeResultButtons;
@@ -1034,7 +1049,12 @@ function resultButtonsForStep(step, aliases, teamNames, state) {
   if (step === 'penaltyResolution') return penaltyResolutionButtons;
   if (step === 'penaltyEjected') return penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
-  if (step === 'penaltyDown') return penaltyDownButtons;
+  if (step === 'penaltyDown') return (
+    state?.tokens?.penaltyEnforcedFrom === 'END'
+    && state?.tokens?.penaltyTeam === actionTeam
+      ? [...penaltyDownButtons, downCountsButton]
+      : penaltyDownButtons
+  );
   if (step === 'offsettingPlayCounts') return offsettingPlayCountsButtons;
   if (step === 'gameControlMenu') return gameControlMenuButtons;
   if (step === 'gameControlQuarterMenu') return quarterFunctionButtons;

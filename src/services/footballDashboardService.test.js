@@ -856,6 +856,55 @@ describe('local football test-game projection', () => {
     });
   });
 
+  it('counts the completed play and advances the down normally for an offensive succeeding-spot foul', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 2,
+      distance: 6,
+      yardLine: 'H44',
+      lineToGain: '50',
+    };
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-DOWN-COUNTS-1', {
+      type: 'rush',
+      subtype: null,
+      participants: {
+        primary: { playerId: 'H-22', team: 'H', role: 'rusher' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'outOfBounds', yards: 3, endYardLine: 'H47' },
+      penalties: [{
+        penaltyId: 'LOCAL-DOWN-COUNTS-PENALTY-1',
+        code: 'UNS',
+        team: 'H',
+        status: 'accepted',
+        yards: 15,
+        enforcedFrom: 'succeedingSpot',
+        finalSpot: 'H32',
+        downCounts: true,
+      }],
+    }));
+
+    expect(response.projection).toMatchObject({ yardsGained: 3, firstDown: false });
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'H',
+      down: 3,
+      yardLine: 'H32',
+    });
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      rushAttempts: 1,
+      rushYards: 3,
+      plays: 1,
+      yards: 3,
+    });
+    expect(response.gameEnvelope.events.at(-1).penalties[0].downCounts).toBe(true);
+  });
+
   it('classifies a rush to the opponent goal line, scores it, and sets up the PAT and kickoff', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.game.teams.H.score = 0;

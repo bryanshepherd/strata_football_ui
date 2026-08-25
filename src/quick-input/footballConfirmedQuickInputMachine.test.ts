@@ -920,6 +920,46 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it('defaults an offensive succeeding-spot foul to Down Counts and rejects it elsewhere', () => {
+    const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
+    const downCounts = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Holding', 'H', 'A', '', 'S', 'H41'],
+    );
+
+    expect(downCounts).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'penaltyDown',
+      currentToken: 'D',
+      tokens: { penaltyDownConsequence: 'DOWN_COUNTS' },
+    });
+
+    const accepted = commitPenaltyTokens(downCounts, ['D']);
+    expect(accepted.status).toBe('summary.reviewing');
+    expect(accepted.draft?.penalties[0]).toMatchObject({
+      team: 'H',
+      enforcedFrom: 'END',
+      downConsequence: 'DOWN_COUNTS',
+      downCounts: true,
+      replayDown: false,
+      automaticFirstDown: false,
+      lossOfDown: false,
+    });
+    expect(accepted.summary?.summaryText).toContain('down counts');
+
+    const defensive = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Holding', 'V', 'A', '', 'S', 'V40', 'D'],
+    );
+    expect(defensive).toMatchObject({
+      status: 'token.error',
+      error: {
+        code: 'INVALID_DOWN_CONSEQUENCE',
+        message: 'Down Counts is available only for an offensive foul enforced from the succeeding spot.',
+      },
+    });
+  });
+
   it('accepted queued spot-of-foul penalty preserves signed derived yardage', () => {
     const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
     const negative = commitPenaltyTokens(startQueuedPenalty(queued), ['Holding', 'H', 'A', '', 'F', 'V45', 'H45', 'R']);

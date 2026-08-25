@@ -39,6 +39,7 @@ export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): Canonica
     ...(penalty.automaticFirstDown || penalty.downConsequence === 'AUTO_FIRST' ? { automaticFirstDown: true } : {}),
     ...(penalty.lossOfDown || penalty.downConsequence === 'LOSS_OF_DOWN' ? { lossOfDown: true } : {}),
     ...(replayDown ? { replayDown: true } : {}),
+    ...(penalty.downCounts || penalty.downConsequence === 'DOWN_COUNTS' ? { downCounts: true } : {}),
     ...(notes ? { notes } : {}),
   };
 }

@@ -355,6 +355,7 @@ export type DraftPenalty = {
   automaticFirstDown?: boolean;
   lossOfDown?: boolean;
   replayDown?: boolean;
+  downCounts?: boolean;
   liveBall?: boolean;
   deadBall?: boolean;
   ejectionable?: boolean;
@@ -381,7 +382,7 @@ export type DraftPenaltyOffsetting = {
   previousPlayCounts: boolean;
 };
 
-export type DraftPenaltyDownConsequence = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST';
+export type DraftPenaltyDownConsequence = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS';
 
 export type DraftWarning = {
   code: DraftWarningCode;
@@ -607,6 +608,12 @@ const PENALTY_ENFORCEMENT_SPOTS = new Set<DraftPenaltyEnforcementSpot>([
 ]);
 
 const PENALTY_STATUSES = new Set<DraftPenaltyStatus>(['accepted', 'declined', 'offsetting', 'pending']);
+const PENALTY_DOWN_CONSEQUENCES = new Set<DraftPenaltyDownConsequence>([
+  'REPEAT',
+  'LOSS_OF_DOWN',
+  'AUTO_FIRST',
+  'DOWN_COUNTS',
+]);
 
 export function validateFootballDraftIntent(input: unknown): FootballIntentValidationResult {
   const errors: FootballIntentValidationError[] = [];
@@ -1044,6 +1051,31 @@ function validatePenalties(
 
     if (!PENALTY_STATUSES.has(penalty.status as DraftPenaltyStatus)) {
       errors.push(error('INVALID_PENALTY', `${field}.status is invalid`, `${field}.status`));
+    }
+
+    if (
+      penalty.downConsequence !== undefined
+      && !PENALTY_DOWN_CONSEQUENCES.has(penalty.downConsequence as DraftPenaltyDownConsequence)
+    ) {
+      errors.push(error('INVALID_PENALTY', `${field}.downConsequence is invalid`, `${field}.downConsequence`));
+    }
+
+    if (penalty.downConsequence === 'DOWN_COUNTS') {
+      const actionTeam = isRecord(play) && isTeamCode(play.actionTeam) ? play.actionTeam : null;
+      if (penalty.enforcedFrom !== 'END' || penalty.team !== actionTeam) {
+        errors.push(error(
+          'INVALID_PENALTY',
+          `${field}.downConsequence DOWN_COUNTS requires a succeeding-spot foul by the offensive team`,
+          `${field}.downConsequence`,
+        ));
+      }
+      if (penalty.downCounts !== true) {
+        errors.push(error(
+          'INVALID_PENALTY',
+          `${field}.downCounts must be true when downConsequence is DOWN_COUNTS`,
+          `${field}.downCounts`,
+        ));
+      }
     }
 
     if (penalty.status === 'pending') {
