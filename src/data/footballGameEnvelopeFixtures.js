@@ -28,7 +28,6 @@ const baseRules = {
   kickoffSpot: 'H35',
   touchbackSpot: 'V20',
   kickoffTouchbackSpot: 'V25',
-  nonKickTouchbackSpot: 'V20',
   patSpot: 'V03',
   safetyKickSpot: 'H20',
   patReturns: true,

@@ -1052,7 +1052,6 @@ describe('footballConfirmedQuickInputMachine', () => {
       rules: {
         touchbackSpot: 'H22',
         kickoffTouchbackSpot: 'H30',
-        nonKickTouchbackSpot: 'H17',
       },
     });
     const withPunter = commitTokenWithContext(inputTokenWithContext(startPunt(), '9', context), context);
@@ -2654,7 +2653,6 @@ function makeContext(options: {
         kickoffSpot: 'H35',
         touchbackSpot: 'V20',
         kickoffTouchbackSpot: 'V25',
-        nonKickTouchbackSpot: 'V20',
         patSpot: 'V03',
         ...options.rules,
       },

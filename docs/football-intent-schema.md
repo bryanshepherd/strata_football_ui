@@ -185,7 +185,6 @@ type DraftRulesSnapshot = {
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
   kickoffTouchbackSpot?: Spot;
-  nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
 };
 
