@@ -7,6 +7,7 @@ import {
   calculateYardsGained,
   calculateYardsToGain,
   createLiveState,
+  parseSpot,
 } from '../utils/footballRulesEngine';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
@@ -455,12 +456,56 @@ const ownTeamRuleSpot = (spot, team) => {
   return yard ? `${team}${yard.padStart(2, '0')}` : spot;
 };
 
+const isUsableBallSpot = (spot) => {
+  const parsed = parseSpot(spot);
+  return parsed.valid && !parsed.goal;
+};
+
+const repairMissingOpeningKickoffSpot = (envelope) => {
+  const awaitingKickoff = envelope?.pregame?.gamePhase === 'awaitingKickoff'
+    || envelope?.liveState?.nextPlayContext === 'awaitingKickoff';
+  if (!awaitingKickoff || isUsableBallSpot(envelope?.liveState?.yardLine)) return envelope;
+
+  const kickoffAccepted = (envelope?.events || []).some((event) => (
+    event?.type === 'kickoff' && (!event.status || event.status === 'accepted')
+  ));
+  const toss = envelope?.pregame?.coinToss;
+  if (kickoffAccepted || toss?.status !== 'complete') return envelope;
+
+  const kickoffTeam = validTeamCode(envelope?.liveState?.kickoffTeam)
+    ? envelope.liveState.kickoffTeam
+    : toss.firstHalfKickingTeam;
+  if (!validTeamCode(kickoffTeam)) return envelope;
+
+  const kickoffSpot = ownTeamRuleSpot(envelope?.game?.rules?.kickoffSpot || 'H35', kickoffTeam);
+  if (!isUsableBallSpot(kickoffSpot)) return envelope;
+
+  return {
+    ...envelope,
+    liveState: {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: kickoffSpot,
+      lineToGain: null,
+      goalToGo: false,
+      redZone: false,
+      driveId: null,
+      pendingTryTeam: null,
+      kickoffTeam,
+      nextPlayContext: 'awaitingKickoff',
+    },
+  };
+};
+
 export function normalizeFootballScoringSetupEnvelope(envelope) {
-  const replayedStats = repairFootballStatsFromCompleteEventLog(envelope);
-  const repairedStats = repairFootballPossessionTimeFromDrives(envelope, replayedStats);
-  const normalizedEnvelope = repairedStats === envelope?.stats
-    ? envelope
-    : { ...envelope, stats: repairedStats };
+  const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(envelope);
+  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedOpeningEnvelope);
+  const repairedStats = repairFootballPossessionTimeFromDrives(repairedOpeningEnvelope, replayedStats);
+  const normalizedEnvelope = repairedStats === repairedOpeningEnvelope?.stats
+    ? repairedOpeningEnvelope
+    : { ...repairedOpeningEnvelope, stats: repairedStats };
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');

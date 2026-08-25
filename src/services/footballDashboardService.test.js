@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
+import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
   enqueueFootballServerSync,
   fetchFootballEnvelope,
@@ -1001,6 +1002,34 @@ describe('local football test-game projection', () => {
       yardLine: 'H35',
       pendingTryTeam: null,
       kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    });
+  });
+
+  it('repairs a missing opening kickoff spot from the completed coin toss', () => {
+    const envelope = clone(getGameEnvelopeFixture('pregame'));
+    envelope.game.rules.kickoffSpot = 'H35';
+    envelope.pregame = {
+      gamePhase: 'awaitingKickoff',
+      coinToss: {
+        ...createCoinTossRecord(),
+        status: 'complete',
+        firstHalfKickingTeam: 'V',
+        firstHalfReceivingTeam: 'H',
+      },
+      starters: {},
+    };
+    envelope.liveState = {
+      ...envelope.liveState,
+      yardLine: '',
+      kickoffTeam: null,
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    expect(normalizeFootballScoringSetupEnvelope(envelope).liveState).toMatchObject({
+      possession: null,
+      yardLine: 'V35',
+      kickoffTeam: 'V',
       nextPlayContext: 'awaitingKickoff',
     });
   });

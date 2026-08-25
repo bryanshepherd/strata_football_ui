@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, vi } from 'vitest';
 import { gameEnvelopeFixtures } from '../data/footballGameEnvelopeFixtures';
+import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
   createFootballDashboardGame,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
@@ -823,6 +824,32 @@ describe('FootballScorerShell', () => {
     fireEvent.keyDown(window, { key: 'k', code: 'KeyK' });
     expect(screen.getByRole('heading', { name: 'Away Chooses Direction' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: /kick type/i })).not.toBeInTheDocument();
+  });
+
+  it('blocks kickoff entry when an awaiting-kickoff envelope has no ball spot', () => {
+    const fixture = gameEnvelopeFixtures.pregame;
+    const originalPregame = fixture.pregame;
+    const originalLiveState = fixture.liveState;
+    fixture.pregame = {
+      gamePhase: 'awaitingKickoff',
+      coinToss: { ...createCoinTossRecord(), status: 'inProgress' },
+      starters: {},
+    };
+    fixture.liveState = {
+      ...fixture.liveState,
+      yardLine: '',
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    try {
+      renderScorer('/scorer?fixture=pregame');
+
+      expect(screen.getByRole('button', { name: /^kick k$/i })).toBeDisabled();
+      expect(screen.getByText(/kickoff spot is not set/i)).toBeInTheDocument();
+    } finally {
+      fixture.pregame = originalPregame;
+      fixture.liveState = originalLiveState;
+    }
   });
 
   it('game control emergency builds a clock-stop summary and starters opens the optional team flow', () => {

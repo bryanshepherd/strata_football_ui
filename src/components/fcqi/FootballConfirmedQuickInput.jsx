@@ -3,6 +3,7 @@ import {
   createInitialFootballQuickInputState,
   transitionFootballQuickInput,
 } from '../../quick-input/footballConfirmedQuickInputMachine';
+import { isCanonicalSpot } from '../../quick-input/footballIntentSchema';
 import { submitFootballFcqiEvent } from '../../quick-input/footballSubmitAdapter';
 import { calculateYardsGained } from '../../utils/footballRulesEngine';
 import FootballDuplicatePlayerModal from './FootballDuplicatePlayerModal';
@@ -157,6 +158,8 @@ export default function FootballConfirmedQuickInput({
     [envelope, startMeta, teamAliases],
   );
   const gamePhase = gamePhaseForEnvelope(envelope);
+  const kickoffContextReady = isCanonicalSpot(envelope.liveState?.yardLine)
+    && envelope.liveState.yardLine !== 'goal';
   const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
     && Boolean(envelope.liveState?.pendingTryTeam);
   const showPatPrompt = awaitingPatTry && !isActiveFcqiPlayFlow(currentState);
@@ -230,7 +233,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startKick = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'kickoff')) return;
+    if (!isPlayFamilyAvailable(gamePhase, 'kickoff') || !kickoffContextReady) return;
     const nextStartMeta = createStartMeta('kick', startedBy, 'K');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -472,7 +475,9 @@ export default function FootballConfirmedQuickInput({
           )}
           {PLAY_BUTTONS.map((button) => {
             const family = button.label === 'Kick' ? 'kickoff' : button.label === 'Game Control' ? 'gameControl' : button.label.toLowerCase();
-            const enabled = button.enabled && isPlayFamilyAvailable(gamePhase, family);
+            const enabled = button.enabled
+              && isPlayFamilyAvailable(gamePhase, family)
+              && (family !== 'kickoff' || kickoffContextReady);
             return (
             <button
               key={button.label}
@@ -510,8 +515,14 @@ export default function FootballConfirmedQuickInput({
         </div>
 
         {(gamePhase === 'pregame' || gamePhase === 'awaitingKickoff') && (
-          <div className="rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
-            {gamePhase === 'awaitingKickoff'
+          <div className={`rounded border px-4 py-3 text-sm ${
+            gamePhase === 'awaitingKickoff' && !kickoffContextReady
+              ? 'border-amber-300 bg-amber-50 text-amber-950'
+              : 'border-sky-200 bg-sky-50 text-sky-950'
+          }`}>
+            {gamePhase === 'awaitingKickoff' && !kickoffContextReady
+              ? 'Kickoff spot is not set. Review and save the coin toss before entering the kickoff.'
+              : gamePhase === 'awaitingKickoff'
               ? 'Awaiting Kickoff: kickoff and applicable dead-ball penalty input are enabled; scrimmage input is blocked.'
               : 'Complete the coin toss in Pregame before kickoff input is available.'}
           </div>
