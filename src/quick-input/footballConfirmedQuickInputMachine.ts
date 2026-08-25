@@ -23,9 +23,12 @@ import {
 } from './footballEventBuilder';
 import {
   findFootballPenaltyDefinition,
+  footballPenaltyRulesetFromRules,
+  resolveFootballPenaltyDefinitionForTeam,
   type FootballPenaltyTableEntry,
 } from './penaltyTable';
 import { isPlayFamilyAvailable, type FootballGamePhase } from '../pregame/footballPregame';
+import { calculateFootballPenaltyFinalSpot } from '../utils/footballPenaltyEnforcement';
 
 export type FootballQuickInputStateName =
   | 'idle'
@@ -1712,7 +1715,7 @@ function commitPenaltyToken(
   context: FootballQuickInputContext,
 ): FootballQuickInputTransitionResult {
   if (state.currentStep === 'penaltyName') {
-    const selection = resolvePenaltySelection(state.currentToken);
+    const selection = resolvePenaltySelection(state.currentToken, context);
     if (!selection) {
       return { state: tokenError(state, 'MISSING_PENALTY_NAME', 'Penalty name is required', 'penalties.name') };
     }
@@ -1737,6 +1740,11 @@ function commitPenaltyToken(
     if (!team) {
       return { state: tokenError(state, 'INVALID_PENALTY_TEAM', 'Penalty team must be H or V', 'penalties.team') };
     }
+    const penaltyDefinition = resolveFootballPenaltyDefinitionForTeam(state.tokens.penaltyDefinition, {
+      penaltyTeam: team,
+      possession: context.play.possession ?? context.prePlay.possession ?? context.play.actionTeam,
+      ruleset: footballPenaltyRulesetFromRules(context.game.rules),
+    });
     return {
       state: {
         ...baseActiveState(state),
@@ -1746,6 +1754,8 @@ function commitPenaltyToken(
         tokens: {
           ...cloneTokens(state.tokens),
           penaltyTeam: team,
+          penaltyDefinition,
+          penaltyCode: penaltyDefinition?.code || state.tokens.penaltyCode,
         },
       },
     };
@@ -1805,7 +1815,7 @@ function commitPenaltyToken(
       ? penaltyEnforcedFromInputCode(defaultEnforcedFrom)
       : nextStep === 'penaltyFinalSpot'
         ? suggestedPenaltyFinalSpot(context, nextTokens, state.draft) ?? ''
-        : '';
+        : state.tokens.penaltyDefinition?.autoEjection ? 'Y' : '';
     const trimmed = state.currentToken.trim();
     if (!trimmed) {
       return {
@@ -1938,7 +1948,7 @@ function commitPenaltyToken(
   }
 
   if (state.currentStep === 'offsettingSecondName') {
-    const selection = resolvePenaltySelection(state.currentToken);
+    const selection = resolvePenaltySelection(state.currentToken, context);
     if (!selection) {
       return { state: tokenError(state, 'MISSING_OFFSETTING_PENALTY_NAME', 'Matching offsetting penalty name is required', 'penalties.1.name') };
     }
@@ -1963,6 +1973,11 @@ function commitPenaltyToken(
     if (!team) {
       return { state: tokenError(state, 'INVALID_OFFSETTING_TEAM', 'Matching offsetting penalty team must be H or V', 'penalties.1.team') };
     }
+    const offsettingSecondDefinition = resolveFootballPenaltyDefinitionForTeam(state.tokens.offsettingSecondDefinition, {
+      penaltyTeam: team,
+      possession: context.play.possession ?? context.prePlay.possession ?? context.play.actionTeam,
+      ruleset: footballPenaltyRulesetFromRules(context.game.rules),
+    });
     return {
       state: {
         ...baseActiveState(state),
@@ -1972,6 +1987,8 @@ function commitPenaltyToken(
         tokens: {
           ...cloneTokens(state.tokens),
           offsettingSecondTeam: team,
+          offsettingSecondDefinition,
+          offsettingSecondCode: offsettingSecondDefinition?.code || state.tokens.offsettingSecondCode,
         },
       },
     };
@@ -3330,6 +3347,8 @@ function advanceAfterPlayerCommit(
     ? penaltyEnforcedFromInputCode(tokens.penaltyEnforcedFrom)
     : role === 'penalizedPlayer' && nextStep === 'penaltyFinalSpot'
       ? suggestedPenaltyFinalSpot(context, tokens, state.draft) ?? ''
+      : role === 'penalizedPlayer' && nextStep === 'penaltyEjected' && tokens.penaltyDefinition?.autoEjection
+        ? 'Y'
       : nextStep === 'fieldGoalSpot'
         ? suggestedFieldGoalKickSpot(context) ?? ''
         : '';
@@ -5044,7 +5063,7 @@ function buildSingleDraftPenalty(
   const penalty: DraftPenalty = {
     penaltyId: input.penaltyId,
     team: input.team ?? context.play.actionTeam,
-    code: input.code ?? penaltyCodeFromName(input.name ?? 'Penalty'),
+    code: input.code || penaltyCodeFromName(input.name ?? 'Penalty'),
     name: input.name ?? 'Penalty',
     resolution: input.resolution,
     status: input.resolution,
@@ -5342,11 +5361,13 @@ function suggestedPenaltyFinalSpot(
     ?? context.prePlay.possession
     ?? context.play.possession
     ?? context.play.actionTeam;
-  const basisEngineSpot = spotToTeamEngineYard(basisSpot, possession);
-  if (typeof basisEngineSpot !== 'number') return undefined;
-
-  const signedPenaltyYards = penaltyTeam === possession ? -Math.abs(tableYards) : Math.abs(tableYards);
-  return engineYardToSpot(basisEngineSpot + signedPenaltyYards, possession);
+  return calculateFootballPenaltyFinalSpot({
+    enforcementSpot: basisSpot,
+    possession,
+    penaltyTeam,
+    yards: Math.abs(tableYards),
+    touchdown: baseDraft?.result.code === 'touchdown',
+  })?.spot;
 }
 
 function penaltyEnforcementBasisSpot(
@@ -5539,17 +5560,17 @@ function parsePatPassResult(value: string): PatPassResultSelection | null {
   return null;
 }
 
-function resolvePenaltySelection(value: string): {
+function resolvePenaltySelection(value: string, context: FootballQuickInputContext): {
   code: string;
   name: string;
   definition?: FootballPenaltyTableEntry;
 } | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const definition = findFootballPenaltyDefinition(trimmed);
+  const definition = findFootballPenaltyDefinition(trimmed, footballPenaltyRulesetFromRules(context.game.rules));
   if (definition) {
     return {
-      code: definition.code,
+      code: definition.code || penaltyCodeFromName(definition.name),
       name: definition.name,
       definition,
     };

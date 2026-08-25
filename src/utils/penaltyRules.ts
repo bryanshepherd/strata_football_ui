@@ -1,5 +1,6 @@
 import type { Penalty, PlayWithPenalties } from '../types/penalties';
 import { getPenaltyDef } from './penaltyTable';
+import { calculateFootballPenaltyFinalSpot } from './footballPenaltyEnforcement';
 
 export type PenaltyAnalysis = {
   kind: 'NONE' | 'OFFSET' | 'ENFORCED';
@@ -188,28 +189,6 @@ function enforceYardage(
   enforcementPoint: string,
   state: any
 ): string {
-  // Parse yard line (format: H25, V30, 50)
-  const parseYardLine = (yl: string): { team: 'H' | 'V' | '50', yards: number } => {
-    if (yl === '50') return { team: '50', yards: 50 };
-    
-    const team = yl[0] as 'H' | 'V';
-    const yards = parseInt(yl.substring(1));
-    return { team, yards };
-  };
-
-  const formatYardLine = (team: 'H' | 'V' | '50', yards: number): string => {
-    if (team === '50' || yards === 50) return '50';
-    if (yards <= 0) return `${team}00`; // Goal line
-    if (yards > 50) {
-      // Flip to other side
-      const oppositeTeam = team === 'H' ? 'V' : 'H';
-      return `${oppositeTeam}${String(100 - yards).padStart(2, '0')}`;
-    }
-    return `${team}${String(yards).padStart(2, '0')}`;
-  };
-
-  const start = parseYardLine(startYardLine);
-  
   // Determine enforcement spot based on enforcement point
   let enforcementSpot = startYardLine;
   switch (enforcementPoint) {
@@ -224,51 +203,13 @@ function enforceYardage(
       enforcementSpot = startYardLine;
   }
 
-  const enforcement = parseYardLine(enforcementSpot);
-  
-  // Calculate field position (0-100, where 0 is own goal, 100 is opponent goal)
-  const getFieldPosition = (yl: { team: 'H' | 'V' | '50', yards: number }, perspective: 'H' | 'V'): number => {
-    if (yl.team === '50') return 50;
-    if (yl.team === perspective) return yl.yards;
-    return 100 - yl.yards;
-  };
-
-  // Determine which team benefits from the penalty
-  const benefitingTeam = penaltyTeam === 'H' ? 'V' : 'H';
-  let fieldPos = getFieldPosition(enforcement, benefitingTeam);
-
-  // Apply penalty yardage
-  if (penaltyTeam === state.possession) {
-    // Offensive penalty - move back
-    fieldPos -= yards;
-  } else {
-    // Defensive penalty - move forward
-    fieldPos += yards;
-  }
-
-  // Apply half-the-distance rule
-  if (fieldPos >= 90 && penaltyTeam !== state.possession) {
-    // Half the distance to goal when enforcing toward opponent's goal
-    const distanceToGoal = 100 - getFieldPosition(enforcement, benefitingTeam);
-    fieldPos = getFieldPosition(enforcement, benefitingTeam) + (distanceToGoal / 2);
-  } else if (fieldPos <= 10 && penaltyTeam === state.possession) {
-    // Half the distance when enforcing toward own goal
-    const distanceToGoal = getFieldPosition(enforcement, benefitingTeam);
-    fieldPos = distanceToGoal / 2;
-  }
-
-  // Clamp field position
-  fieldPos = Math.max(1, Math.min(99, fieldPos));
-
-  // Convert back to yard line format
-  if (fieldPos === 50) {
-    return '50';
-  } else if (fieldPos < 50) {
-    return formatYardLine(benefitingTeam, Math.round(fieldPos));
-  } else {
-    const oppositeTeam = benefitingTeam === 'H' ? 'V' : 'H';
-    return formatYardLine(oppositeTeam, Math.round(100 - fieldPos));
-  }
+  const possession = state.possession === 'V' ? 'V' : 'H';
+  return calculateFootballPenaltyFinalSpot({
+    enforcementSpot: enforcementSpot as any,
+    possession,
+    penaltyTeam,
+    yards: Math.abs(yards),
+  })?.spot ?? startYardLine;
 }
 
 /**

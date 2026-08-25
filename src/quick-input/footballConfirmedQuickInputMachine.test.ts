@@ -488,7 +488,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       result: { code: 'accepted', endYardLine: 'H49' },
       penalties: [
         {
-          name: 'Offside',
+          name: 'Offsides',
           code: 'OFF',
           team: 'V',
           tableYards: 5,
@@ -506,7 +506,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.status).toBe('summary.reviewing');
-    expect(reviewing.summary?.summaryText).toContain('Penalty: Offside on VIS');
+    expect(reviewing.summary?.summaryText).toContain('Penalty: Offsides on VIS');
   });
 
   it('accepted immediate penalty does not ask for yards', () => {
@@ -550,7 +550,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     expect(state.status).toBe('draft.ready');
     expect(state.draft?.penalties[0]).toMatchObject({
-      name: 'Offside',
+      name: 'Offsides',
       code: 'OFF',
       resolution: 'declined',
       status: 'declined',
@@ -585,7 +585,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     const withPlayerSkipped = commitPenaltyTokens(withPenalty, ['Holding', 'H', 'A', '']);
 
     expect(withPlayerSkipped.currentStep).toBe('penaltyEnforcedFrom');
-    expect(withPlayerSkipped.currentToken).toBe('F');
+    expect(withPlayerSkipped.currentToken).toBe('P');
 
     const missingFoulSpot = commitPenaltyTokens(withPlayerSkipped, ['F', '']);
     expect(missingFoulSpot.status).toBe('token.error');
@@ -604,7 +604,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       code: 'HOLD',
       team: 'H',
       tableYards: 10,
-      defaultEnforcement: 'SPOT',
+      defaultEnforcement: 'PREVIOUS',
       yards: -10,
       source: 'queued',
       status: 'accepted',
@@ -650,7 +650,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
   it('succeeding-spot penalty prefills final spot from play end spot', () => {
     const queued = transition(completeRushDraft({ spot: 'V39' }), { type: 'QUEUE_PENALTY_REQUEST' });
-    const state = commitPenaltyTokens(startQueuedPenalty(queued), ['PF', 'V', 'A', '', 'N', 'S']);
+    const state = commitPenaltyTokens(startQueuedPenalty(queued), ['PF', 'V', 'A', '', 'S']);
 
     expect(state.status).toBe('token.awaiting');
     expect(state.currentStep).toBe('penaltyFinalSpot');
@@ -672,7 +672,7 @@ describe('footballConfirmedQuickInputMachine', () => {
   it('queued accepted penalty defaults enforcement from table', () => {
     const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
     const offside = commitPenaltyTokens(startQueuedPenalty(queued), ['OFF', 'V', 'A', '']);
-    const personalFoul = commitPenaltyTokens(startQueuedPenalty(queued), ['PF', 'V', 'A', '', 'N']);
+    const personalFoul = commitPenaltyTokens(startQueuedPenalty(queued), ['PF', 'V', 'A', '']);
 
     expect(offside.status).toBe('token.awaiting');
     expect(offside.currentStep).toBe('penaltyEnforcedFrom');
@@ -680,8 +680,29 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(offside.tokens.penaltyEnforcedFrom).toBe('PREVIOUS');
     expect(personalFoul.status).toBe('token.awaiting');
     expect(personalFoul.currentStep).toBe('penaltyEnforcedFrom');
-    expect(personalFoul.currentToken).toBe('S');
-    expect(personalFoul.tokens.penaltyEnforcedFrom).toBe('END');
+    expect(personalFoul.currentToken).toBe('P');
+    expect(personalFoul.tokens.penaltyEnforcedFrom).toBe('PREVIOUS');
+  });
+
+  it('prefills the catalog half-distance spot and statistical rounding near the goal line', () => {
+    const context = makeContext({ prePlay: { yardLine: 'V29' } });
+    const state = commitPenaltyTokens(
+      startPenalty('immediate', context),
+      ['Personal Foul', 'V', 'A', ''],
+      context,
+    );
+
+    expect(state.status).toBe('token.awaiting');
+    expect(state.currentStep).toBe('penaltyFinalSpot');
+    expect(state.currentToken).toBe('V14');
+  });
+
+  it('prefills Yes for catalog entries with automatic ejection', () => {
+    const state = commitPenaltyTokens(startPenalty('immediate'), ['Targeting', 'V', 'A', '']);
+
+    expect(state.status).toBe('token.awaiting');
+    expect(state.currentStep).toBe('penaltyEjected');
+    expect(state.currentToken).toBe('Y');
   });
 
   it('infers live-ball and dead-ball timing from the penalty entry flow', () => {

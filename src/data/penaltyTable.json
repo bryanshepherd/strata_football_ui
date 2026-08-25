@@ -1,238 +1,971 @@
-[
-  {
-    "code": "FKI",
-    "name": "Free Kick Infraction",
-    "liveBall": true,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "HOLD",
-    "name": "Holding",
-    "liveBall": true,
-    "yards": 10,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "DPI",
-    "name": "Defensive Pass Interference",
-    "liveBall": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": true,
-    "lossOfDown": false
-  },
-  {
-    "code": "OPI",
-    "name": "Offensive Pass Interference",
-    "liveBall": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "FS",
-    "name": "False Start",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "OFF",
-    "name": "Offside",
-    "liveBall": true,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "DH",
-    "name": "Defensive Holding",
-    "liveBall": true,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": true,
-    "lossOfDown": false
-  },
-  {
-    "code": "PF",
-    "name": "Personal Foul",
-    "liveBall": true,
-    "deadBall": true,
-    "ejectionable": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "END",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "RGH",
-    "name": "Roughing the Passer",
-    "liveBall": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "END",
-    "automaticFirstDown": true,
-    "lossOfDown": false
-  },
-  {
-    "code": "ILL",
-    "name": "Illegal Formation",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "DOG",
-    "name": "Delay of Game",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "ENC",
-    "name": "Encroachment",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "IG",
-    "name": "Intentional Grounding",
-    "liveBall": true,
-    "yards": 10,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": false,
-    "lossOfDown": true
-  },
-  {
-    "code": "TH",
-    "name": "Targeting",
-    "liveBall": true,
-    "ejectionable": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": true,
-    "lossOfDown": false
-  },
-  {
-    "code": "UC",
-    "name": "Unsportsmanlike Conduct",
-    "liveBall": true,
-    "deadBall": true,
-    "ejectionable": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "END",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "IBB",
-    "name": "Illegal Block in the Back",
-    "liveBall": true,
-    "yards": 10,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "CLI",
-    "name": "Clipping",
-    "liveBall": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "SPOT",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "FMB",
-    "name": "Face Mask",
-    "liveBall": true,
-    "yards": 15,
-    "requiresYards": true,
-    "requiresSpot": true,
-    "defaultEnforcement": "END",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "12M",
-    "name": "12 Men on Field",
-    "liveBall": true,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "ILS",
-    "name": "Illegal Shift",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  },
-  {
-    "code": "ILM",
-    "name": "Illegal Motion",
-    "liveBall": false,
-    "yards": 5,
-    "requiresYards": true,
-    "requiresSpot": false,
-    "defaultEnforcement": "PREVIOUS",
-    "automaticFirstDown": false,
-    "lossOfDown": false
-  }
-]
+{
+  "penalties": [
+    {
+      "code": "",
+      "name": "Illegal Scrimmage Kick",
+      "team": "offense",
+      "NCAA": {
+        "yards": 5,
+        "down": "loss",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Forward Pass",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "loss",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "loss",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Intentional Grounding",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "loss",
+        "enforcement": "spot",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 0,
+        "down": "loss",
+        "enforcement": "spot",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Batting",
+      "team": "both",
+      "NCAA": {
+        "yards": 10,
+        "down": "loss",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Kicking",
+      "team": "both",
+      "NCAA": {
+        "yards": 10,
+        "down": "loss",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Delay of Game",
+      "team": "both",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Substitution Infraction (Illegal Substitution)",
+      "team": "both",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Free Kick Infraction",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Invalid Fair Catch",
+      "team": "defense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "False Start",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Snap Infraction",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Encroachment",
+      "team": "both",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Offsides",
+      "team": "both",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Motion",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Formation",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Shift",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Ineligible Downfield on Pass",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Running into the Kicker",
+      "team": "defense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Running into the Snapper",
+      "team": "defense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Sideline Interference (Second Infraction)",
+      "team": "both",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Helping Ball Carrier",
+      "team": "offense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Block",
+      "team": "both",
+      "NFHS": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "spot",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "spot",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Holding",
+      "team": "offense",
+      "NFHS": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Block in the Back",
+      "team": "offense",
+      "NFHS": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "spot",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "spot",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Use of Hands",
+      "team": "defense",
+      "NFHS": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 10,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Defensive Holding",
+      "team": "defense",
+      "NFHS": {
+        "yards": 10,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 10,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Unsportsmanlike Conduct",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Unsportsmanlike Conduct",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Kick Catch Interference",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Personal Foul",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Personal Foul",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Offensive Pass Interference",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Defensive Pass Interference",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 0,
+        "down": "auto",
+        "enforcement": "spot",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Targeting",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": true
+      }
+    },
+    {
+      "code": "",
+      "name": "Clipping",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Clipping",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Block Below the Waist",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Block Below the Waist",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Face Mask",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Incidental Face Mask",
+      "team": "defense",
+      "NFHS": {
+        "yards": 5,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Hands to the Face",
+      "team": "offense",
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Hands to the Face",
+      "team": "defense",
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Roughing the Passer",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Roughing the Kicker",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Roughing the Holder",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Roughing the Snapper",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Chop Block",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Chop Block",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Leverage",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Leverage",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Leaping",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Leaping",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Horse-Collar Tackle",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Blind-Side Block",
+      "team": "both",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Illegal Participation",
+      "team": "both",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "previous",
+        "eject": false
+      }
+    },
+    {
+      "code": "",
+      "name": "Fighting",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": true
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": true
+      }
+    },
+    {
+      "code": "",
+      "name": "Fighting",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": true
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": true
+      }
+    },
+    {
+      "code": "",
+      "name": "Intentionally Contacting an Official",
+      "team": "offense",
+      "NFHS": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "repeat",
+        "enforcement": "succeeding",
+        "eject": true
+      }
+    },
+    {
+      "code": "",
+      "name": "Intentionally Contacting an Official",
+      "team": "defense",
+      "NFHS": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": false
+      },
+      "NCAA": {
+        "yards": 15,
+        "down": "auto",
+        "enforcement": "succeeding",
+        "eject": true
+      }
+    }
+  ]
+}

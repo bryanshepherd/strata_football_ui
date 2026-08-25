@@ -10,6 +10,7 @@ import FootballFlowModal from './FootballFlowModal';
 import { buildFootballFlowProgressSteps } from './FootballFlowProgress';
 import FootballPlaySummaryModal from './FootballPlaySummaryModal';
 import { gamePhaseForEnvelope, isPlayFamilyAvailable, pregameForEnvelope } from '../../pregame/footballPregame';
+import { footballPenaltyRulesetFromRules } from '../../quick-input/penaltyTable';
 
 const PLAY_BUTTONS = [
   { label: 'Rush', hotkey: 'R', enabled: true },
@@ -591,6 +592,7 @@ export default function FootballConfirmedQuickInput({
         onStepClick={jumpToStep}
         onTokenCommit={commitToken}
         prePlaySpot={envelope.liveState.yardLine}
+        penaltyRuleset={footballPenaltyRulesetFromRules(envelope.game.rules)}
         progressSteps={progressSteps}
         state={currentState}
         teamAliases={teamAliases}

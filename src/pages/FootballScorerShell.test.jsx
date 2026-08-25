@@ -1406,7 +1406,7 @@ describe('FootballScorerShell', () => {
       fireEvent.submit(finalSpotInput.closest('form'));
 
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
-      expect(summaryDialog).toHaveTextContent(/penalty: offside on vis/i);
+      expect(summaryDialog).toHaveTextContent(/penalty: offsides on vis/i);
       expect(summaryDialog).toHaveTextContent(/4 yards/i);
       expect(summaryDialog).toHaveTextContent(/from the previous spot/i);
 

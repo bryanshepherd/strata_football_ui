@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   findFootballPenaltyDefinition,
+  listFootballPenaltyCatalog,
   listFootballPenaltyTable,
   resetFootballPenaltyTableForTests,
   saveFootballPenaltyDefinition,
@@ -10,16 +11,41 @@ import {
 afterEach(() => resetFootballPenaltyTableForTests());
 
 describe('penaltyTable', () => {
-  it('loads expected seed entries', () => {
+  it('loads the agreed catalog schema without inventing pending codes', () => {
+    const catalog = listFootballPenaltyCatalog();
+    const allowedEntryKeys = ['code', 'name', 'team', 'NFHS', 'NCAA'];
+    const allowedRuleKeys = ['yards', 'down', 'enforcement', 'eject'];
+
+    expect(catalog).toHaveLength(59);
+    expect(catalog.filter((entry) => entry.NCAA)).toHaveLength(58);
+    expect(catalog.filter((entry) => entry.NFHS)).toHaveLength(54);
+    expect(catalog.every((entry) => entry.code === '')).toBe(true);
+    expect(catalog.some((entry) => entry.name === 'Sideline Warning')).toBe(false);
+    catalog.forEach((entry) => {
+      expect(Object.keys(entry).every((key) => allowedEntryKeys.includes(key))).toBe(true);
+      expect(['offense', 'defense', 'both']).toContain(entry.team);
+      for (const ruleset of ['NFHS', 'NCAA'] as const) {
+        const rule = entry[ruleset];
+        if (!rule) continue;
+        expect(Object.keys(rule).sort()).toEqual(allowedRuleKeys.slice().sort());
+        expect(['repeat', 'loss', 'auto']).toContain(rule.down);
+        expect(['previous', 'spot', 'succeeding']).toContain(rule.enforcement);
+        expect(typeof rule.eject).toBe('boolean');
+      }
+    });
+  });
+
+  it('adapts the selected ruleset to quick-input defaults', () => {
     const table = listFootballPenaltyTable();
 
-    expect(table.length).toBeGreaterThan(10);
+    expect(table).toHaveLength(58);
+    expect(listFootballPenaltyTable('NFHS')).toHaveLength(54);
     expect(table).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'HOLD',
           name: 'Holding',
-          defaultEnforcement: 'SPOT',
+          defaultEnforcement: 'PREVIOUS',
           yards: 10,
         }),
         expect.objectContaining({
@@ -45,18 +71,61 @@ describe('penaltyTable', () => {
         }),
       ]),
     );
+
+    expect(findFootballPenaltyDefinition('Intentional Grounding', 'NCAA')).toMatchObject({
+      yards: 0,
+      lossOfDown: true,
+      defaultEnforcement: 'SPOT',
+    });
+    expect(findFootballPenaltyDefinition('Intentional Grounding', 'NFHS')).toMatchObject({
+      yards: 5,
+      lossOfDown: true,
+      defaultEnforcement: 'SPOT',
+    });
+    expect(findFootballPenaltyDefinition('Incidental Face Mask', 'NCAA')).toBeNull();
+    expect(findFootballPenaltyDefinition('Incidental Face Mask', 'NFHS')).toMatchObject({ yards: 5 });
   });
 
   it('selects penalties by code or name', () => {
     expect(findFootballPenaltyDefinition('OFF')).toMatchObject({
       code: 'OFF',
-      name: 'Offside',
+      name: 'Offsides',
     });
     expect(findFootballPenaltyDefinition('offside')).toMatchObject({
       code: 'OFF',
-      name: 'Offside',
+      name: 'Offsides',
     });
     expect(findFootballPenaltyDefinition('missing')).toBeNull();
+  });
+
+  it('keeps conditional offense and defense defaults distinct', () => {
+    expect(findFootballPenaltyDefinition('Unsportsmanlike Conduct', {
+      ruleset: 'NCAA',
+      teamRole: 'offense',
+    })).toMatchObject({ team: 'offense', automaticFirstDown: false });
+    expect(findFootballPenaltyDefinition('Unsportsmanlike Conduct', {
+      ruleset: 'NCAA',
+      teamRole: 'defense',
+    })).toMatchObject({ team: 'defense', automaticFirstDown: true });
+
+    expect(findFootballPenaltyDefinition('Targeting', 'NCAA')).toMatchObject({
+      autoEjection: true,
+      ejectionable: true,
+    });
+    expect(findFootballPenaltyDefinition('Targeting', 'NFHS')).toMatchObject({
+      autoEjection: false,
+      ejectionable: false,
+    });
+  });
+
+  it('selects pending-code entries by their internal lookup key while keeping the catalog code blank', () => {
+    const entry = searchFootballPenaltyTable('Helping Ball Carrier')[0];
+
+    expect(entry).toMatchObject({ code: '', name: 'Helping Ball Carrier' });
+    expect(findFootballPenaltyDefinition(entry.lookupKey)).toMatchObject({
+      code: '',
+      name: 'Helping Ball Carrier',
+    });
   });
 
   it('filters penalties by code or name', () => {

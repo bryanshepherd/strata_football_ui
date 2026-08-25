@@ -28,6 +28,7 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
   const [entries, setEntries] = useState(() => listFootballPenaltyTable());
   const [filter, setFilter] = useState('');
   const [previousCode, setPreviousCode] = useState(null);
+  const [previousLookupKey, setPreviousLookupKey] = useState(null);
   const [form, setForm] = useState(() => emptyPenalty());
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -37,6 +38,7 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
     setEntries(listFootballPenaltyTable());
     setFilter('');
     setPreviousCode(null);
+    setPreviousLookupKey(null);
     setForm(emptyPenalty());
     setMessage('');
     setError('');
@@ -59,6 +61,7 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
 
   const startNew = () => {
     setPreviousCode(null);
+    setPreviousLookupKey(null);
     setForm(emptyPenalty());
     setMessage('');
     setError('');
@@ -66,12 +69,17 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
 
   const editPenalty = (penalty) => {
     setPreviousCode(penalty.code);
+    setPreviousLookupKey(penalty.lookupKey);
     setForm(formForPenalty(penalty));
     setMessage('');
     setError('');
   };
 
-  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const update = (field, value) => setForm((current) => ({
+    ...current,
+    [field]: value,
+    ...(field === 'ejectionable' ? { autoEjection: value } : {}),
+  }));
 
   const save = (event) => {
     event.preventDefault();
@@ -82,9 +90,13 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
         ...form,
         code: form.code,
         yards: form.yards === '' ? undefined : Number(form.yards),
-      }, { previousCode: previousCode || undefined });
+      }, {
+        previousCode: previousCode || undefined,
+        previousLookupKey: previousLookupKey || undefined,
+      });
       setEntries(listFootballPenaltyTable());
       setPreviousCode(saved.code);
+      setPreviousLookupKey(saved.lookupKey);
       setForm(formForPenalty(saved));
       setMessage(`${saved.name} (${saved.code}) saved.`);
     } catch (saveError) {
@@ -139,13 +151,13 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
               {visibleEntries.map((entry) => (
                 <button
                   className={`mb-1 w-full rounded border px-3 py-2 text-left hover:bg-white ${
-                    previousCode === entry.code ? 'border-emerald-600 bg-emerald-50' : 'border-transparent'
+                    previousLookupKey === entry.lookupKey ? 'border-emerald-600 bg-emerald-50' : 'border-transparent'
                   }`}
-                  key={entry.code}
+                  key={entry.lookupKey}
                   onClick={() => editPenalty(entry)}
                   type="button"
                 >
-                  <span className="block text-xs font-black text-emerald-800">{entry.code}</span>
+                  <span className="block text-xs font-black text-emerald-800">{entry.code || 'Code pending'}</span>
                   <span className="block text-sm font-semibold text-zinc-900">{entry.name}</span>
                 </button>
               ))}
@@ -153,7 +165,7 @@ export default function FootballPenaltyCodeEditorModal({ onClose, open }) {
           </aside>
 
           <form className="min-h-0 overflow-y-auto p-5" onSubmit={save}>
-            <h3 className="text-lg font-semibold text-zinc-950">{previousCode ? 'Edit Penalty Type' : 'Add Penalty Type'}</h3>
+            <h3 className="text-lg font-semibold text-zinc-950">{previousLookupKey ? 'Edit Penalty Type' : 'Add Penalty Type'}</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-semibold text-zinc-800">
                 Penalty Code

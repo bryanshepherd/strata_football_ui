@@ -731,6 +731,7 @@ export default function FootballFlowModal({
   onStepClick,
   onTokenCommit,
   progressSteps = [],
+  penaltyRuleset = 'NCAA',
   teamAliases,
   teamNames,
 }) {
@@ -742,7 +743,7 @@ export default function FootballFlowModal({
   const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state);
   const buttonOnly = Boolean(activeButtons);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
-    ? searchFootballPenaltyTable(value, 8)
+    ? searchFootballPenaltyTable(value, 8, penaltyRuleset)
     : [];
 
   useEffect(() => {
@@ -817,20 +818,20 @@ export default function FootballFlowModal({
           <div className="grid max-h-60 gap-2 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 sm:grid-cols-2">
             {penaltyOptions.map((penalty) => (
               <button
-                key={penalty.code}
+                key={penalty.lookupKey}
                 className="flex items-center justify-between gap-3 rounded border border-zinc-300 bg-white px-3 py-2 text-left text-sm font-semibold text-zinc-900 hover:border-emerald-700 hover:bg-emerald-50"
-                onClick={() => onTokenCommit(penalty.code)}
+                onClick={() => onTokenCommit(penalty.lookupKey)}
                 type="button"
               >
                 <span className="min-w-0">
                   <span className="block truncate">{penalty.name}</span>
                   <span className="block text-xs font-medium text-zinc-500">
-                    Default {penalty.defaultEnforcement}
+                    {penalty.ruleset} · {penalty.team} · Default {penalty.defaultEnforcement}
                     {typeof penalty.yards === 'number' ? `, ${penalty.yards} yd reference` : ''}
                   </span>
                 </span>
                 <span className="grid h-7 min-w-10 place-items-center rounded border border-zinc-300 bg-zinc-50 px-2 text-xs font-black">
-                  {penalty.code}
+                  {penalty.code || 'Pending'}
                 </span>
               </button>
             ))}

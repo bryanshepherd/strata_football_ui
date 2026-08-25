@@ -1,51 +1,57 @@
 import type { PenaltyDef } from '../types/penalties';
-import penaltyTableData from '../data/penaltyTable.json';
+import {
+  findFootballPenaltyDefinition,
+  listFootballPenaltyTable,
+} from '../quick-input/penaltyTable';
 
 let penaltyTable: PenaltyDef[] | null = null;
 
 /**
- * Load the penalty table data
+ * Compatibility adapter for the legacy penalty modal. The confirmed quick
+ * input path can use name-only catalog entries while their official codes are
+ * pending; this modal continues to expose only entries that have a code.
  */
 export async function loadPenaltyTable(): Promise<PenaltyDef[]> {
-  // In a real app, this might fetch from an API
-  // For now, we're using the imported JSON data
-  penaltyTable = penaltyTableData as PenaltyDef[];
+  penaltyTable = buildCodedPenaltyTable();
   return penaltyTable;
 }
 
-/**
- * Get a specific penalty definition by code
- */
 export function getPenaltyDef(code: string): PenaltyDef | undefined {
-  if (!penaltyTable) {
-    // Try to load synchronously from import
-    penaltyTable = penaltyTableData as PenaltyDef[];
-  }
-  return penaltyTable?.find(p => p.code === code);
+  const definition = findFootballPenaltyDefinition(code);
+  return definition?.code ? toPenaltyDef(definition) : undefined;
 }
 
-/**
- * Check if the penalty table is loaded
- */
 export function isPenaltyTableLoaded(): boolean {
   return penaltyTable !== null && penaltyTable.length > 0;
 }
 
-/**
- * Get all penalty definitions
- */
 export function getAllPenalties(): PenaltyDef[] {
-  if (!penaltyTable) {
-    penaltyTable = penaltyTableData as PenaltyDef[];
-  }
-  return penaltyTable || [];
+  if (!penaltyTable) penaltyTable = buildCodedPenaltyTable();
+  return penaltyTable;
 }
 
-/**
- * Initialize penalty table on app start
- */
 export function initPenaltyTable(): void {
-  if (!penaltyTable) {
-    penaltyTable = penaltyTableData as PenaltyDef[];
-  }
+  if (!penaltyTable) penaltyTable = buildCodedPenaltyTable();
+}
+
+function buildCodedPenaltyTable(): PenaltyDef[] {
+  const byCode = new Map<string, PenaltyDef>();
+  listFootballPenaltyTable().forEach((entry) => {
+    if (entry.code && !byCode.has(entry.code)) byCode.set(entry.code, toPenaltyDef(entry));
+  });
+  return [...byCode.values()];
+}
+
+function toPenaltyDef(entry: ReturnType<typeof listFootballPenaltyTable>[number]): PenaltyDef {
+  return {
+    code: entry.code,
+    name: entry.name,
+    liveBall: entry.liveBall,
+    ...(entry.yards === undefined ? {} : { yards: entry.yards }),
+    requiresYards: entry.requiresYards,
+    requiresSpot: entry.requiresSpot,
+    defaultEnforcement: entry.defaultEnforcement,
+    automaticFirstDown: entry.automaticFirstDown,
+    lossOfDown: entry.lossOfDown,
+  };
 }
