@@ -1414,6 +1414,61 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(downed.draft?.result).toMatchObject({ code: 'downed', endYardLine: 'V30', nextPossession: 'V' });
   });
 
+  it('offers to advance a kickoff downed before the configured kickoff touchback spot', () => {
+    const context = makeContext({
+      rules: { touchbackSpot: 'H25', kickoffTouchbackSpot: 'H20' },
+    });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V10', context), context);
+    const decision = commitTokenWithContext(inputTokenWithContext(withDestination, 'D', context), context);
+
+    expect(decision).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'kickDownedTouchbackDecision',
+      tokens: {
+        downedSpot: 'V10',
+        kickDownedTouchbackTargetSpot: 'V20',
+      },
+    });
+
+    const downingPlayer = commitTokenWithContext(inputTokenWithContext(decision, 'Y', context), context);
+    expect(downingPlayer).toMatchObject({
+      currentStep: 'downingPlayerJersey',
+      tokens: { downedSpot: 'V20', kickAdvanceDownedToTouchback: true },
+    });
+    const ready = commitTokenWithContext(inputTokenWithContext(downingPlayer, '', context), context);
+    expect(ready.draft?.result).toMatchObject({ code: 'downed', endYardLine: 'V20', nextPossession: 'V' });
+  });
+
+  it('preserves the actual kickoff downed spot when the operator declines advancement', () => {
+    const context = makeContext({ rules: { kickoffTouchbackSpot: 'H30' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V12', context), context);
+    const decision = commitTokenWithContext(inputTokenWithContext(withDestination, 'D', context), context);
+    const downingPlayer = commitTokenWithContext(inputTokenWithContext(decision, 'N', context), context);
+    const ready = commitTokenWithContext(inputTokenWithContext(downingPlayer, '', context), context);
+
+    expect(ready.tokens).toMatchObject({
+      downedSpot: 'V12',
+      kickDownedTouchbackTargetSpot: 'V30',
+      kickAdvanceDownedToTouchback: false,
+    });
+    expect(ready.draft?.result).toMatchObject({ code: 'downed', endYardLine: 'V12', nextPossession: 'V' });
+  });
+
+  it.each(['V20', 'V31'])('does not prompt when a kickoff is downed at or beyond the configured spot (%s)', (spot) => {
+    const context = makeContext({ rules: { kickoffTouchbackSpot: 'H20' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, spot, context), context);
+    const downingPlayer = commitTokenWithContext(inputTokenWithContext(withDestination, 'D', context), context);
+
+    expect(downingPlayer.currentStep).toBe('downingPlayerJersey');
+    expect(downingPlayer.tokens.kickDownedTouchbackTargetSpot).toBeUndefined();
+  });
+
   it('kickoff return fumble and lateral continue to terminal states', () => {
     const fumbleTerminal = completeKickoffReturnThroughTerminal({ terminalResult: 'F' });
     const fumbleSpot = commitToken(inputToken(fumbleTerminal, 'V31'));

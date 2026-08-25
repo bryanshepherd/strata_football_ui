@@ -130,6 +130,7 @@ export type KickTokenStep =
   | 'kickOutOfBoundsSpot'
   | 'kickOutOfBoundsAwardedSpot'
   | 'kickRekickPenaltyReview'
+  | 'kickDownedTouchbackDecision'
   | 'downingPlayerJersey'
   | 'downedSpot';
 export type FieldGoalTokenStep =
@@ -256,6 +257,8 @@ export type KickFlowTokens = PuntFlowTokens & {
   kickOutOfBoundsSpot?: Spot;
   kickOutOfBoundsAwardedSpot?: Spot;
   kickRekickSpot?: Spot;
+  kickDownedTouchbackTargetSpot?: Spot;
+  kickAdvanceDownedToTouchback?: boolean;
   fieldGoalSpot?: Spot;
   fieldGoalResult?: FieldGoalResultSelection;
   fieldGoalMissedReason?: KickMissedReasonSelection;
@@ -1504,7 +1507,7 @@ function commitKickToken(
             ...baseActiveState(state),
             tokens: {
               ...cloneTokens(state.tokens),
-              downedSpot: state.tokens.kickReturnStartSpot,
+              downedSpot: state.tokens.downedSpot ?? state.tokens.kickReturnStartSpot,
             },
           }, context),
         };
@@ -1532,11 +1535,52 @@ function commitKickToken(
     if (!downedSpot) {
       return { state: tokenError(state, 'INVALID_SPOT', 'Downed spot must use canonical spot format', 'result.endYardLine') };
     }
+    const kickDownedTouchbackTargetSpot = kickoffDownedTouchbackTargetSpot(downedSpot, context);
+    const tokens = {
+      ...cloneTokens(state.tokens),
+      downedSpot,
+      kickDownedTouchbackTargetSpot,
+      kickAdvanceDownedToTouchback: undefined,
+    };
+    if (kickDownedTouchbackTargetSpot) {
+      return {
+        state: {
+          ...baseActiveState(state),
+          status: 'token.awaiting',
+          currentStep: 'kickDownedTouchbackDecision',
+          currentToken: '',
+          tokens,
+        },
+      };
+    }
+    return { state: makeReadyState({ ...baseActiveState(state), tokens }, context) };
+  }
+
+  if (state.currentStep === 'kickDownedTouchbackDecision') {
+    const advance = parseBooleanToken(state.currentToken);
+    if (advance === null) {
+      return {
+        state: tokenError(
+          state,
+          'INVALID_KICK_DOWNED_TOUCHBACK_DECISION',
+          'Choose Advance Ball (Y) or Keep Downed Spot (N).',
+          'result.endYardLine',
+        ),
+      };
+    }
+    const targetSpot = state.tokens.kickDownedTouchbackTargetSpot;
     return {
-      state: makeReadyState({
+      state: {
         ...baseActiveState(state),
-        tokens: { ...cloneTokens(state.tokens), downedSpot },
-      }, context),
+        status: 'token.awaiting',
+        currentStep: 'downingPlayerJersey',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          downedSpot: advance && targetSpot ? targetSpot : state.tokens.downedSpot,
+          kickAdvanceDownedToTouchback: advance,
+        },
+      },
     };
   }
 
@@ -2680,13 +2724,18 @@ function commitKickReceiveResult(
   }
 
   if (result === 'downed') {
+    const kickDownedTouchbackTargetSpot = kickoffDownedTouchbackTargetSpot(tokens.downedSpot, context);
     return {
       state: {
         ...baseActiveState(state),
         status: 'token.awaiting',
-        currentStep: 'downingPlayerJersey',
+        currentStep: kickDownedTouchbackTargetSpot ? 'kickDownedTouchbackDecision' : 'downingPlayerJersey',
         currentToken: '',
-        tokens,
+        tokens: {
+          ...tokens,
+          kickDownedTouchbackTargetSpot,
+          kickAdvanceDownedToTouchback: undefined,
+        },
       },
     };
   }
@@ -3518,6 +3567,10 @@ function editPlay(state: FootballConfirmedQuickInputState): FootballQuickInputTr
     tokens.kickOutOfBoundsSpot = undefined;
     tokens.kickOutOfBoundsAwardedSpot = undefined;
     tokens.kickRekickSpot = undefined;
+    tokens.kickDownedTouchbackTargetSpot = undefined;
+    tokens.kickAdvanceDownedToTouchback = undefined;
+    tokens.downingPlayer = undefined;
+    tokens.downedSpot = undefined;
     tokens.tacklers = [];
 
     return {
@@ -5297,6 +5350,25 @@ function ruleSpotForTeam(spot: Spot | undefined, team: TeamCode, fieldSide: 'own
   return `${side}${yard}` as Spot;
 }
 
+function kickoffDownedTouchbackTargetSpot(
+  downedSpot: Spot | undefined,
+  context: FootballQuickInputContext,
+): Spot | undefined {
+  const configuredSpot = ruleSpotForTeam(
+    context.game.rules?.kickoffTouchbackSpot,
+    context.play.actionTeam,
+    'opponent',
+  );
+  if (!downedSpot || !configuredSpot) return undefined;
+  const receivingTeam = opposingTeam(context.play.actionTeam);
+  const downedYard = spotToTeamEngineYard(downedSpot, receivingTeam);
+  const touchbackYard = spotToTeamEngineYard(configuredSpot, receivingTeam);
+  if (typeof downedYard !== 'number' || typeof touchbackYard !== 'number' || downedYard >= touchbackYard) {
+    return undefined;
+  }
+  return configuredSpot;
+}
+
 function resolveReturnGoalOutcome(
   tokens: FootballFlowTokens,
   context: FootballQuickInputContext,
@@ -6191,6 +6263,7 @@ function isKickSpecificTokenStep(step: FootballTokenStep): step is KickTokenStep
     'kickOutOfBoundsSpot',
     'kickOutOfBoundsAwardedSpot',
     'kickRekickPenaltyReview',
+    'kickDownedTouchbackDecision',
     'downingPlayerJersey',
     'downedSpot',
     'fieldGoalSpot',
@@ -6342,6 +6415,8 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     kickOutOfBoundsSpot: tokens.kickOutOfBoundsSpot,
     kickOutOfBoundsAwardedSpot: tokens.kickOutOfBoundsAwardedSpot,
     kickRekickSpot: tokens.kickRekickSpot,
+    kickDownedTouchbackTargetSpot: tokens.kickDownedTouchbackTargetSpot,
+    kickAdvanceDownedToTouchback: tokens.kickAdvanceDownedToTouchback,
     fieldGoalSpot: tokens.fieldGoalSpot,
     fieldGoalResult: tokens.fieldGoalResult,
     fieldGoalMissedReason: tokens.fieldGoalMissedReason,

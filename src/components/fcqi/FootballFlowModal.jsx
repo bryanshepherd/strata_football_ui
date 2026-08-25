@@ -343,6 +343,12 @@ const stepCopy = {
     helper: 'Review the prefilled penalty, then accept it to continue to the play summary.',
     placeholder: 'A',
   },
+  kickDownedTouchbackDecision: {
+    title: 'Advance Ball To Touchback Spot?',
+    label: 'Downed kickoff spot',
+    helper: 'Choose whether to advance the ball to the configured kickoff touchback spot.',
+    placeholder: 'Y',
+  },
   fieldGoalSpot: {
     title: 'Field goal',
     label: 'Yardline kicked from',
@@ -618,6 +624,11 @@ const kickOutOfBoundsDecisionButtons = [
 
 const kickRekickPenaltyReviewButtons = [
   { label: 'Accept Penalty', hotkey: 'A', value: 'A' },
+];
+
+const kickDownedTouchbackDecisionButtons = [
+  { label: 'Advance Ball', hotkey: 'Y', value: 'Y' },
+  { label: 'Keep Downed Spot', hotkey: 'N', value: 'N' },
 ];
 
 const kickMenuButtons = [
@@ -971,6 +982,7 @@ function resultButtonsForStep(step, aliases, teamNames, state) {
   if (step === 'kickReceiveResult') return kickReceiveResultButtons;
   if (step === 'kickOutOfBoundsDecision') return kickOutOfBoundsDecisionButtons;
   if (step === 'kickRekickPenaltyReview') return kickRekickPenaltyReviewButtons;
+  if (step === 'kickDownedTouchbackDecision') return kickDownedTouchbackDecisionButtons;
   if (step === 'returnTerminalResult') return returnTerminalResultButtons;
   if (step === 'returnOwnGoalDecision') return returnOwnGoalDecisionButtons;
   if (step === 'fumbleReturned') return returnAttemptedButtons;
@@ -1045,6 +1057,12 @@ function stepCopyForState(state, aliases, teamNames) {
     return {
       ...copy,
       helper: `Free Kick Infraction · ${teamName}${player ? ` · ${player}` : ''} · 5 yards · Accepted · Previous Spot · Repeat Down · Rekick at ${state.tokens?.kickRekickSpot || 'calculated spot'}.`,
+    };
+  }
+  if (step === 'kickDownedTouchbackDecision') {
+    return {
+      ...copy,
+      helper: `The kickoff was downed at ${state.tokens?.downedSpot || 'the entered spot'}, before the configured ${state.tokens?.kickDownedTouchbackTargetSpot || 'kickoff touchback spot'}. Advance the ball?`,
     };
   }
   if (!copy || !['recoverTeam', 'penaltyTeam', 'offsettingSecondTeam', 'gameControlPossession'].includes(step)) return copy;

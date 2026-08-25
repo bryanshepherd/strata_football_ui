@@ -1391,6 +1391,8 @@ describe('FootballScorerShell', () => {
     rendered = renderScorer();
     startKickoffReceiveResultSelection();
     fireEvent.click(screen.getByRole('button', { name: /^downed/i }));
+    const touchbackDecision = screen.getByRole('dialog', { name: 'Advance Ball To Touchback Spot?' });
+    fireEvent.click(within(touchbackDecision).getByRole('button', { name: /keep downed spot/i }));
     expect(screen.getByLabelText(/downing player jersey/i)).toBeInTheDocument();
   });
 
