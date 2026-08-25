@@ -1047,6 +1047,38 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('touchback');
   });
 
+  it('uses touchbackSpot for punts and never shows the kickoff advance modal', () => {
+    const context = makeContext({
+      rules: {
+        touchbackSpot: 'H22',
+        kickoffTouchbackSpot: 'H30',
+        nonKickTouchbackSpot: 'H17',
+      },
+    });
+    const withPunter = commitTokenWithContext(inputTokenWithContext(startPunt(), '9', context), context);
+    const withSpot = commitTokenWithContext(inputTokenWithContext(withPunter, 'V05', context), context);
+    const touchback = commitTokenWithContext(inputTokenWithContext(withSpot, 'T', context), context);
+
+    expect(touchback).toMatchObject({ status: 'draft.ready' });
+    expect(touchback.currentStep).toBeUndefined();
+    expect(touchback.draft?.result).toMatchObject({ code: 'touchback', endYardLine: 'V22' });
+  });
+
+  it('does not offer the kickoff advance modal when a punt is downed short', () => {
+    const context = makeContext({
+      rules: { touchbackSpot: 'H20', kickoffTouchbackSpot: 'H30' },
+    });
+    const withPunter = commitTokenWithContext(inputTokenWithContext(startPunt(), '9', context), context);
+    const withSpot = commitTokenWithContext(inputTokenWithContext(withPunter, 'V10', context), context);
+    const downed = commitTokenWithContext(inputTokenWithContext(withSpot, 'D', context), context);
+
+    expect(downed).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'downingPlayerJersey',
+      tokens: { puntReceiveResult: 'downed' },
+    });
+  });
+
   it('punt fair catch requires returner and scopes C as fair catch', () => {
     const reviewing = transition(completePuntReceiveDraft({ receiveResult: 'C', returner: '3' }), { type: 'GENERATE_SUMMARY' });
 

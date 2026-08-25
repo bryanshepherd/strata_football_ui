@@ -5307,7 +5307,7 @@ function puntCatchSpot(tokens: FootballFlowTokens): Spot | undefined {
 function puntEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputContext): Spot | undefined {
   if (tokens.puntReceiveResult === 'touchback') {
     const receivingTeam = opposingTeam(context.play.actionTeam);
-    return ruleSpotForTeam(context.game.rules?.nonKickTouchbackSpot ?? 'H20', receivingTeam, 'own') ?? tokens.puntSpot;
+    return ruleSpotForTeam(context.game.rules?.touchbackSpot, receivingTeam, 'own') ?? tokens.puntSpot;
   }
   if (tokens.puntReceiveResult === 'return') return tokens.returnEndSpot;
   if (tokens.puntReceiveResult === 'downed') return tokens.downedSpot ?? tokens.puntSpot;
@@ -5381,7 +5381,7 @@ function resolveReturnGoalOutcome(
   const touchback = relativeEnd === 0 && tokens.returnOwnGoalDecision === 'touchback';
   const touchbackRuleSpot = tokens.returnFlow?.type === 'Kickoff'
     ? tokens.kickTouchbackSpot ?? context.game.rules?.kickoffTouchbackSpot
-    : context.game.rules?.nonKickTouchbackSpot ?? 'H20';
+    : context.game.rules?.touchbackSpot;
   const fieldEndYardLine = touchback && returnTeam
     ? ruleSpotForTeam(touchbackRuleSpot, returnTeam, 'own')
     : returnEndYardLine;
