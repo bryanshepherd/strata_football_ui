@@ -1598,13 +1598,35 @@ const applyGameControlProjection = (envelope, event) => {
   if (control.action === 'startQuarter') {
     const minutes = Number(rules.minutesPerPeriod || rules.minutes || 15);
     const resetTimeouts = period === Math.floor(periods / 2) + 1;
+    const secondHalf = resetTimeouts ? control.secondHalf : null;
+    const kickoffTeam = validTeamCode(secondHalf?.kickingTeam) ? secondHalf.kickingTeam : null;
+    const kickoffSpot = kickoffTeam ? ownTeamRuleSpot(rules.kickoffSpot || 'H35', kickoffTeam) : null;
+    const liveState = resetTimeouts
+      ? { ...envelope.liveState, timeouts: initializeTeamCounts({}, resolveTimeoutLimit(rules)) }
+      : envelope.liveState;
     return withEvent({
       game: { ...envelope.game, period, status: 'inProgress' },
       clock: { ...envelope.clock, period, clock: `${String(minutes).padStart(2, '0')}:00`, clockTenths: minutes * 600, isRunning: false },
-      liveState: resetTimeouts
-        ? { ...envelope.liveState, timeouts: initializeTeamCounts({}, resolveTimeoutLimit(rules)) }
-        : envelope.liveState,
-      pregame: envelope.pregame ? { ...envelope.pregame, gamePhase: 'live' } : envelope.pregame,
+      liveState: kickoffTeam
+        ? {
+            ...liveState,
+            possession: null,
+            down: null,
+            distance: null,
+            yardLine: kickoffSpot,
+            lineToGain: null,
+            goalToGo: false,
+            redZone: false,
+            driveId: null,
+            pendingTryTeam: null,
+            kickoffTeam,
+            nextPlayContext: 'awaitingKickoff',
+          }
+        : liveState,
+      drives: kickoffTeam ? { ...envelope.drives, current: null } : envelope.drives,
+      pregame: envelope.pregame
+        ? { ...envelope.pregame, gamePhase: kickoffTeam ? 'awaitingKickoff' : 'live' }
+        : envelope.pregame,
     });
   }
 

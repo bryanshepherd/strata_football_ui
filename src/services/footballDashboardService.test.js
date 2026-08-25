@@ -489,6 +489,46 @@ describe('local football test-game projection', () => {
     expect(possession.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
   });
 
+  it('initializes the third quarter as an awaiting-kickoff state from the second-half choice', async () => {
+    const envelope = clone(getGameEnvelopeFixture('halftime'));
+    envelope.pregame = {
+      gamePhase: 'halftime',
+      coinToss: {
+        status: 'complete',
+        secondHalfChoiceTeam: 'V',
+      },
+      starters: {},
+    };
+    const response = await submitFootballEventLocally(
+      envelope,
+      gameControlRequest('LOCAL-START-Q3-1', 'startQuarter', {
+        period: 3,
+        secondHalf: {
+          choiceTeam: 'V',
+          choice: 'receive',
+          otherTeamChoice: null,
+          direction: 'north',
+          directionChoiceTeam: 'H',
+          kickingTeam: 'H',
+          receivingTeam: 'V',
+        },
+      }),
+    );
+
+    expect(response.gameEnvelope.game).toMatchObject({ status: 'inProgress', period: 3 });
+    expect(response.gameEnvelope.clock).toMatchObject({ period: 3, clock: '15:00', isRunning: false });
+    expect(response.gameEnvelope.pregame.gamePhase).toBe('awaitingKickoff');
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H35',
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+      timeouts: { H: 3, V: 3 },
+    });
+  });
+
   it('sets an explicit down, distance, spot, and line to gain', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const response = await submitFootballEventLocally(

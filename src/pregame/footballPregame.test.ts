@@ -5,6 +5,7 @@ import {
   isConsequentialTossEdit,
   isPlayFamilyAvailable,
   resolveCompleteToss,
+  resolveSecondHalfInitialization,
   resolveToss,
   validateCoinToss,
 } from './footballPregame';
@@ -58,6 +59,33 @@ describe('football pregame coin toss domain', () => {
       receivingTeam: 'H',
     });
     expect(awaitingKickoffState({ minutesPerPeriod: 12, kickoffSpot: 'H35' }, toss).liveState.yardLine).toBe('V35');
+  });
+
+  it.each([
+    ['choice team kicks', 'kick', null, 'V', 'H', 'H'],
+    ['choice team receives', 'receive', null, 'H', 'V', 'H'],
+    ['choice team takes direction and the other team kicks', 'side', 'kick', 'H', 'V', 'V'],
+    ['choice team takes direction and the other team receives', 'side', 'receive', 'V', 'H', 'V'],
+  ])('resolves second-half initialization when %s', (_label, choice, otherTeamChoice, kickingTeam, receivingTeam, directionChoiceTeam) => {
+    const coinToss = complete({ winnerInitialChoice: 'receive', direction: 'west' });
+    expect(resolveSecondHalfInitialization(coinToss, {
+      choice: choice as any,
+      otherTeamChoice: otherTeamChoice as any,
+      direction: 'north',
+    })).toMatchObject({
+      choiceTeam: 'V',
+      kickingTeam,
+      receivingTeam,
+      directionChoiceTeam,
+      direction: 'north',
+    });
+  });
+
+  it('rejects second-half initialization before a valid completed toss', () => {
+    expect(resolveSecondHalfInitialization(createCoinTossRecord(), {
+      choice: 'receive',
+      direction: 'south',
+    })).toBeNull();
   });
 
   it('gates FCQI play families by phase and flags consequential post-kick edits', () => {

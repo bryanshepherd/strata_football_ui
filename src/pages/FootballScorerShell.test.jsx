@@ -1009,6 +1009,57 @@ describe('FootballScorerShell', () => {
     assertGameControlMenu();
   });
 
+  it('requires the recorded second-half choice before accepting the third-quarter start', async () => {
+    const fixture = gameEnvelopeFixtures.halftime;
+    const originalPregame = fixture.pregame;
+    fixture.pregame = {
+      gamePhase: 'halftime',
+      coinToss: {
+        ...createCoinTossRecord(),
+        status: 'complete',
+        winnerTeam: 'H',
+        loserTeam: 'V',
+        winnerInitialChoice: 'receive',
+        direction: 'west',
+        directionChoiceTeam: 'V',
+        firstHalfKickingTeam: 'V',
+        firstHalfReceivingTeam: 'H',
+        secondHalfChoiceTeam: 'V',
+        completedAt: '2026-06-20T00:00:00Z',
+      },
+      starters: {},
+    };
+
+    try {
+      renderScorer('/scorer?fixture=halftime&local=1');
+      fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: /^game control$/i })).getByRole('button', { name: /^quarter functions q$/i }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: /quarter functions/i })).getByRole('button', { name: /^start quarter s$/i }));
+      fireEvent.click(within(await screen.findByRole('dialog', { name: /play summary review/i })).getByRole('button', { name: /^submit play$/i }));
+
+      const choiceDialog = await screen.findByRole('dialog', { name: 'Second-Half Choice' });
+      expect(within(choiceDialog).getByRole('heading', { name: "Visitor Tech's Second-Half Choice" })).toBeInTheDocument();
+      expect(within(screen.getByRole('heading', { name: /game log/i }).closest('section')).queryByText(/start quarter 3\./i)).not.toBeInTheDocument();
+      fireEvent.click(within(choiceDialog).getByRole('button', { name: 'Receive' }));
+      expect(within(choiceDialog).getByRole('heading', { name: 'Home State Chooses Direction' })).toBeInTheDocument();
+      fireEvent.click(within(choiceDialog).getByRole('button', { name: 'North' }));
+
+      const summary = within(choiceDialog).getByRole('region', { name: 'Second-Half Initialization Summary' });
+      expect(summary).toHaveTextContent('Home State');
+      expect(summary).toHaveTextContent('Visitor Tech');
+      fireEvent.click(within(choiceDialog).getByRole('button', { name: 'Start Third Quarter' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Second-Half Choice' })).not.toBeInTheDocument());
+      expect(screen.getByText('Q3')).toBeInTheDocument();
+      expect(screen.getByText('15:00')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^kick k$/i })).toBeEnabled();
+      expect(screen.getByText(/home state will kick to visitor tech; home state chose north/i)).toBeInTheDocument();
+    } finally {
+      fixture.pregame = originalPregame;
+    }
+  });
+
   it('opens the roster workspace from the scorer header', () => {
     renderScorer('/scorer?fixture=pregame');
 

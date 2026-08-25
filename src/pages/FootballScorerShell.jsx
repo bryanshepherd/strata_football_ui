@@ -12,6 +12,7 @@ import FootballTeamStats from '../components/scorer/FootballTeamStats';
 import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
 import FootballRosterEditorModal from '../components/pregame/FootballRosterEditorModal';
 import FootballStartersModal from '../components/pregame/FootballStartersModal';
+import FootballSecondHalfChoiceModal from '../components/pregame/FootballSecondHalfChoiceModal';
 import ScorerLayoutShell from '../components/scorer/ScorerLayoutShell';
 import {
   defaultFixtureKey,
@@ -19,7 +20,7 @@ import {
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
-import { pregameForEnvelope } from '../pregame/footballPregame';
+import { gamePhaseForEnvelope, pregameForEnvelope } from '../pregame/footballPregame';
 import {
   buildFootballDriveSummary,
   isFootballDriveSummaryTerminalEvent,
@@ -78,6 +79,32 @@ export const shouldUseLocalFootballEnvelope = (envelope) => {
   return pregame.gamePhase !== 'pregame' || pregame.coinToss.status === 'complete';
 };
 
+const isThirdQuarterStartFromHalftime = (envelope, submitRequest) => (
+  gamePhaseForEnvelope(envelope) === 'halftime'
+  && submitRequest?.event?.result?.gameControl?.action === 'startQuarter'
+  && Number(submitRequest.event.result.gameControl.period) === 3
+);
+
+const withSecondHalfInitialization = (submitRequest, initialization, envelope) => {
+  const kickingTeam = envelope.game.teams[initialization.kickingTeam];
+  const receivingTeam = envelope.game.teams[initialization.receivingTeam];
+  const directionTeam = envelope.game.teams[initialization.directionChoiceTeam];
+  return {
+    ...submitRequest,
+    event: {
+      ...submitRequest.event,
+      description: `Start quarter 3. ${kickingTeam.name} will kick to ${receivingTeam.name}; ${directionTeam.name} chose ${initialization.direction}.`,
+      result: {
+        ...submitRequest.event.result,
+        gameControl: {
+          ...submitRequest.event.result.gameControl,
+          secondHalf: initialization,
+        },
+      },
+    },
+  };
+};
+
 const getRequestedGameId = (searchParams) =>
   searchParams.get('envelopeGameId')
   || searchParams.get('gameId')
@@ -122,6 +149,7 @@ export default function FootballScorerShell() {
   const [possessionClockChange, setPossessionClockChange] = useState(null);
   const [driveSummary, setDriveSummary] = useState(null);
   const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
+  const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
   const envelope = useMemo(
@@ -147,6 +175,7 @@ export default function FootballScorerShell() {
     setPossessionClockChange(null);
     setDriveSummary(null);
     setPenaltyCodeEditorOpen(false);
+    setPendingSecondHalfStart(null);
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
   }, [requestedFixture, requestedGameId]);
 
@@ -256,7 +285,7 @@ export default function FootballScorerShell() {
 
   const forceLocalTestGame = searchParams.get('local') === '1';
   const useLocalTestGame = import.meta.env.MODE !== 'test' || forceLocalTestGame || Boolean(requestedGameId);
-  const localSubmitAdapter = useCallback(async (submitRequest) => {
+  const submitLocalRequest = useCallback(async (submitRequest) => {
     const previousEnvelope = envelope;
     const result = await submitFootballEventLocally(envelope, submitRequest);
     if (result?.ok && result?.status !== 'duplicateAccepted') {
@@ -273,6 +302,40 @@ export default function FootballScorerShell() {
     }
     return result;
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
+  const localSubmitAdapter = useCallback(async (submitRequest) => {
+    if (!isThirdQuarterStartFromHalftime(envelope, submitRequest)) {
+      return submitLocalRequest(submitRequest);
+    }
+    const coinToss = pregameForEnvelope(envelope).coinToss;
+    if (coinToss.status !== 'complete' || !coinToss.secondHalfChoiceTeam) {
+      throw new Error('Complete the coin toss before initializing the second half.');
+    }
+    return new Promise((resolve, reject) => {
+      setPendingSecondHalfStart({ coinToss, reject, resolve, submitRequest });
+    });
+  }, [envelope, submitLocalRequest]);
+
+  const confirmSecondHalfStart = useCallback(async (initialization) => {
+    if (!pendingSecondHalfStart) return;
+    const { resolve, reject, submitRequest } = pendingSecondHalfStart;
+    try {
+      const result = await submitLocalRequest(withSecondHalfInitialization(submitRequest, initialization, envelope));
+      setPendingSecondHalfStart(null);
+      resolve(result);
+    } catch (error) {
+      setPendingSecondHalfStart(null);
+      reject(error);
+      throw error;
+    }
+  }, [envelope, pendingSecondHalfStart, submitLocalRequest]);
+
+  const cancelSecondHalfStart = useCallback(() => {
+    if (!pendingSecondHalfStart) return;
+    const { reject } = pendingSecondHalfStart;
+    setPendingSecondHalfStart(null);
+    reject(new Error('Second-half initialization was canceled.'));
+  }, [pendingSecondHalfStart]);
 
   const undoLastLocalEvent = useCallback(() => {
     const previousEnvelope = localUndoStack[localUndoStack.length - 1];
@@ -545,6 +608,13 @@ export default function FootballScorerShell() {
       <FootballPenaltyCodeEditorModal
         onClose={closePenaltyCodeEditor}
         open={penaltyCodeEditorOpen}
+      />
+      <FootballSecondHalfChoiceModal
+        coinToss={pendingSecondHalfStart?.coinToss}
+        onCancel={cancelSecondHalfStart}
+        onConfirm={confirmSecondHalfStart}
+        open={Boolean(pendingSecondHalfStart)}
+        teams={envelope.game.teams}
       />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}

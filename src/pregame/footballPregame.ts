@@ -36,12 +36,61 @@ export type TossInput = Pick<CoinTossRecord,
 export type TossResolution = Pick<CoinTossRecord,
   'loserTeam' | 'directionChoiceTeam' | 'firstHalfKickingTeam' | 'firstHalfReceivingTeam' | 'secondHalfChoiceTeam'>;
 
+export type SecondHalfChoiceInput = {
+  choice: NonDeferCoinTossChoice;
+  otherTeamChoice?: Exclude<NonDeferCoinTossChoice, 'side'> | null;
+  direction: FieldDirection;
+};
+
+export type SecondHalfInitialization = {
+  choiceTeam: TeamCode;
+  choice: NonDeferCoinTossChoice;
+  otherTeamChoice: Exclude<NonDeferCoinTossChoice, 'side'> | null;
+  direction: FieldDirection;
+  directionChoiceTeam: TeamCode;
+  kickingTeam: TeamCode;
+  receivingTeam: TeamCode;
+};
+
 export type TossValidationResult = { ok: true } | { ok: false; errors: string[] };
 
 export const STARTER_GROUPS: StarterGroup[] = ['offense', 'defense', 'specialTeams'];
 
 export function otherTeam(team: TeamCode): TeamCode {
   return team === 'H' ? 'V' : 'H';
+}
+
+export function resolveSecondHalfInitialization(
+  coinToss: CoinTossRecord,
+  input: SecondHalfChoiceInput,
+): SecondHalfInitialization | null {
+  if (!coinToss) return null;
+  const choiceTeam = coinToss.status === 'complete' ? coinToss.secondHalfChoiceTeam : null;
+  if (!choiceTeam || !['kick', 'receive', 'side'].includes(input.choice) || !input.direction) return null;
+  const opposingTeam = otherTeam(choiceTeam);
+
+  if (input.choice === 'side') {
+    if (input.otherTeamChoice !== 'kick' && input.otherTeamChoice !== 'receive') return null;
+    return {
+      choiceTeam,
+      choice: input.choice,
+      otherTeamChoice: input.otherTeamChoice,
+      direction: input.direction,
+      directionChoiceTeam: choiceTeam,
+      kickingTeam: input.otherTeamChoice === 'kick' ? opposingTeam : choiceTeam,
+      receivingTeam: input.otherTeamChoice === 'receive' ? opposingTeam : choiceTeam,
+    };
+  }
+
+  return {
+    choiceTeam,
+    choice: input.choice,
+    otherTeamChoice: null,
+    direction: input.direction,
+    directionChoiceTeam: opposingTeam,
+    kickingTeam: input.choice === 'kick' ? choiceTeam : opposingTeam,
+    receivingTeam: input.choice === 'receive' ? choiceTeam : opposingTeam,
+  };
 }
 
 export function createCoinTossRecord(): CoinTossRecord {
