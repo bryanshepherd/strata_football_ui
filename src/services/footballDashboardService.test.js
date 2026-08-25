@@ -76,6 +76,15 @@ describe('local-first football persistence', () => {
     window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
   });
 
+  it('uses the stable cross-runtime checksum for complete envelopes', () => {
+    expect(checksumFootballEnvelope({
+      schemaVersion: 'football.gameEnvelope.v1',
+      gameId: 'FB-CHECKSUM',
+      updatedAt: '2026-08-25T04:00:00.000Z',
+      events: [],
+    })).toBe('fnv1a64:a8b63cf28ee37641:118');
+  });
+
   it('creates a durable browser record when the initial envelope came from the server', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-SERVER-SEED-001';
