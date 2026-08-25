@@ -1789,13 +1789,25 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('pass incomplete intended for #88 Eli Grant');
   });
 
-  it('incomplete pass skips the breakup question', () => {
+  it('incomplete pass asks whether it was broken up before asking about a hurry', () => {
     const withPasser = commitToken(inputToken(startPass(), '12'));
     const withResult = commitToken(inputToken(withPasser, 'I'));
     const withReceiver = commitToken(inputToken(withResult, '88'));
     const afterSpot = commitToken(inputToken(withReceiver, ''));
 
-    expect(afterSpot.currentStep).toBe('hurried');
+    expect(afterSpot.currentStep).toBe('passBreakup');
+    const noBreakup = commitToken(inputToken(afterSpot, 'N'));
+    expect(noBreakup.currentStep).toBe('hurried');
+    expect(noBreakup.tokens.brokenUp).toBe(false);
+  });
+
+  it('does not accept broken up as a primary pass result', () => {
+    const withPasser = commitToken(inputToken(startPass(), '12'));
+    const state = commitToken(inputToken(withPasser, 'B'));
+
+    expect(state.status).toBe('token.error');
+    expect(state.error?.code).toBe('INVALID_PASS_RESULT');
+    expect(state.currentStep).toBe('passResult');
   });
 
   it('broken up pass allows exactly one defender', () => {
@@ -1893,10 +1905,11 @@ describe('footballConfirmedQuickInputMachine', () => {
 
   it('duplicate defender resolution uses duplicate modal path', () => {
     const withPasser = commitToken(inputToken(startPass(), '12'));
-    const withResult = commitToken(inputToken(withPasser, 'B'));
+    const withResult = commitToken(inputToken(withPasser, 'I'));
     const withReceiver = commitToken(inputToken(withResult, '88'));
     const withSpot = commitToken(inputToken(withReceiver, ''));
-    const state = commitToken(inputToken(withSpot, '3'));
+    const withBreakup = commitToken(inputToken(withSpot, 'B'));
+    const state = commitToken(inputToken(withBreakup, '3'));
 
     expect(state.status).toBe('jersey.disambiguating');
     expect(state.duplicate?.role).toBe('passBreakup');
@@ -2141,9 +2154,11 @@ function completeIncompletePassDraft(options: {
   hurried?: string[];
 } = {}): FootballConfirmedQuickInputState {
   const withPasser = commitToken(inputToken(startPass(), '12'));
-  const withResult = commitToken(inputToken(withPasser, options.brokenUp ? 'B' : 'I'));
+  const withResult = commitToken(inputToken(withPasser, 'I'));
   const withReceiver = commitToken(inputToken(withResult, '88'));
   let next = commitToken(inputToken(withReceiver, ''));
+
+  next = commitToken(inputToken(next, options.brokenUp ? 'B' : 'N'));
 
   if (options.brokenUp) {
     next = commitToken(inputToken(next, '44'));

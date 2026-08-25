@@ -171,6 +171,30 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenCalledWith('Y');
   });
 
+  it('uses Broken Up and No Pass Breakup buttons with B/N hotkeys', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting',
+          flow: 'pass',
+          currentStep: 'passBreakup',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Broken Up B' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No Pass Breakup N' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'b', code: 'KeyB' });
+    expect(onTokenCommit).toHaveBeenCalledWith('B');
+  });
+
   it('uses button-only Touchback and Safety choices with T/S hotkeys', () => {
     const onTokenCommit = vi.fn();
     render(

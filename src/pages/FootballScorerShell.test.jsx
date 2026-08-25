@@ -810,6 +810,21 @@ describe('FootballScorerShell', () => {
       const button = screen.getByRole('button', { name: new RegExp(`^${label} ${hotkey}$`, 'i') });
       expect(within(button).getByText(hotkey)).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: /^broken up b$/i })).not.toBeInTheDocument();
+  });
+
+  it('asks Broken Up or No Pass Breakup after an incomplete pass', () => {
+    renderScorer();
+    startPassResultSelection();
+
+    fireEvent.click(screen.getByRole('button', { name: /^incomplete i$/i }));
+    submitTextToken(/intended for jersey/i, '88');
+    submitTextToken(/^yardline$/i, '');
+
+    const dialog = screen.getByRole('dialog', { name: /pass breakup/i });
+    expect(within(dialog).getByRole('button', { name: /^broken up b$/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^no pass breakup n$/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('opens the punt modal from the Punt button and U hotkey', () => {
@@ -2387,7 +2402,6 @@ function startPatTypeSelection() {
 const PASS_BUTTON_EXPECTATIONS = [
   ['Complete', 'C'],
   ['Incomplete', 'I'],
-  ['Broken Up', 'B'],
   ['Sack', 'S'],
   ['Sack Fumble', 'F'],
   ['Rush Conversion', 'R'],

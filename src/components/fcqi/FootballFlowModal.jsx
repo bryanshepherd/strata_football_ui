@@ -143,6 +143,12 @@ const stepCopy = {
     helper: 'Enter the pass target/interception yardline, or press Enter to skip.',
     placeholder: 'V49',
   },
+  passBreakup: {
+    title: 'Pass breakup',
+    label: 'Pass Breakup',
+    helper: 'Choose Broken Up or No Pass Breakup.',
+    placeholder: 'N',
+  },
   brokenUpDefenderJersey: {
     title: 'Pass broken up',
     label: 'Broken up by jersey',
@@ -576,7 +582,6 @@ const rushResultButtons = [
 const passResultButtons = [
   { label: 'Complete', hotkey: 'C', value: 'C' },
   { label: 'Incomplete', hotkey: 'I', value: 'I' },
-  { label: 'Broken Up', hotkey: 'B', value: 'B' },
   { label: 'Sack', hotkey: 'S', value: 'S' },
   { label: 'Sack Fumble', hotkey: 'F', value: 'F' },
   { label: 'Rush Conversion', hotkey: 'R', value: 'R' },
@@ -657,6 +662,11 @@ const patPassResultButtons = [
 const hurryButtons = [
   { label: 'Hurry', hotkey: 'Y', value: 'Y' },
   { label: 'No Hurry', hotkey: 'N', value: 'N' },
+];
+
+const passBreakupButtons = [
+  { label: 'Broken Up', hotkey: 'B', value: 'B' },
+  { label: 'No Pass Breakup', hotkey: 'N', value: 'N' },
 ];
 
 const returnAttemptedButtons = [
@@ -947,6 +957,7 @@ function resultButtonsForStep(step, aliases, teamNames, state) {
   if (step === 'returnTerminalResult') return returnTerminalResultButtons;
   if (step === 'returnOwnGoalDecision') return returnOwnGoalDecisionButtons;
   if (step === 'fumbleReturned') return returnAttemptedButtons;
+  if (step === 'passBreakup') return passBreakupButtons;
   if (step === 'hurried') return hurryButtons;
   if (step === 'fieldGoalResult') return fieldGoalResultButtons;
   if (step === 'fieldGoalMissedReason') return missedReasonButtons;

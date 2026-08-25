@@ -49,6 +49,7 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'completeResult') return 'Choose complete pass result.';
   if (state.currentStep === 'intendedReceiverJersey') return 'Enter intended receiver jersey number.';
   if (state.currentStep === 'passYardLine') return 'Enter pass yardline or skip.';
+  if (state.currentStep === 'passBreakup') return 'Choose Broken Up or No Pass Breakup.';
   if (state.currentStep === 'brokenUpDefenderJersey') return 'Enter pass breakup defender jersey.';
   if (state.currentStep === 'hurried') return 'Choose Hurry or No Hurry.';
   if (state.currentStep === 'hurryDefender1Jersey') return 'Enter hurry defender jersey.';

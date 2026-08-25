@@ -45,7 +45,7 @@ export type FootballQuickInputStateName =
 
 export type FootballQuickInputFlow = 'rush' | 'pass' | 'punt' | 'kick' | 'penalty' | 'gameControl';
 export type RushResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
-export type PassPrimaryResultSelection = 'complete' | 'incomplete' | 'brokenUp' | 'sack' | 'sackFumble' | 'rushConversion' | 'interception';
+export type PassPrimaryResultSelection = 'complete' | 'incomplete' | 'sack' | 'sackFumble' | 'rushConversion' | 'interception';
 export type CompletePassResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
 export type PuntReceiveResultSelection = 'return' | 'touchback' | 'fairCatch' | 'outOfBounds' | 'muffed' | 'downed' | 'blocked';
 export type ReturnTerminalResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
@@ -92,6 +92,7 @@ export type PassTokenStep =
   | 'intendedReceiverJersey'
   | 'passYardLine'
   | 'interceptorJersey'
+  | 'passBreakup'
   | 'brokenUpDefenderJersey'
   | 'hurried'
   | 'hurryDefender1Jersey'
@@ -1034,11 +1035,32 @@ function commitPassToken(
       state: {
         ...baseActiveState(state),
         status: 'token.awaiting',
-        currentStep: state.tokens.passResult === 'brokenUp' ? 'brokenUpDefenderJersey' : 'hurried',
+        currentStep: 'passBreakup',
         currentToken: '',
         tokens: {
           ...tokens,
-          brokenUp: state.tokens.passResult === 'brokenUp',
+          brokenUp: undefined,
+          brokenUpBy: undefined,
+        },
+      },
+    };
+  }
+
+  if (state.currentStep === 'passBreakup') {
+    const brokenUp = parsePassBreakupDecision(state.currentToken);
+    if (brokenUp === null) {
+      return { state: tokenError(state, 'INVALID_PASS_BREAKUP_FLAG', 'Choose Broken Up (B) or No Pass Breakup (N).', 'result.pass.brokenUpByPlayerId') };
+    }
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: brokenUp ? 'brokenUpDefenderJersey' : 'hurried',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          brokenUp,
+          brokenUpBy: brokenUp ? state.tokens.brokenUpBy : undefined,
         },
       },
     };
@@ -2440,7 +2462,7 @@ function commitPassPrimaryResult(state: FootballConfirmedQuickInputState): Footb
       state: tokenError(
         state,
         'INVALID_PASS_RESULT',
-        'Pass result must be C, I, B, S, F, R, or X.',
+        'Pass result must be C, I, S, F, R, or X.',
         'result.code',
       ),
     };
@@ -3836,7 +3858,7 @@ function buildPassDraft(
 
 function passSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']['subtype'] {
   if (tokens.passResult === 'complete') return 'complete';
-  if (tokens.passResult === 'incomplete' || tokens.passResult === 'brokenUp') return 'incomplete';
+  if (tokens.passResult === 'incomplete') return 'incomplete';
   if (tokens.passResult === 'sack' || tokens.passResult === 'sackFumble') return 'sack';
   if (tokens.passResult === 'interception') return 'interception';
   return 'incomplete';
@@ -3895,7 +3917,7 @@ function buildPassResult(tokens: FootballFlowTokens, context: FootballQuickInput
     };
   }
 
-  if (tokens.passResult === 'incomplete' || tokens.passResult === 'brokenUp') {
+  if (tokens.passResult === 'incomplete') {
     return {
       code: 'incomplete',
       driveEnds: false,
@@ -5485,11 +5507,17 @@ function parsePassPrimaryResult(value: string): PassPrimaryResultSelection | nul
   const normalized = value.trim().toUpperCase();
   if (normalized === 'C' || normalized === 'COMPLETE') return 'complete';
   if (normalized === 'I' || normalized === 'INCOMPLETE') return 'incomplete';
-  if (normalized === 'B' || normalized === 'BROKEN UP' || normalized === 'BROKENUP') return 'brokenUp';
   if (normalized === 'S' || normalized === 'SACK') return 'sack';
   if (normalized === 'F' || normalized === 'SACK FUMBLE' || normalized === 'SACKFUMBLE') return 'sackFumble';
   if (normalized === 'R' || normalized === 'RUSH') return 'rushConversion';
   if (normalized === 'X' || normalized === 'INTERCEPTED' || normalized === 'INTERCEPTION') return 'interception';
+  return null;
+}
+
+function parsePassBreakupDecision(value: string): boolean | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'B' || normalized === 'BROKEN UP' || normalized === 'BROKENUP') return true;
+  if (normalized === 'N' || normalized === 'NO' || normalized === 'NO PASS BREAKUP' || normalized === 'NOPASSBREAKUP') return false;
   return null;
 }
 
@@ -6098,6 +6126,7 @@ function isPassSpecificTokenStep(step: FootballTokenStep): step is PassTokenStep
     'intendedReceiverJersey',
     'passYardLine',
     'interceptorJersey',
+    'passBreakup',
     'brokenUpDefenderJersey',
     'hurried',
     'hurryDefender1Jersey',
