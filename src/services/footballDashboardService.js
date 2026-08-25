@@ -421,6 +421,39 @@ const markSyncItemFailed = (itemId, error) => {
   writeSyncQueue(next);
 };
 
+const retryStaleEnvelopeMirror = (item, responsePayload) => {
+  const current = responsePayload?.current;
+  if (
+    item?.kind !== 'envelope'
+    || responsePayload?.schemaVersion !== 'football.localEnvelopeMirrorError.v1'
+    || responsePayload?.code !== 'MIRROR_CONFLICT'
+    || item.conflictRetries
+    || current?.gameId !== item.payload?.gameId
+    || current?.mirrorSourceId !== item.payload?.mirrorSourceId
+    || !Number.isSafeInteger(current?.mirrorRevision)
+    || current.mirrorRevision < item.payload.mirrorRevision
+  ) {
+    return false;
+  }
+
+  const mirrorRevision = current.mirrorRevision + 1;
+  const payload = { ...item.payload, mirrorRevision };
+  const retryItem = {
+    ...item,
+    id: footballSyncItemId({ kind: item.kind, payload }),
+    payload,
+    conflictRetries: 1,
+    attempts: Number(item.attempts || 0) + 1,
+    lastAttemptAt: new Date().toISOString(),
+    lastError: responsePayload.error || 'Football mirror revision conflict.',
+  };
+  const queue = readSyncQueue();
+  if (!queue.some((candidate) => candidate.id === item.id)) return false;
+  writeSyncQueue(queue.map((candidate) => candidate.id === item.id ? retryItem : candidate));
+  adoptMirrorIdentity(item.gameId, item.payload.mirrorSourceId, mirrorRevision);
+  return true;
+};
+
 const mirrorAckError = (item, payload) => {
   if (!payload || payload.schemaVersion !== 'football.localEnvelopeMirrorAck.v1') {
     return 'Server mirror returned an invalid acknowledgment.';
@@ -476,6 +509,9 @@ export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } =
         }
         removeSyncItem(item.id);
         syncedCount += 1;
+        continue;
+      }
+      if (response?.status === 409 && retryStaleEnvelopeMirror(item, responsePayload)) {
         continue;
       }
       if (!error) {

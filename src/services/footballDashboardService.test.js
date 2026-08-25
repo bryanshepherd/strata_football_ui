@@ -178,6 +178,57 @@ describe('local-first football persistence', () => {
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.liveState.yardLine).toBe(envelope.liveState.yardLine);
   });
 
+  it('retries one same-source stale mirror conflict with newer metadata and the exact local envelope', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-STALE-MIRROR-001';
+    envelope.events = [{ clientEventId: 'local-event-1', eventId: 'LOCAL-000001', sequence: 1, type: 'rush' }];
+    envelope.stats.sourceEventSequence = 1;
+    const saved = saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-STALE-MIRROR-001',
+      envelope: saved,
+    });
+    const requests = [];
+    const fetchImpl = vi.fn().mockImplementation(async (_url, init) => {
+      const request = JSON.parse(init.body);
+      requests.push(request);
+      if (requests.length === 1) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            schemaVersion: 'football.localEnvelopeMirrorError.v1',
+            code: 'MIRROR_CONFLICT',
+            error: 'Football mirror revision is stale.',
+            current: {
+              gameId: request.gameId,
+              mirrorSourceId: request.mirrorSourceId,
+              mirrorRevision: 7,
+            },
+          }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => mirrorAck(request) };
+    });
+
+    const result = await flushFootballServerSync({ fetchImpl });
+
+    expect(result).toMatchObject({ pendingCount: 0, syncedCount: 1, error: '' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(requests[1]).toEqual({ ...requests[0], mirrorRevision: 8 });
+    expect(requests[1].envelope).toEqual(saved);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope).toEqual(saved);
+
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-STALE-MIRROR-001',
+      envelope: saved,
+    });
+    const queued = JSON.parse(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY));
+    expect(queued.items[0].payload.mirrorRevision).toBe(9);
+  });
+
   it('migrates a legacy nine-event queue into one exact envelope snapshot', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-LEGACY-MIGRATION-001';
