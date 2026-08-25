@@ -346,6 +346,38 @@ describe('footballConfirmedQuickInputMachine', () => {
     }
   });
 
+  it.each([
+    ['fumble recovery return', completeDefensiveFumbleReturnAt],
+    ['interception return', completeInterceptionReturnAt],
+  ])('%s uses touchbackSpot rather than kickoffTouchbackSpot', (_label, completeReturn) => {
+    const context = makeContext({
+      rules: { touchbackSpot: 'H22', kickoffTouchbackSpot: 'H30' },
+    });
+    const pending = completeReturn('V00', context);
+
+    expect(pending).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'returnOwnGoalDecision',
+    });
+
+    const touchback = commitTokenWithContext(inputTokenWithContext(pending, 'T', context), context);
+    expect(touchback.draft?.result).toMatchObject({
+      code: 'touchback',
+      endYardLine: 'V22',
+      nextPossession: 'V',
+    });
+
+    const submitting = transitionWithContext(
+      transitionWithContext(touchback, { type: 'GENERATE_SUMMARY' }, context),
+      { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' },
+      context,
+    );
+    expect(submitting.buildResult?.ok).toBe(true);
+    if (submitting.buildResult?.ok) {
+      expect(submitting.buildResult.event.result.endYardLine).toBe('V22');
+    }
+  });
+
   it('uses kickoffTouchbackSpot for a kickoff return ruled a touchback', () => {
     const context = makeContext({ rules: { touchbackSpot: 'H25', kickoffTouchbackSpot: 'H20' } });
     const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
@@ -2224,16 +2256,19 @@ function completeFumbleDraft(options: { returned: 'yes' | 'no' }): FootballConfi
   return commitToken(inputToken(withRecoverSpot, options.returned));
 }
 
-function completeDefensiveFumbleReturnAt(endSpot: string): FootballConfirmedQuickInputState {
-  const withRusher = commitToken(inputToken(startRush(), '22'));
-  const withResult = commitToken(inputToken(withRusher, 'F'));
-  const withForcedBy = commitToken(inputToken(withResult, '44'));
-  const withRecoverTeam = commitToken(inputToken(withForcedBy, 'V'));
-  const withRecoverPlayer = commitToken(inputToken(withRecoverTeam, '44'));
-  const withRecoverSpot = commitToken(inputToken(withRecoverPlayer, 'V20'));
-  const returned = commitToken(inputToken(withRecoverSpot, 'Y'));
-  const terminal = commitToken(inputToken(returned, '.'));
-  return commitToken(inputToken(terminal, endSpot));
+function completeDefensiveFumbleReturnAt(
+  endSpot: string,
+  context: FootballQuickInputContext = makeContext(),
+): FootballConfirmedQuickInputState {
+  const withRusher = commitTokenWithContext(inputTokenWithContext(startRush(), '22', context), context);
+  const withResult = commitTokenWithContext(inputTokenWithContext(withRusher, 'F', context), context);
+  const withForcedBy = commitTokenWithContext(inputTokenWithContext(withResult, '44', context), context);
+  const withRecoverTeam = commitTokenWithContext(inputTokenWithContext(withForcedBy, 'V', context), context);
+  const withRecoverPlayer = commitTokenWithContext(inputTokenWithContext(withRecoverTeam, '44', context), context);
+  const withRecoverSpot = commitTokenWithContext(inputTokenWithContext(withRecoverPlayer, 'V20', context), context);
+  const returned = commitTokenWithContext(inputTokenWithContext(withRecoverSpot, 'Y', context), context);
+  const terminal = commitTokenWithContext(inputTokenWithContext(returned, '.', context), context);
+  return commitTokenWithContext(inputTokenWithContext(terminal, endSpot, context), context);
 }
 
 function completeDefensiveFumbleRecoveryAt(recoverySpot: string): FootballConfirmedQuickInputState {
@@ -2336,13 +2371,16 @@ function completeInterceptionTargeting(): FootballConfirmedQuickInputState {
   return commitToken(inputToken(withTerminal, 'V40'));
 }
 
-function completeInterceptionReturnAt(endSpot: string): FootballConfirmedQuickInputState {
-  const withPasser = commitToken(inputToken(startPass(), '12'));
-  const withResult = commitToken(inputToken(withPasser, 'X'));
-  const withInterceptor = commitToken(inputToken(withResult, '44'));
-  const withSpot = commitToken(inputToken(withInterceptor, 'V49'));
-  const withTerminal = commitToken(inputToken(withSpot, '.'));
-  return commitToken(inputToken(withTerminal, endSpot));
+function completeInterceptionReturnAt(
+  endSpot: string,
+  context: FootballQuickInputContext = makeContext(),
+): FootballConfirmedQuickInputState {
+  const withPasser = commitTokenWithContext(inputTokenWithContext(startPass(), '12', context), context);
+  const withResult = commitTokenWithContext(inputTokenWithContext(withPasser, 'X', context), context);
+  const withInterceptor = commitTokenWithContext(inputTokenWithContext(withResult, '44', context), context);
+  const withSpot = commitTokenWithContext(inputTokenWithContext(withInterceptor, 'V49', context), context);
+  const withTerminal = commitTokenWithContext(inputTokenWithContext(withSpot, '.', context), context);
+  return commitTokenWithContext(inputTokenWithContext(withTerminal, endSpot, context), context);
 }
 
 function completeSackDraft(): FootballConfirmedQuickInputState {
