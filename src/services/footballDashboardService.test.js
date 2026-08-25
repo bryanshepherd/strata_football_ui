@@ -315,13 +315,51 @@ describe('local football test-game projection', () => {
 
     const normalized = normalizeFootballScoringSetupEnvelope(envelope);
 
-    expect(normalized.stats.teams.H.timeOfPossession).toBe(491);
-    expect(normalized.stats.teams.V.timeOfPossession).toBe(394);
+    expect(normalized.stats.teams.H.timeOfPossession).toBe(504);
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(396);
+    expect(normalized.stats.teams.H.timeOfPossession + normalized.stats.teams.V.timeOfPossession).toBe(900);
     expect(normalized.stats.teams.H.possessionSegments).toHaveLength(4);
     expect(normalized.stats.teams.V.possessionSegments).toHaveLength(3);
+    expect(normalized.stats.teams.H.possessionSegments[0]).toMatchObject({
+      startPeriod: 1,
+      startClock: '15:00',
+      endClock: '13:32',
+    });
+    expect(normalized.stats.teams.H.possessionSegments[1]).toMatchObject({
+      startPeriod: 1,
+      startClock: '09:49',
+      endClock: '08:09',
+    });
+    expect(normalized.stats.teams.V.possessionSegments[2]).toMatchObject({
+      startPeriod: 1,
+      startClock: '02:02',
+      endClock: '00:35',
+    });
     expect(normalized.stats.teams.H.possessionSegments.at(-1)).toEqual({
       startPeriod: 1,
       startClock: '00:35',
+    });
+  });
+
+  it('credits elapsed kickoff time to the receiving team without changing the drive start clock', () => {
+    const envelope = clone(getGameEnvelopeFixture('kickoffDrive'));
+    envelope.stats.teams = {};
+
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: null,
+      nextPossession: 'V',
+      period: 1,
+      clock: '14:54',
+    });
+
+    expect(recorded.stats.teams.V.possessionSegments).toEqual([{
+      startPeriod: 1,
+      startClock: '15:00',
+    }]);
+    expect(recorded.drives.current).toMatchObject({
+      team: 'V',
+      startPeriod: 1,
+      startClock: '14:54',
     });
   });
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { searchFootballPenaltyTable } from '../../quick-input/penaltyTable';
+import { formatFootballClockEntry } from '../../utils/footballClock';
 import FootballFlowProgress from './FootballFlowProgress';
 
 const yardLineSteps = new Set([
@@ -24,9 +25,10 @@ const yardLineSteps = new Set([
   'gameControlDriveSpot',
 ]);
 
-const normalizeVisibleInput = (step, value) => (
-  yardLineSteps.has(step) || step === 'recoverTeam' ? value.toUpperCase() : value
-);
+const normalizeVisibleInput = (step, value) => {
+  if (step === 'gameControlClock') return formatFootballClockEntry(value);
+  return yardLineSteps.has(step) || step === 'recoverTeam' ? value.toUpperCase() : value;
+};
 
 const stepCopy = {
   rusherJersey: {
@@ -560,8 +562,8 @@ const stepCopy = {
   gameControlClock: {
     title: 'Set Game Clock',
     label: 'Game Clock',
-    helper: 'Enter the displayed game clock in MM:SS format.',
-    placeholder: '12:34',
+    helper: 'Enter M:SS or MM:SS. Three digits are read as M:SS.',
+    placeholder: '8:01 or 12:34',
   },
   gameControlChallengeStatus: {
     title: 'Challenge',
@@ -745,7 +747,7 @@ export default function FootballFlowModal({
   teamAliases,
   teamNames,
 }) {
-  const [value, setValue] = useState(state.currentToken || '');
+  const [value, setValue] = useState(() => normalizeVisibleInput(state.currentStep, state.currentToken || ''));
   const inputRef = useRef(null);
   const selectedPrefillRef = useRef(null);
   const aliases = normalizeTeamAliases(teamAliases);
@@ -757,7 +759,7 @@ export default function FootballFlowModal({
     : [];
 
   useEffect(() => {
-    setValue(state.currentToken || '');
+    setValue(normalizeVisibleInput(state.currentStep, state.currentToken || ''));
   }, [state.currentStep, state.currentToken, state.status]);
 
   useEffect(() => {
@@ -859,6 +861,7 @@ export default function FootballFlowModal({
                 autoCapitalize={yardLineSteps.has(state.currentStep) ? 'characters' : 'off'}
                 className="mt-2 w-full rounded border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold tabular-nums outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                 id={`fcqi-${state.currentStep}`}
+                inputMode={state.currentStep === 'gameControlClock' ? 'numeric' : undefined}
                 onChange={(event) => setValue(normalizeVisibleInput(state.currentStep, event.target.value))}
                 placeholder={activeStep.placeholder}
                 spellCheck={yardLineSteps.has(state.currentStep) ? false : undefined}

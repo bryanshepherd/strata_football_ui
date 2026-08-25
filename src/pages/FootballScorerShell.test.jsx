@@ -473,7 +473,7 @@ describe('FootballScorerShell', () => {
     const eventLogSlot = shell.querySelector('[data-scorer-slot="event-log"]');
     const assistantSlot = shell.querySelector('[data-scorer-slot="input-assistant"]');
 
-    expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
+    expect(within(scoreboardSlot).getByText('8:42')).toBeInTheDocument();
     expect(within(scoreboardSlot).getByText('Down/Distance')).toBeInTheDocument();
     expect(within(scoreboardSlot).getByLabelText('Possession football')).toBeInTheDocument();
     expect(within(scoreboardSlot).getByLabelText('V timeouts').children).toHaveLength(3);
@@ -522,7 +522,7 @@ describe('FootballScorerShell', () => {
     });
     expect(within(statsSlot).getAllByText('0 for 0 yards').length).toBeGreaterThan(0);
     expect(within(statsSlot).getAllByText('0.0').length).toBeGreaterThan(0);
-    expect(within(statsSlot).getAllByText('00:00').length).toBeGreaterThan(0);
+    expect(within(statsSlot).getAllByText('0:00').length).toBeGreaterThan(0);
   });
 
   it('renders scoreboard refinements on the /scorer route', () => {
@@ -1224,17 +1224,17 @@ describe('FootballScorerShell', () => {
     expect(clockDialog).not.toHaveTextContent(/home state.*visitor tech/i);
     const clockInput = within(clockDialog).getByLabelText('Game Clock');
     fireEvent.change(clockInput, { target: { value: '0801' } });
-    expect(clockInput).toHaveValue('08:01');
+    expect(clockInput).toHaveValue('8:01');
     fireEvent.submit(clockInput.closest('form'));
 
     const shell = screen.getByTestId('scorer-layout-shell');
     const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
     const statsSlot = shell.querySelector('[data-scorer-slot="stats"]');
     const eventLogSlot = shell.querySelector('[data-scorer-slot="event-log"]');
-    await waitFor(() => expect(within(scoreboardSlot).getByText('08:01')).toBeInTheDocument());
-    expect(within(statsSlot).getByText('03:59')).toBeInTheDocument();
+    await waitFor(() => expect(within(scoreboardSlot).getByText('8:01')).toBeInTheDocument());
+    expect(within(statsSlot).getByText('3:59')).toBeInTheDocument();
     const driveStart = within(eventLogSlot).getByRole('separator', { name: 'Drive Start - Visitor Tech' });
-    expect(driveStart).toHaveTextContent('08:01 at V31 by Punt');
+    expect(driveStart).toHaveTextContent('8:01 at V31 by Punt');
     expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
   });
 
@@ -1257,10 +1257,10 @@ describe('FootballScorerShell', () => {
 
     const clockDialog = await screen.findByRole('dialog', { name: /change of possession clock/i });
     const clockInput = within(clockDialog).getByLabelText('Game Clock');
-    expect(clockInput).toHaveValue('01:32');
+    expect(clockInput).toHaveValue('1:32');
     await waitFor(() => {
       expect(clockInput.selectionStart).toBe(0);
-      expect(clockInput.selectionEnd).toBe(5);
+      expect(clockInput.selectionEnd).toBe(4);
     });
     fireEvent.submit(clockInput.closest('form'));
 
@@ -1284,10 +1284,10 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('button', { name: 'Point After Try' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Assistant: Press A to enter PAT Try.')).not.toBeInTheDocument();
     expect(driveSummary).toHaveTextContent('Price 5 yard rush (Price Kick)');
-    expect(driveSummary).toHaveTextContent('Start: 03:08 at V35 by Punt');
+    expect(driveSummary).toHaveTextContent('Start: 3:08 at V35 by Punt');
     expect(within(driveSummary).getByText('10')).toBeInTheDocument();
     expect(within(driveSummary).getByText('65')).toBeInTheDocument();
-    expect(within(driveSummary).getByText('01:36')).toBeInTheDocument();
+    expect(within(driveSummary).getByText('1:36')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText('V35').length).toBeGreaterThan(0));
     expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Enter' });
@@ -1665,7 +1665,7 @@ describe('FootballScorerShell', () => {
       const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
       const eventLogSlot = shell.querySelector('[data-scorer-slot="event-log"]');
 
-      expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
+      expect(within(scoreboardSlot).getByText('8:42')).toBeInTheDocument();
       expect(within(eventLogSlot).queryByText(/backend accepted rush/i)).not.toBeInTheDocument();
 
       completeRushFlowInputs();
@@ -1674,7 +1674,7 @@ describe('FootballScorerShell', () => {
 
       expect((await screen.findAllByText('Submitted play.')).length).toBeGreaterThan(0);
       await waitFor(() => {
-        expect(within(scoreboardSlot).getByText('08:01')).toBeInTheDocument();
+        expect(within(scoreboardSlot).getByText('8:01')).toBeInTheDocument();
         expect(within(scoreboardSlot).getByText('1 and 10')).toBeInTheDocument();
         expect(within(scoreboardSlot).getByText('V35')).toBeInTheDocument();
       });
@@ -1776,7 +1776,7 @@ describe('FootballScorerShell', () => {
 
       expect(await screen.findByText(/response envelope fields are malformed/i)).toBeInTheDocument();
       expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
-      expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
+      expect(within(scoreboardSlot).getByText('8:42')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('2 and 6')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('H44')).toBeInTheDocument();
     } finally {
@@ -1856,7 +1856,7 @@ describe('FootballScorerShell', () => {
       }));
       expect(screen.getByRole('dialog', { name: /play summary review/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^edit play$/i })).toBeEnabled();
-      expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
+      expect(within(scoreboardSlot).getByText('8:42')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('2 and 6')).toBeInTheDocument();
       expect(within(scoreboardSlot).getByText('H44')).toBeInTheDocument();
     } finally {

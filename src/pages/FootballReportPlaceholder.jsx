@@ -5,6 +5,7 @@ import {
   fixtureOptions,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import { formatFootballClockDisplay } from '../utils/footballClock';
 
 const formatStatus = (status) =>
   String(status || 'unknown').replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -24,7 +25,7 @@ export const buildEjectionReportNotes = (gameEnvelope) => {
         ? `#${player.jersey} ${player.displayName}`
         : penalty.playerId || 'Penalized person';
       const period = event.period ? `Q${event.period}` : 'Period not recorded';
-      const clock = event.clock || 'Clock not recorded';
+      const clock = formatFootballClockDisplay(event.clock, 'Clock not recorded');
       return [{
         id: `${event.eventId || event.clientEventId || event.sequence || 'event'}-${penalty.penaltyId || penalty.code}`,
         text: `${teamRecord?.name || team || 'Team'} ${person} was ejected from the game (${penalty.code || 'penalty'}, ${period} ${clock}).`,
@@ -101,7 +102,7 @@ export default function FootballReportPlaceholder() {
             </div>
             <div className="grid grid-cols-3 gap-3 text-sm">
               <ReportMetric label="Status" value={formatStatus(gameEnvelope.game.status)} />
-              <ReportMetric label="Clock" value={gameEnvelope.clock.clock} />
+              <ReportMetric label="Clock" value={formatFootballClockDisplay(gameEnvelope.clock.clock)} />
               <ReportMetric label="Period" value={String(gameEnvelope.clock.period)} />
               <ReportMetric label={teams.V.abbr} value={String(teams.V.score)} />
               <ReportMetric label={teams.H.abbr} value={String(teams.H.score)} />

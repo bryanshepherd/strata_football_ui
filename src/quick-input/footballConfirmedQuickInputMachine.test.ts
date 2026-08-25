@@ -1523,7 +1523,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
   it('game control supports clock, timeout, challenge, and drive start', () => {
     const clockMenu = commitToken(inputToken(startGameControl(), 'K'));
-    const clock = commitToken(inputToken(clockMenu, '9:07'));
+    const clock = commitToken(inputToken(clockMenu, '907'));
     expect(clock.draft).toMatchObject({ result: { code: 'clockUpdate', clock: '09:07', clockTenths: 5470, gameControl: { action: 'setClock' } } });
 
     const timeoutMenu = commitToken(inputToken(startGameControl(), 'T'));

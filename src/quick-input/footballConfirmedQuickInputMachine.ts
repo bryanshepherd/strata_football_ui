@@ -29,6 +29,7 @@ import {
 } from './penaltyTable';
 import { isPlayFamilyAvailable, type FootballGamePhase } from '../pregame/footballPregame';
 import { calculateFootballPenaltyFinalSpot } from '../utils/footballPenaltyEnforcement';
+import { normalizeFootballClock } from '../utils/footballClock';
 
 export type FootballQuickInputStateName =
   | 'idle'
@@ -5692,9 +5693,7 @@ function parseGameControlChallengeStatus(value: string): GameControlChallengeSta
 }
 
 function parseClockToken(value: string): `${number}${number}:${number}${number}` | null {
-  const match = value.trim().match(/^(\d{1,2}):([0-5]\d)$/);
-  if (!match) return null;
-  return `${match[1].padStart(2, '0')}:${match[2]}` as `${number}${number}:${number}${number}`;
+  return normalizeFootballClock(value);
 }
 
 function parseDown(value: string): number | null {

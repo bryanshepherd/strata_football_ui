@@ -97,7 +97,7 @@ describe('football drive summary', () => {
       teamName: 'Fairmont St.',
       plays: 8,
       yards: 53,
-      timeOfPossession: '01:31',
+      timeOfPossession: '1:31',
       scoringPlay: 'Hatcher 5 yard rush (Richardson Kick)',
       startInfo: 'Start: 13:32 at V47 by Punt',
     });

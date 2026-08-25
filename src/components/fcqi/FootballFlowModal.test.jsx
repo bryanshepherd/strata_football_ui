@@ -65,6 +65,38 @@ describe('FootballFlowModal team aliases', () => {
     expect(input).toHaveValue('W');
   });
 
+  it('accepts three- or four-digit game clocks and hides an optional leading zero', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting',
+          flow: 'gameControl',
+          currentStep: 'gameControlClock',
+          currentToken: '08:42',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    const input = screen.getByRole('textbox', { name: 'Game Clock' });
+    expect(input).toHaveAttribute('inputmode', 'numeric');
+    expect(input).toHaveValue('8:42');
+
+    fireEvent.change(input, { target: { value: '801' } });
+    expect(input).toHaveValue('8:01');
+    fireEvent.submit(input.closest('form'));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('8:01');
+
+    fireEvent.change(input, { target: { value: '0801' } });
+    expect(input).toHaveValue('8:01');
+    fireEvent.change(input, { target: { value: '1234' } });
+    expect(input).toHaveValue('12:34');
+  });
+
   it('shows configured team hotkeys and commits canonical team codes', () => {
     const onTokenCommit = vi.fn();
     render(

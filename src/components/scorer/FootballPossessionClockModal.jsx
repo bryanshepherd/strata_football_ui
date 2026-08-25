@@ -1,31 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-
-const normalizeClock = (value) => {
-  const match = String(value || '').trim().match(/^(\d{1,2}):([0-5]\d)$/);
-  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
-};
-
-const formatClockInput = (value) => {
-  const rawValue = String(value || '');
-  if (rawValue.includes(':')) {
-    const [minutes = '', ...secondParts] = rawValue.split(':');
-    const minuteDigits = minutes.replace(/\D/g, '').slice(0, 2);
-    const secondDigits = secondParts.join('').replace(/\D/g, '').slice(0, 2);
-    const paddedMinutes = minuteDigits.length === 1 ? `0${minuteDigits}` : minuteDigits;
-    return `${paddedMinutes}:${secondDigits}`;
-  }
-
-  const digits = rawValue.replace(/\D/g, '').slice(0, 4);
-  return digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
-};
+import { formatFootballClockEntry, normalizeFootballClock } from '../../utils/footballClock';
 
 export default function FootballPossessionClockModal({ change, onSave }) {
-  const [clock, setClock] = useState(() => formatClockInput(change?.defaultClock || ''));
+  const [clock, setClock] = useState(() => formatFootballClockEntry(change?.defaultClock || ''));
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
   useEffect(() => {
-    setClock(formatClockInput(change?.defaultClock || ''));
+    setClock(formatFootballClockEntry(change?.defaultClock || ''));
     setError('');
     if (!change) return undefined;
     const selectionTimer = window.setTimeout(() => {
@@ -39,9 +21,9 @@ export default function FootballPossessionClockModal({ change, onSave }) {
 
   const submit = (event) => {
     event.preventDefault();
-    const normalized = normalizeClock(clock);
+    const normalized = normalizeFootballClock(clock);
     if (!normalized) {
-      setError('Enter the game clock in MM:SS format.');
+      setError('Enter M:SS or MM:SS. Three digits are read as M:SS.');
       return;
     }
     onSave(normalized);
@@ -74,10 +56,10 @@ export default function FootballPossessionClockModal({ change, onSave }) {
               id="possession-change-clock"
               inputMode="numeric"
               onChange={(event) => {
-                setClock(formatClockInput(event.target.value));
+                setClock(formatFootballClockEntry(event.target.value));
                 setError('');
               }}
-              placeholder="_ _ : _ _"
+              placeholder="M:SS or MM:SS"
               value={clock}
             />
             {error && (

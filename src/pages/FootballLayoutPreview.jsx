@@ -7,6 +7,7 @@ import {
   transitionFootballQuickInput,
 } from '../quick-input/footballConfirmedQuickInputMachine';
 import { calculateYardsGained } from '../utils/footballRulesEngine';
+import { formatFootballClockDisplay } from '../utils/footballClock';
 
 const PLAY_BUTTONS = [
   { label: 'Rush', hotkey: 'R' },
@@ -63,7 +64,7 @@ const formatDecimal = (value) => toNumber(value).toFixed(1);
 
 const formatPossessionTime = (value) => {
   if (typeof value === 'string' && /^\d{1,2}:\d{2}$/.test(value)) {
-    return value;
+    return formatFootballClockDisplay(value);
   }
 
   const seconds = Math.max(0, Math.floor(toNumber(value)));
@@ -607,7 +608,7 @@ const PreviewEventLogSlot = ({ envelope }) => (
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-zinc-500">
-                    Q{event.period || '-'} {event.clock || '--:--'} · {event.possession || '-'}
+                    Q{event.period || '-'} {formatFootballClockDisplay(event.clock, '--:--')} · {event.possession || '-'}
                   </div>
                 </li>
               ))}

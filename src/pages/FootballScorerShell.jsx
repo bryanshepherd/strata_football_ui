@@ -38,6 +38,7 @@ import {
   recordFootballPossessionClock,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
+import { formatFootballClockDisplay } from '../utils/footballClock';
 
 const formatStatus = (status) =>
   String(status || 'unknown')
@@ -856,7 +857,7 @@ const GameLogColumn = ({ canUndo, envelope, onUndoLastEvent }) => {
               >
                 <div className="text-sm font-black">Drive Start - {item.team}</div>
                 <div className="mt-0.5 text-xs font-semibold">
-                  {item.time} at {item.yardLine} by {item.howGained}
+                  {formatFootballClockDisplay(item.time, '--:--')} at {item.yardLine} by {item.howGained}
                 </div>
               </li>
             ) : (
@@ -876,7 +877,7 @@ const GameLogColumn = ({ canUndo, envelope, onUndoLastEvent }) => {
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
-                  Q{item.event.period || '-'} {item.event.clock || '--:--'} · {item.event.possession || '-'}
+                  Q{item.event.period || '-'} {formatFootballClockDisplay(item.event.clock, '--:--')} · {item.event.possession || '-'}
                 </div>
               </li>
             )

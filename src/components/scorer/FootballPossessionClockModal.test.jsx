@@ -15,7 +15,7 @@ describe('FootballPossessionClockModal', () => {
     );
 
     const input = screen.getByLabelText('Game Clock');
-    expect(input).toHaveAttribute('placeholder', '_ _ : _ _');
+    expect(input).toHaveAttribute('placeholder', 'M:SS or MM:SS');
     fireEvent.change(input, { target: { value: '1454' } });
     expect(input).toHaveValue('14:54');
     fireEvent.submit(input.closest('form'));
@@ -36,9 +36,30 @@ describe('FootballPossessionClockModal', () => {
 
     const input = screen.getByLabelText('Game Clock');
     fireEvent.change(input, { target: { value: '7:05' } });
-    expect(input).toHaveValue('07:05');
+    expect(input).toHaveValue('7:05');
     fireEvent.submit(input.closest('form'));
 
     expect(onSave).toHaveBeenCalledWith('07:05');
+  });
+
+  it('accepts three digits or an optional typed leading zero and drops that zero from display', () => {
+    const onSave = vi.fn();
+    render(
+      <FootballPossessionClockModal
+        change={{ previousPossession: 'H', nextPossession: 'V', defaultClock: '' }}
+        onSave={onSave}
+      />,
+    );
+
+    const input = screen.getByLabelText('Game Clock');
+    fireEvent.change(input, { target: { value: '801' } });
+    expect(input).toHaveValue('8:01');
+    fireEvent.submit(input.closest('form'));
+    expect(onSave).toHaveBeenLastCalledWith('08:01');
+
+    fireEvent.change(input, { target: { value: '0801' } });
+    expect(input).toHaveValue('8:01');
+    fireEvent.submit(input.closest('form'));
+    expect(onSave).toHaveBeenLastCalledWith('08:01');
   });
 });

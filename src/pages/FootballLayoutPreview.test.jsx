@@ -14,7 +14,7 @@ describe('FootballLayoutPreview', () => {
     const assistantSlot = shell.querySelector('[data-scorer-slot="input-assistant"]');
 
     expect(screen.getByRole('heading', { name: /football canonical scorer shell/i })).toBeInTheDocument();
-    expect(within(scoreboardSlot).getByText('08:42')).toBeInTheDocument();
+    expect(within(scoreboardSlot).getByText('8:42')).toBeInTheDocument();
     expect(within(scoreboardSlot).getByLabelText('Possession football')).toBeInTheDocument();
     expect(within(scoreboardSlot).getByLabelText('V timeouts').children).toHaveLength(3);
     expect(within(scoreboardSlot).getByLabelText('H timeouts').children).toHaveLength(3);

@@ -602,6 +602,17 @@ const finiteNumber = (value, fallback = 0) => {
 
 const validTeamCode = (team) => team === 'H' || team === 'V';
 
+const kickoffReceivingTeam = (event) => {
+  const returnTeam = event?.participants?.returner?.team;
+  if (validTeamCode(returnTeam)) return returnTeam;
+  const kickingTeam = event?.participants?.kicker?.team
+    || event?.participants?.primary?.team
+    || event?.possession;
+  if (validTeamCode(kickingTeam)) return kickingTeam === 'H' ? 'V' : 'H';
+  const nextPossession = event?.result?.nextPossession || event?.postState?.possession;
+  return validTeamCode(nextPossession) ? nextPossession : null;
+};
+
 const ownTeamRuleSpot = (spot, team) => {
   if (!validTeamCode(team) || !spot) return spot || null;
   if (spot === '50' || spot === 'H50' || spot === 'V50') return '50';
@@ -1080,11 +1091,35 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
     finiteNumber(envelope?.game?.rules?.minutesPerPeriod || envelope?.game?.rules?.minutes, 15) * 60,
   );
   const segments = { H: [], V: [] };
+  const kickoffEvents = (envelope?.events || []).filter((event) => (
+    event?.type === 'kickoff'
+    && (!event.status || event.status === 'accepted')
+    && !hasAcceptedPreviousSpotPenalty(event)
+    && normalizeClockText(event.clock)
+  ));
+  const usedKickoffEvents = new Set();
+  const possessionStartClock = (drive) => {
+    if (!String(drive?.startReason || '').toLowerCase().startsWith('kickoff')) return drive.startClock;
+    const drivePeriod = finiteNumber(drive.startPeriod, 1);
+    const driveStartSeconds = clockSeconds(drive.startClock);
+    const kickoffIndex = kickoffEvents.findIndex((event, index) => {
+      if (usedKickoffEvents.has(index)) return false;
+      const receivingTeam = kickoffReceivingTeam(event);
+      const kickoffSeconds = clockSeconds(event.clock);
+      return receivingTeam === drive.team
+        && finiteNumber(event.period, drivePeriod) === drivePeriod
+        && kickoffSeconds !== null
+        && (driveStartSeconds === null || kickoffSeconds >= driveStartSeconds);
+    });
+    if (kickoffIndex < 0) return drive.startClock;
+    usedKickoffEvents.add(kickoffIndex);
+    return normalizeClockText(kickoffEvents[kickoffIndex].clock) || drive.startClock;
+  };
   for (const drive of envelope?.drives?.completed || []) {
     if (!validTeamCode(drive?.team) || !drive.startClock || !drive.endClock) continue;
     segments[drive.team].push({
       startPeriod: finiteNumber(drive.startPeriod, 1),
-      startClock: drive.startClock,
+      startClock: possessionStartClock(drive),
       endPeriod: finiteNumber(drive.endPeriod, drive.startPeriod || 1),
       endClock: drive.endClock,
     });
@@ -1094,7 +1129,7 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
   if (validTeamCode(currentDrive?.team) && currentDrive.startClock) {
     segments[currentDrive.team].push({
       startPeriod: finiteNumber(currentDrive.startPeriod, envelope?.clock?.period || 1),
-      startClock: currentDrive.startClock,
+      startClock: possessionStartClock(currentDrive),
     });
   }
 
@@ -1230,6 +1265,21 @@ export function recordFootballPossessionClock(envelope, {
   if (!envelope || !normalizedClock) throw new Error('Possession clock must use MM:SS format.');
   const periodNumber = Math.max(1, finiteNumber(period, envelope.clock?.period || envelope.game?.period || 1));
   const periodSeconds = Math.max(60, finiteNumber(envelope.game?.rules?.minutesPerPeriod || envelope.game?.rules?.minutes, 15) * 60);
+  const latestEvent = [...(envelope.events || [])]
+    .reverse()
+    .find((event) => !event.status || event.status === 'accepted');
+  const receivingTeam = kickoffReceivingTeam(latestEvent);
+  const kickoffSeconds = clockSeconds(latestEvent?.clock);
+  const possessionChangeSeconds = clockSeconds(normalizedClock);
+  const kickoffClock = latestEvent?.type === 'kickoff'
+    && !hasAcceptedPreviousSpotPenalty(latestEvent)
+    && (receivingTeam || nextPossession) === nextPossession
+    && finiteNumber(latestEvent.period, periodNumber) === periodNumber
+    && kickoffSeconds !== null
+    && possessionChangeSeconds !== null
+    && kickoffSeconds >= possessionChangeSeconds
+    ? normalizeClockText(latestEvent.clock)
+    : null;
   let teams = { ...(envelope.stats?.teams || {}) };
 
   if (validTeamCode(previousPossession) && previousPossession !== nextPossession) {
@@ -1291,7 +1341,7 @@ export function recordFootballPossessionClock(envelope, {
       : [];
     const lastSegment = segments[segments.length - 1];
     if (lastSegment?.endClock || !lastSegment) {
-      segments.push({ startPeriod: periodNumber, startClock: normalizedClock });
+      segments.push({ startPeriod: periodNumber, startClock: kickoffClock || normalizedClock });
     }
     teams = {
       ...teams,

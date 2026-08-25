@@ -21,6 +21,8 @@ describe('FootballScoreboard', () => {
   it('keeps drive context in the same strip as down and distance', () => {
     render(<FootballScoreboard envelope={getGameEnvelopeFixture('normal')} />);
 
+    expect(screen.getByText('8:42')).toBeInTheDocument();
+    expect(screen.queryByText('08:42')).not.toBeInTheDocument();
     expect(screen.getByText('Down/Distance')).toBeInTheDocument();
     expect(screen.getByText('Spot')).toBeInTheDocument();
     expect(screen.getByText('Line To Gain')).toBeInTheDocument();

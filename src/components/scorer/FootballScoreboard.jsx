@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatFootballClockDisplay } from '../../utils/footballClock';
 
 const formatStatus = (status) =>
   String(status || 'unknown')
@@ -61,7 +62,7 @@ export default function FootballScoreboard({ envelope }) {
             {formatStatus(displayStatus)}
           </div>
           <div className="mt-1 text-4xl font-black tabular-nums">
-            {envelope.clock.clock}
+            {formatFootballClockDisplay(envelope.clock.clock)}
           </div>
           <div className="mt-1 text-sm text-zinc-300">
             Q{envelope.clock.period || '-'}

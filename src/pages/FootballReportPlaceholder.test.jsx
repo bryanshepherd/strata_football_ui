@@ -35,7 +35,7 @@ describe('Football report ejection notes', () => {
 
     expect(notes).toEqual([{
       id: 'event-7-penalty-1',
-      text: 'Home State #56 Casey Jones was ejected from the game (PF, Q2 08:41).',
+      text: 'Home State #56 Casey Jones was ejected from the game (PF, Q2 8:41).',
     }]);
   });
 });

@@ -1,3 +1,5 @@
+import { formatFootballClockDisplay } from '../utils/footballClock';
+
 const TEAM_CODES = ['H', 'V'];
 
 const finiteNumber = (value, fallback = 0) => {
@@ -13,7 +15,7 @@ const clockSeconds = (clock) => {
 
 const formatElapsed = (seconds) => {
   const total = Math.max(0, Math.round(finiteNumber(seconds)));
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
 const playerForId = (envelope, playerId) => {
@@ -233,6 +235,6 @@ export function buildFootballDriveSummary(envelope, terminalEvent) {
     yards: finiteNumber(drive.yards),
     timeOfPossession: formatElapsed(driveElapsedSeconds(envelope, drive, scoringEvent)),
     scoringPlay: summarizedScoringPlay,
-    startInfo: `Start: ${drive.startClock || '--:--'} at ${drive.startYardLine || 'Unknown Spot'} by ${reason}`,
+    startInfo: `Start: ${formatFootballClockDisplay(drive.startClock, '--:--')} at ${drive.startYardLine || 'Unknown Spot'} by ${reason}`,
   };
 }
