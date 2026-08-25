@@ -4,6 +4,28 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('maps the physical Escape key to the modal Esc control', () => {
+    const onCancel = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={onCancel}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          status: 'token.awaiting',
+          flow: 'rush',
+          currentStep: 'rusherJersey',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the full ruleset penalty catalog before the operator filters it', () => {
     const { rerender } = render(
       <FootballFlowModal

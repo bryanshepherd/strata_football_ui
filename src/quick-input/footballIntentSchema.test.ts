@@ -268,6 +268,15 @@ describe('footballIntentSchema', () => {
     expectInvalidCode(intent, 'INVALID_SPOT');
   });
 
+  it('requires the kickoff touchback rule to use canonical spot format', () => {
+    const intent = makeRushIntent();
+    intent.game.rules = { kickoffTouchbackSpot: 'H25' };
+    expect(validateFootballDraftIntent(intent).ok).toBe(true);
+
+    intent.game.rules.kickoffTouchbackSpot = '25' as never;
+    expectInvalidCode(intent, 'INVALID_SPOT');
+  });
+
   it('rejects unresolved required players', () => {
     const intent = makeRushIntent();
     intent.participants.primary!.playerId = '';

@@ -775,6 +775,20 @@ export default function FootballFlowModal({
   }, [state.currentStep, state.currentToken, state.flow, state.selectCurrentToken, state.status, value]);
 
   useEffect(() => {
+    if (!activeStep || (state.status !== 'token.awaiting' && state.status !== 'token.error')) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onCancel();
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [onCancel, state.currentStep, state.status]);
+
+  useEffect(() => {
     if (!activeButtons || state.status !== 'token.awaiting') return undefined;
 
     const onKeyDown = (event) => {

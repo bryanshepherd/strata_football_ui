@@ -83,6 +83,7 @@ export type DraftRulesSnapshot = {
   yardsToFirstDown?: number;
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
+  kickoffTouchbackSpot?: Spot;
   nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
   safetyKickSpot?: Spot;
@@ -741,7 +742,7 @@ function validateGameContext(game: Record<string, unknown>, errors: FootballInte
   }
 
   if (isRecord(game.rules)) {
-    for (const field of ['kickoffSpot', 'touchbackSpot', 'nonKickTouchbackSpot', 'patSpot', 'safetyKickSpot']) {
+    for (const field of ['kickoffSpot', 'touchbackSpot', 'kickoffTouchbackSpot', 'nonKickTouchbackSpot', 'patSpot', 'safetyKickSpot']) {
       if (game.rules[field] !== undefined && !isCanonicalSpot(game.rules[field])) {
         errors.push(error('INVALID_SPOT', `${field} must use canonical spot format`, `game.rules.${field}`));
       }

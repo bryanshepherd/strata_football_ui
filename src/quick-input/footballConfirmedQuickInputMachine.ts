@@ -2706,13 +2706,16 @@ function commitKickReceiveResult(
   }
 
   if (result === 'touchback') {
-    if (context.game.rules?.touchbackSpot) {
+    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot
+      ?? context.game.rules?.touchbackSpot
+      ?? 'H25';
+    if (kickoffTouchbackSpot) {
       return {
         state: makeReadyState({
           ...baseActiveState(state),
           tokens: {
             ...tokens,
-            kickTouchbackSpot: ruleSpotForTeam(context.game.rules.touchbackSpot, context.play.actionTeam, 'opponent'),
+            kickTouchbackSpot: ruleSpotForTeam(kickoffTouchbackSpot, context.play.actionTeam, 'opponent'),
           },
         }, context),
       };
@@ -5213,7 +5216,10 @@ function kickoffCatchSpot(tokens: FootballFlowTokens): Spot | undefined {
 
 function kickoffEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputContext): Spot | undefined {
   if (tokens.kickReceiveResult === 'touchback') {
-    return tokens.kickTouchbackSpot ?? ruleSpotForTeam(context.game.rules?.touchbackSpot, context.play.actionTeam, 'opponent');
+    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot
+      ?? context.game.rules?.touchbackSpot
+      ?? 'H25';
+    return tokens.kickTouchbackSpot ?? ruleSpotForTeam(kickoffTouchbackSpot, context.play.actionTeam, 'opponent');
   }
   if (tokens.kickReceiveResult === 'return') return tokens.returnEndSpot;
   if (tokens.kickReceiveResult === 'fairCatch') return tokens.kickFairCatchSpot;
@@ -5287,7 +5293,7 @@ function resolveReturnGoalOutcome(
   const safety = relativeEnd === 0 && tokens.returnOwnGoalDecision === 'safety';
   const touchback = relativeEnd === 0 && tokens.returnOwnGoalDecision === 'touchback';
   const touchbackRuleSpot = tokens.returnFlow?.type === 'Kickoff'
-    ? context.game.rules?.touchbackSpot ?? 'H25'
+    ? context.game.rules?.kickoffTouchbackSpot ?? context.game.rules?.touchbackSpot ?? 'H25'
     : context.game.rules?.nonKickTouchbackSpot ?? 'H20';
   const fieldEndYardLine = touchback && returnTeam
     ? ruleSpotForTeam(touchbackRuleSpot, returnTeam, 'own')

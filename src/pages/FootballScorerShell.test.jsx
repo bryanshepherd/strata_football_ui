@@ -587,6 +587,18 @@ describe('FootballScorerShell', () => {
     expect(screen.getByLabelText(/rusher jersey/i)).toBeInTheDocument();
   });
 
+  it('cancels an open quick-input modal with the Escape key', () => {
+    renderScorer();
+
+    fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+    expect(screen.getByRole('dialog', { name: /rush/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: /rush/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Choose a play type.').length).toBeGreaterThan(0);
+  });
+
   it('keeps flow progress on play and penalty modals where it verifies entered data', () => {
     const cases = [
       [/^rush/i, /^rush$/i],

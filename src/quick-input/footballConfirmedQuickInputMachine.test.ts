@@ -1190,6 +1190,25 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('touchback');
   });
 
+  it('uses the kickoff touchback spot instead of the general touchback spot', () => {
+    const context = makeContext({
+      rules: {
+        touchbackSpot: 'H20',
+        kickoffTouchbackSpot: 'H25',
+      },
+    });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V00', context), context);
+    const touchback = commitTokenWithContext(inputTokenWithContext(withDestination, 'T', context), context);
+
+    expect(touchback.draft?.result).toMatchObject({
+      code: 'touchback',
+      endYardLine: 'V25',
+      nextPossession: 'V',
+    });
+  });
+
   it.each([
     ['W00', 'H00'],
     ['f00', 'V00'],
@@ -2501,7 +2520,9 @@ function makeContext(options: {
       },
       rules: {
         kickoffSpot: 'H35',
-        touchbackSpot: 'V25',
+        touchbackSpot: 'V20',
+        kickoffTouchbackSpot: 'V25',
+        nonKickTouchbackSpot: 'V20',
         patSpot: 'V03',
         ...options.rules,
       },

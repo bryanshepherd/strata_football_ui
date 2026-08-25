@@ -237,6 +237,7 @@ export interface Rules {
    * via the `definition` "spot".
    */
   touchbackSpot?: string;
+  kickoffTouchbackSpot?: string;
   nonKickTouchbackSpot?: string;
   /**
    * This interface was referenced by `GameEnvelope`'s JSON-Schema

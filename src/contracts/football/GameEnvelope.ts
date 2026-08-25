@@ -137,6 +137,7 @@ export interface Rules {
   fieldLength?: number;
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
+  kickoffTouchbackSpot?: Spot;
   nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
   safetyKickSpot?: Spot;

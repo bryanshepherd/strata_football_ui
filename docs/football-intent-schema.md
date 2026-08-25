@@ -184,6 +184,8 @@ type DraftRulesSnapshot = {
   yardsToFirstDown?: number;
   kickoffSpot?: Spot;
   touchbackSpot?: Spot;
+  kickoffTouchbackSpot?: Spot;
+  nonKickTouchbackSpot?: Spot;
   patSpot?: Spot;
 };
 
@@ -1157,7 +1159,7 @@ Downstream validation:
   "createdAt": "2026-06-20T00:07:00Z",
   "updatedAt": "2026-06-20T00:07:04Z",
   "revision": 2,
-  "game": { "gameId": "FB-1001", "teams": { "H": { "team": "H", "abbr": "HOM" }, "V": { "team": "V", "abbr": "VIS" } }, "rules": { "touchbackSpot": "V25" } },
+  "game": { "gameId": "FB-1001", "teams": { "H": { "team": "H", "abbr": "HOM" }, "V": { "team": "V", "abbr": "VIS" } }, "rules": { "touchbackSpot": "V20", "kickoffTouchbackSpot": "V25" } },
   "source": { "kind": "fcqi", "startedBy": "hotkey", "hotkey": "K", "startedAt": "2026-06-20T00:07:00Z", "baseEventSequence": 48 },
   "play": { "family": "kickoff", "subtype": "touchback", "actionTeam": "H", "possession": "H", "period": 1, "clock": "15:00" },
   "prePlay": { "possession": null, "down": null, "distance": null, "yardLine": null, "lineToGain": null, "driveId": null, "driveNumber": 0 },

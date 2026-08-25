@@ -155,7 +155,9 @@ Clock:
       "yardsToFirstDown": 10,
       "fieldLength": 100,
       "kickoffSpot": "H35",
-      "touchbackSpot": "V25",
+      "touchbackSpot": "V20",
+      "kickoffTouchbackSpot": "V25",
+      "nonKickTouchbackSpot": "V20",
       "patSpot": "V03",
       "overtimeEnabled": true
     }
