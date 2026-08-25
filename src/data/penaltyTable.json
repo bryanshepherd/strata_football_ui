@@ -537,7 +537,7 @@
         "eject": false
       },
       "NCAA": {
-        "yards": 0,
+        "yards": 15,
         "down": "auto",
         "enforcement": "spot",
         "eject": false

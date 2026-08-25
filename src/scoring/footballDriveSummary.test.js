@@ -193,6 +193,60 @@ describe('football drive summary', () => {
     expect(summary.scoringPlay).toBe('Jackson 20 yd. pass to Ary (Rush Failed)');
   });
 
+  it('labels a kickoff-return fumble recovery as the scoring drive acquisition', () => {
+    const kickoffFumble = {
+      eventId: 'EVT-KO-FUMBLE',
+      sequence: 1,
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 2,
+      clock: '06:46',
+      participants: {
+        kicker: { playerId: 'V-93', team: 'V', role: 'kicker' },
+        returner: { playerId: 'H-44', team: 'H', role: 'returner' },
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V28',
+        nextPossession: 'V',
+        fumble: { turnover: true, recoveredByTeam: 'V', recoverySpot: 'V28' },
+        turnover: { type: 'fumble', recoveredBy: 'V', spot: 'V28' },
+      },
+    };
+    const touchdown = {
+      ...rushTouchdown,
+      eventId: 'EVT-KO-FUMBLE-TD',
+      sequence: 2,
+      period: 2,
+      clock: '05:41',
+      preState: { driveId: 'DRV-2', possession: 'V', yardLine: 'H26' },
+    };
+    const pat = {
+      ...tryEvent('kick', {
+        code: 'made',
+        scoring: { team: 'V', points: 1, type: 'patKick' },
+      }, {
+        primary: { playerId: 'V-93' },
+        kicker: { playerId: 'V-93' },
+      }),
+      period: 2,
+      clock: '05:41',
+    };
+    const summary = buildFootballDriveSummary(
+      envelopeFor([kickoffFumble, touchdown, pat], {
+        startYardLine: 'V28',
+        startClock: '06:38',
+        startPeriod: 2,
+        endClock: '05:41',
+        endPeriod: 2,
+        startReason: 'kickoff',
+      }),
+      pat,
+    );
+
+    expect(summary.startInfo).toBe('Start: 6:38 at V28 by Fumble Recovery');
+  });
+
   it('keeps suffixes out of the last-name display', () => {
     expect(footballPlayerLastName('Larrey Williams III')).toBe('Williams');
     expect(footballPlayerLastName('Todd Gregory, Jr.')).toBe('Gregory');

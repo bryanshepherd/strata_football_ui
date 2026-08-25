@@ -51,6 +51,8 @@ describe('penaltyTable', () => {
         expect.objectContaining({
           code: 'DPI',
           name: 'Defensive Pass Interference',
+          yards: 15,
+          defaultEnforcement: 'SPOT',
           automaticFirstDown: true,
         }),
         expect.objectContaining({
@@ -167,6 +169,26 @@ describe('penaltyTable', () => {
 
     expect(findFootballPenaltyDefinition('NEW1')).toBeNull();
     expect(findFootballPenaltyDefinition('NEW2')).toMatchObject({ name: 'Revised Test Penalty' });
+  });
+
+  it('restores fixed catalog yards when an older code-only override stored zero or blank yards', () => {
+    const base = findFootballPenaltyDefinition('Defensive Holding', 'NCAA');
+
+    const zeroYards = saveFootballPenaltyDefinition({
+      ...base,
+      code: 'DH',
+      yards: 0,
+    }, { previousCode: 'DH' });
+    expect(zeroYards.yards).toBe(10);
+    expect(findFootballPenaltyDefinition('DH', 'NCAA')?.yards).toBe(10);
+
+    const blankYards = saveFootballPenaltyDefinition({
+      ...base,
+      code: 'DH',
+      yards: '' as unknown as number,
+    }, { previousCode: 'DH' });
+    expect(blankYards.yards).toBe(10);
+    expect(findFootballPenaltyDefinition('DH', 'NCAA')?.yards).toBe(10);
   });
 
   it('does not save a penalty with no valid timing', () => {

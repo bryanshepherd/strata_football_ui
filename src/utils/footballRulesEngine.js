@@ -335,14 +335,26 @@ function applyScrimmagePlay(envelope, event, preState, endYardLine, options, tra
 
 function applyKickoff(envelope, event, preState, endYardLine, options, trace, rules) {
   const kickingTeam = kickoffKickingTeam(event, preState);
-  const receivingTeam = normalizeTeamCode(event.result?.nextPossession || event.postState?.possession) || oppositeTeam(kickingTeam);
-  const drive = createStartedDrive(envelope, receivingTeam, endYardLine, 'kickoff', options);
-  const lineToGain = calculateLineToGain(endYardLine, receivingTeam, rules.yardsToFirstDown);
+  const possessionTeam = normalizeTeamCode(
+    event.result?.nextPossession
+    || event.result?.turnover?.recoveredBy
+    || event.result?.turnover?.team
+    || event.postState?.possession,
+  ) || oppositeTeam(kickingTeam);
+  const kickoffReturnTurnover = Boolean(
+    event.result?.fumble?.turnover
+    || event.result?.turnover?.type === 'fumble',
+  ) && possessionTeam === kickingTeam;
+  const startReason = kickoffReturnTurnover ? 'fumbleRecovery' : 'kickoff';
+  const drive = createStartedDrive(envelope, possessionTeam, endYardLine, startReason, options);
+  const lineToGain = calculateLineToGain(endYardLine, possessionTeam, rules.yardsToFirstDown);
 
   addTrace(trace, 'drive', 'kickoff new-drive checks', {
-    input: { kickingTeam, receivingTeam, endYardLine },
+    input: { kickingTeam, possessionTeam, endYardLine, kickoffReturnTurnover },
     result: `start ${drive.driveId}`,
-    reason: 'Kickoffs create the receiving team drive and do not assign a kickoff return as the previous drive result.',
+    reason: kickoffReturnTurnover
+      ? 'A fumble recovered by the kicking team starts its drive by fumble recovery.'
+      : 'Kickoffs create the receiving team drive and do not assign a kickoff return as the previous drive result.',
   });
 
   return finish({
@@ -350,7 +362,7 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
     event,
     trace,
     liveState: createLiveState({
-      possession: receivingTeam,
+      possession: possessionTeam,
       down: 1,
       yardLine: endYardLine,
       lineToGain,
@@ -363,7 +375,7 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
       endedDriveId: null,
       startedDrive: drive,
       driveResult: null,
-      reason: 'kickoff',
+      reason: startReason,
     },
     yardsGained: null,
     firstDown: true,

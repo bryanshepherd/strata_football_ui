@@ -5181,7 +5181,9 @@ function buildSingleDraftPenalty(
   if (input.resolution === 'accepted') {
     penalty.playerId = tokens.penaltyPlayer?.playerId ?? null;
     penalty.penalizedPlayerId = tokens.penaltyPlayer?.playerId;
-    penalty.enforcedFrom = tokens.penaltyEnforcedFrom ?? (input.source === 'immediate' ? 'PREVIOUS' : undefined);
+    const requestedEnforcedFrom = tokens.penaltyEnforcedFrom ?? (input.source === 'immediate' ? 'PREVIOUS' : undefined);
+    const dpiAward = ncaaDefensivePassInterferenceAward(context, tokens, baseDraft, requestedEnforcedFrom);
+    penalty.enforcedFrom = dpiAward?.enforcedFrom ?? requestedEnforcedFrom;
     penalty.spotOfFoul = tokens.penaltySpotOfFoul;
     penalty.spot = tokens.penaltySpotOfFoul;
     penalty.finalSpot = tokens.penaltyFinalSpot;
@@ -5441,7 +5443,9 @@ function derivePenaltyYards(
   finalSpot: Spot | undefined,
 ): number | undefined {
   if (!enforcedFrom || !finalSpot) return undefined;
-  const basisSpot = penaltyEnforcementBasisSpot(context, tokens, baseDraft, enforcedFrom);
+  const basisSpot = isNcaaDefensivePassInterference(context, tokens)
+    ? context.prePlay.yardLine
+    : penaltyEnforcementBasisSpot(context, tokens, baseDraft, enforcedFrom);
   if (!basisSpot) return undefined;
   const possession = baseDraft?.play.possession
     ?? baseDraft?.play.actionTeam
@@ -5464,6 +5468,14 @@ function suggestedPenaltyFinalSpot(
   tokens: FootballFlowTokens,
   baseDraft: FootballDraftIntent | undefined,
 ): Spot | undefined {
+  const dpiAward = ncaaDefensivePassInterferenceAward(
+    context,
+    tokens,
+    baseDraft,
+    tokens.penaltyEnforcedFrom,
+  );
+  if (dpiAward) return dpiAward.spot;
+
   const tableYards = tokens.penaltyDefinition?.yards;
   const penaltyTeam = tokens.penaltyTeam;
   const enforcedFrom = tokens.penaltyEnforcedFrom;
@@ -5484,6 +5496,56 @@ function suggestedPenaltyFinalSpot(
     yards: Math.abs(tableYards),
     touchdown: baseDraft?.result.code === 'touchdown',
   })?.spot;
+}
+
+function isNcaaDefensivePassInterference(
+  context: FootballQuickInputContext,
+  tokens: FootballFlowTokens,
+): boolean {
+  if (footballPenaltyRulesetFromRules(context.game.rules) !== 'NCAA') return false;
+  const code = String(tokens.penaltyDefinition?.code || tokens.penaltyCode || '').trim().toUpperCase();
+  const name = String(tokens.penaltyDefinition?.name || tokens.penaltyName || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+  return code === 'DPI' || name === 'DEFENSIVEPASSINTERFERENCE';
+}
+
+function ncaaDefensivePassInterferenceAward(
+  context: FootballQuickInputContext,
+  tokens: FootballFlowTokens,
+  baseDraft: FootballDraftIntent | undefined,
+  enforcedFrom: PenaltyEnforcedFromSelection | undefined,
+): { spot: Spot; enforcedFrom: PenaltyEnforcedFromSelection } | undefined {
+  if (!isNcaaDefensivePassInterference(context, tokens) || !enforcedFrom) return undefined;
+  const possession = baseDraft?.play.possession
+    ?? baseDraft?.play.actionTeam
+    ?? context.prePlay.possession
+    ?? context.play.possession
+    ?? context.play.actionTeam;
+  const previous = spotToTeamEngineYard(context.prePlay.yardLine, possession);
+  if (typeof previous !== 'number') return undefined;
+
+  const foul = enforcedFrom === 'SPOT'
+    ? spotToTeamEngineYard(tokens.penaltySpotOfFoul, possession)
+    : undefined;
+  if (enforcedFrom === 'SPOT' && typeof foul !== 'number') return undefined;
+  const foulDistance = typeof foul === 'number' ? Math.max(0, foul - previous) : 15;
+  const awardedDistance = Math.min(15, foulDistance);
+  let awardedPosition = previous + awardedDistance;
+  if (previous >= 98) {
+    awardedPosition = previous + ((100 - previous) / 2);
+  } else if (awardedPosition > 98) {
+    awardedPosition = 98;
+  }
+  const roundedPosition = Math.min(99, Math.ceil(awardedPosition));
+  const spot = engineYardToSpot(roundedPosition, possession);
+  if (!spot) return undefined;
+  const usesPreviousSpot = enforcedFrom === 'PREVIOUS'
+    || foulDistance >= 15
+    || previous >= 98
+    || (typeof foul === 'number' && roundedPosition !== Math.ceil(foul));
+  return { spot, enforcedFrom: usesPreviousSpot ? 'PREVIOUS' : 'SPOT' };
 }
 
 function penaltyEnforcementBasisSpot(

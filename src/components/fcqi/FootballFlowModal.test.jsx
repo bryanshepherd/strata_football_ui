@@ -4,6 +4,55 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('uses Backspace for text editing until the field is empty, then goes back a step', () => {
+    const onBackStep = vi.fn();
+    render(
+      <FootballFlowModal
+        onBackStep={onBackStep}
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          status: 'token.awaiting',
+          flow: 'rush',
+          currentStep: 'rusherJersey',
+          currentToken: '22',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    const input = screen.getByRole('textbox', { name: /rusher jersey/i });
+    fireEvent.keyDown(input, { key: 'Backspace', code: 'Backspace' });
+    expect(onBackStep).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.keyDown(input, { key: 'Backspace', code: 'Backspace' });
+    expect(onBackStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses Backspace immediately on a button-only step', () => {
+    const onBackStep = vi.fn();
+    render(
+      <FootballFlowModal
+        onBackStep={onBackStep}
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          status: 'token.awaiting',
+          flow: 'rush',
+          currentStep: 'result',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: 'Backspace', code: 'Backspace' });
+    expect(onBackStep).toHaveBeenCalledTimes(1);
+  });
+
   it('maps the physical Escape key to the modal Esc control', () => {
     const onCancel = vi.fn();
     render(

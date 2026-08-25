@@ -748,6 +748,23 @@ describe('FootballScorerShell', () => {
     expect(screen.getAllByText('Choose rush result.').length).toBeGreaterThan(0);
   });
 
+  it('uses Backspace to restore the previous modal answer without overriding text deletion', () => {
+    renderScorer();
+
+    fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+    const jerseyInput = screen.getByLabelText(/rusher jersey/i);
+    fireEvent.change(jerseyInput, { target: { value: '22' } });
+    fireEvent.keyDown(jerseyInput, { key: 'Backspace', code: 'Backspace' });
+    expect(screen.getByLabelText(/rusher jersey/i)).toHaveValue('22');
+
+    fireEvent.submit(jerseyInput.closest('form'));
+    expect(screen.getByRole('dialog', { name: /rush result/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Backspace', code: 'Backspace' });
+    expect(screen.getByRole('dialog', { name: /^rush$/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/rusher jersey/i)).toHaveValue('22');
+  });
+
   it('removes text inputs from one-key selection modals while keeping hotkey buttons active', () => {
     renderScorer();
 
@@ -1566,6 +1583,24 @@ describe('FootballScorerShell', () => {
     } finally {
       submitMock.restore();
     }
+  });
+
+  it('prepopulates the penalty final-spot modal with defensive holding yardage', () => {
+    renderScorer();
+
+    fireEvent.keyDown(window, { key: 'e', code: 'KeyE' });
+    const penaltyNameInput = screen.getByPlaceholderText(/hold or holding/i);
+    fireEvent.change(penaltyNameInput, { target: { value: 'Defensive Holding' } });
+    fireEvent.submit(penaltyNameInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^visitor tech v$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
+
+    const playerInput = screen.getByLabelText(/penalized player/i);
+    fireEvent.change(playerInput, { target: { value: '' } });
+    fireEvent.submit(playerInput.closest('form'));
+
+    const finalSpotDialog = screen.getByRole('dialog', { name: /penalty final spot/i });
+    expect(within(finalSpotDialog).getByLabelText(/^final spot$/i)).toHaveValue('V46');
   });
 
   it('shows the play summary immediately after completing the rush flow', async () => {

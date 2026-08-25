@@ -175,7 +175,10 @@ export function saveFootballPenaltyDefinition(
     replacedLookupKeys: [...replacedLookupKeys],
   };
   writeStoredPenaltyTable(storedTable);
-  return clonePenaltyEntry(normalized);
+  const saved = listFootballPenaltyTable(normalized.ruleset ?? 'NCAA').find((entry) => (
+    entry.lookupKey === normalized.lookupKey || entry.code === normalized.code
+  ));
+  return clonePenaltyEntry(saved || normalized);
 }
 
 export function resetFootballPenaltyTableForTests(): void {
@@ -234,7 +237,7 @@ function normalizePenaltyEntry(
   const name = String(entry.name || '').trim();
   if (!code) throw new Error('Penalty code is required.');
   if (!name) throw new Error('Penalty name is required.');
-  const yards = entry.yards === undefined || entry.yards === null
+  const yards = entry.yards === undefined || entry.yards === null || String(entry.yards).trim() === ''
     ? undefined
     : Number(entry.yards);
   const liveBall = Boolean(entry.liveBall);
@@ -280,9 +283,25 @@ function mergePenaltyTable(
     .filter((entry) => !entry.code || !replacedCodes.has(entry.code))
     .map(clonePenaltyEntry);
   stored.entries.forEach((entry) => {
+    const seed = seeds.find((candidate) => (
+      candidate.lookupKey === entry.lookupKey
+      || (candidate.code && candidate.code === entry.code)
+      || (
+        normalizePenaltySearch(candidate.name) === normalizePenaltySearch(entry.name)
+        && candidate.team === entry.team
+      )
+    ));
+    const restoreFixedSeedYards = typeof seed?.yards === 'number'
+      && seed.yards > 0
+      && (entry.yards === undefined || entry.yards === 0);
+    const mergedEntry = clonePenaltyEntry({
+      ...(seed || {}),
+      ...entry,
+      ...(restoreFixedSeedYards ? { yards: seed.yards } : {}),
+    });
     const index = merged.findIndex((candidate) => candidate.code && candidate.code === entry.code);
-    if (index >= 0) merged[index] = clonePenaltyEntry(entry);
-    else merged.push(clonePenaltyEntry(entry));
+    if (index >= 0) merged[index] = mergedEntry;
+    else merged.push(mergedEntry);
   });
   return merged.sort((left, right) => (
     left.name.localeCompare(right.name)

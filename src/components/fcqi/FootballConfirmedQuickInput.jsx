@@ -154,6 +154,7 @@ export default function FootballConfirmedQuickInput({
   });
   const startCounter = useRef(0);
   const submitInFlightRef = useRef(false);
+  const modalStepHistoryRef = useRef([]);
   const context = useMemo(
     () => buildQuickInputContext(envelope, startMeta, teamAliases),
     [envelope, startMeta, teamAliases],
@@ -178,6 +179,10 @@ export default function FootballConfirmedQuickInput({
     });
   };
 
+  const clearModalStepHistory = () => {
+    modalStepHistoryRef.current = [];
+  };
+
   const applyEvent = (event, activeContext = context, baseState = currentState) =>
     transitionFootballQuickInput(baseState, event, activeContext).state;
 
@@ -199,6 +204,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('rush', startedBy, 'R');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -212,6 +218,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('pass', startedBy, 'P');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -225,6 +232,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('punt', startedBy, 'U');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -238,6 +246,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('kick', startedBy, 'K');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -251,6 +260,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('pat', startedBy, 'A');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     let nextState = transitionFootballQuickInput(currentState, {
@@ -267,6 +277,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('penalty', startedBy, 'E');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -280,6 +291,7 @@ export default function FootballConfirmedQuickInput({
     const nextStartMeta = createStartMeta('game-control', startedBy, 'G');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent(
@@ -332,18 +344,34 @@ export default function FootballConfirmedQuickInput({
     clearSubmitStatus();
     const normalizedValue = String(value || '').trim().toUpperCase();
     if (currentState.currentStep === 'gameControlMenu' && normalizedValue === 'R' && onOpenStarters) {
+      clearModalStepHistory();
       publishState(createInitialFootballQuickInputState());
       onOpenStarters();
       return;
     }
     if (currentState.currentStep === 'gameControlMenu' && normalizedValue === 'F' && onOpenPenaltyEditor) {
+      clearModalStepHistory();
       publishState(createInitialFootballQuickInputState());
       onOpenPenaltyEditor();
       return;
     }
-    let nextState = applyEvent({ type: 'INPUT_TOKEN', value });
-    nextState = transitionFootballQuickInput(nextState, { type: 'COMMIT_TOKEN' }, context).state;
+    const tokenState = applyEvent({ type: 'INPUT_TOKEN', value });
+    const nextState = transitionFootballQuickInput(tokenState, { type: 'COMMIT_TOKEN' }, context).state;
+    const advanced = nextState.status !== 'token.error'
+      && (nextState.status !== tokenState.status || nextState.currentStep !== tokenState.currentStep);
+    if (advanced) {
+      modalStepHistoryRef.current = [...modalStepHistoryRef.current.slice(-99), tokenState];
+    }
     publishState(nextState);
+  };
+
+  const goBackStep = () => {
+    const previousState = modalStepHistoryRef.current[modalStepHistoryRef.current.length - 1];
+    if (!previousState) return;
+    modalStepHistoryRef.current = modalStepHistoryRef.current.slice(0, -1);
+    setPenaltyMessage('');
+    clearSubmitStatus();
+    publishState(previousState);
   };
 
   const selectDuplicatePlayer = (playerId) => {
@@ -413,6 +441,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const editPlay = () => {
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent({ type: 'EDIT_PLAY' }));
@@ -424,6 +453,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const cancelFlow = () => {
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent({ type: 'CANCEL' }));
@@ -432,6 +462,7 @@ export default function FootballConfirmedQuickInput({
   const buildResult = currentState.buildResult;
   const progressSteps = buildFootballFlowProgressSteps(currentState);
   const jumpToStep = (stepId) => {
+    clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
     publishState(applyEvent({ type: 'JUMP_TO_STEP', stepId }));
@@ -600,6 +631,7 @@ export default function FootballConfirmedQuickInput({
       </div>
 
       <FootballFlowModal
+        onBackStep={goBackStep}
         onCancel={cancelFlow}
         onStepClick={jumpToStep}
         onTokenCommit={commitToken}
@@ -612,7 +644,10 @@ export default function FootballConfirmedQuickInput({
       />
       <FootballDuplicatePlayerModal
         duplicate={currentState.status === 'jersey.disambiguating' ? currentState.duplicate : null}
-        onCancel={() => publishState(applyEvent({ type: 'CANCEL_DUPLICATE' }))}
+        onCancel={() => {
+          modalStepHistoryRef.current = modalStepHistoryRef.current.slice(0, -1);
+          publishState(applyEvent({ type: 'CANCEL_DUPLICATE' }));
+        }}
         onSelect={selectDuplicatePlayer}
         queuedPenaltyActive={Boolean(currentState.queuedPenaltyRequested)}
       />

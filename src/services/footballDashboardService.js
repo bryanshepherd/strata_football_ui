@@ -613,6 +613,44 @@ const kickoffReceivingTeam = (event) => {
   return validTeamCode(nextPossession) ? nextPossession : null;
 };
 
+const repairKickoffReturnFumbleDriveReasons = (envelope) => {
+  const events = [...(envelope?.events || [])]
+    .filter((event) => !event.status || event.status === 'accepted')
+    .sort((left, right) => finiteNumber(left.sequence) - finiteNumber(right.sequence));
+  const firstEventIndexByDrive = new Map();
+  events.forEach((event, index) => {
+    const driveId = event?.preState?.driveId;
+    if (driveId && !firstEventIndexByDrive.has(driveId)) firstEventIndexByDrive.set(driveId, index);
+  });
+
+  const repairDrive = (drive) => {
+    if (!drive || String(drive.startReason || '').toLowerCase() !== 'kickoff') return drive;
+    const firstDriveEventIndex = firstEventIndexByDrive.get(drive.driveId);
+    if (!Number.isInteger(firstDriveEventIndex) || firstDriveEventIndex < 1) return drive;
+    const acquisition = events[firstDriveEventIndex - 1];
+    const recoveryTeam = acquisition?.result?.turnover?.recoveredBy
+      || acquisition?.result?.turnover?.team
+      || acquisition?.result?.fumble?.recoveredByTeam
+      || acquisition?.result?.nextPossession;
+    const kickingTeam = acquisition?.participants?.kicker?.team
+      || acquisition?.participants?.primary?.team
+      || acquisition?.possession;
+    const isKickoffReturnFumble = acquisition?.type === 'kickoff' && Boolean(
+      acquisition?.result?.fumble?.turnover
+      || acquisition?.result?.turnover?.type === 'fumble',
+    );
+    if (!isKickoffReturnFumble || recoveryTeam !== kickingTeam || drive.team !== recoveryTeam) return drive;
+    return { ...drive, startReason: 'fumbleRecovery' };
+  };
+
+  const current = repairDrive(envelope?.drives?.current || null);
+  const completed = (envelope?.drives?.completed || []).map(repairDrive);
+  const changed = current !== envelope?.drives?.current
+    || completed.some((drive, index) => drive !== envelope?.drives?.completed?.[index]);
+  if (!changed) return envelope;
+  return { ...envelope, drives: { ...envelope.drives, current, completed } };
+};
+
 const ownTeamRuleSpot = (spot, team) => {
   if (!validTeamCode(team) || !spot) return spot || null;
   if (spot === '50' || spot === 'H50' || spot === 'V50') return '50';
@@ -665,11 +703,12 @@ const repairMissingOpeningKickoffSpot = (envelope) => {
 
 export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(envelope);
-  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedOpeningEnvelope);
-  const repairedStats = repairFootballPossessionTimeFromDrives(repairedOpeningEnvelope, replayedStats);
-  const normalizedEnvelope = repairedStats === repairedOpeningEnvelope?.stats
-    ? repairedOpeningEnvelope
-    : { ...repairedOpeningEnvelope, stats: repairedStats };
+  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedOpeningEnvelope);
+  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
+  const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
+  const normalizedEnvelope = repairedStats === repairedDriveEnvelope?.stats
+    ? repairedDriveEnvelope
+    : { ...repairedDriveEnvelope, stats: repairedStats };
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');

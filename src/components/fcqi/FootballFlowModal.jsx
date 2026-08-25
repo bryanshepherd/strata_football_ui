@@ -750,6 +750,7 @@ const challengeStatusButtons = [
 export default function FootballFlowModal({
   state,
   prePlaySpot,
+  onBackStep,
   onCancel,
   onStepClick,
   onTokenCommit,
@@ -789,7 +790,19 @@ export default function FootballFlowModal({
     if (!activeStep || (state.status !== 'token.awaiting' && state.status !== 'token.error')) return undefined;
 
     const onKeyDown = (event) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.key !== 'Escape') return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === 'Backspace' && typeof onBackStep === 'function') {
+        const editableTarget = event.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+        const editableValue = editableTarget && 'value' in editableTarget
+          ? String(editableTarget.value || '')
+          : String(editableTarget?.textContent || '');
+        if (editableTarget && editableValue.length > 0) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat) onBackStep();
+        return;
+      }
+      if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopImmediatePropagation();
       onCancel();
@@ -797,7 +810,7 @@ export default function FootballFlowModal({
 
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [onCancel, state.currentStep, state.status]);
+  }, [onBackStep, onCancel, state.currentStep, state.status]);
 
   useEffect(() => {
     if (!activeButtons || state.status !== 'token.awaiting') return undefined;

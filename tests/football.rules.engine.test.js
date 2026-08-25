@@ -299,6 +299,73 @@ describe('footballRulesEngine event application', () => {
     });
   });
 
+  it('starts a kicking-team drive by fumble recovery when it recovers the kickoff return', () => {
+    const result = applyFootballEventToEnvelope(gameEnvelopeFixtures.pregame, {
+      clientEventId: 'test-kickoff-return-fumble',
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 2,
+      clock: '06:46',
+      possession: null,
+      preState: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'H35',
+        lineToGain: null,
+        driveId: null,
+        driveNumber: 9,
+      },
+      participants: {
+        primary: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-85', team: 'V', role: 'returner' },
+        fumbler: { playerId: 'V-85', team: 'V', role: 'returner' },
+        recoveredBy: { playerId: 'H-31', team: 'H', role: 'recoverer' },
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V28',
+        nextPossession: 'H',
+        fumble: {
+          fumblerPlayerId: 'V-85',
+          spot: 'V26',
+          recoveredByPlayerId: 'H-31',
+          recoveredByTeam: 'H',
+          recoverySpot: 'V28',
+          turnover: true,
+        },
+        turnover: {
+          type: 'fumble',
+          team: 'H',
+          playerId: 'H-31',
+          spot: 'V28',
+          recoveredBy: 'H',
+          returnEndYardLine: 'V28',
+        },
+      },
+      penalties: [],
+    });
+
+    expect(result.liveState).toMatchObject({
+      possession: 'H',
+      down: 1,
+      yardLine: 'V28',
+      lineToGain: 'V18',
+    });
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: true,
+      driveResult: null,
+      reason: 'fumbleRecovery',
+      startedDrive: {
+        team: 'H',
+        startYardLine: 'V28',
+        startReason: 'fumbleRecovery',
+      },
+    });
+  });
+
   it('ends punts and starts the receiving team drive', () => {
     const event = {
       clientEventId: 'test-punt',

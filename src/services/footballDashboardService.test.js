@@ -363,6 +363,70 @@ describe('local football test-game projection', () => {
     });
   });
 
+  it('repairs a stored kickoff drive reason when the kicking team recovered a return fumble', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events = [
+      {
+        eventId: 'KO-FUMBLE-1',
+        sequence: 1,
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        period: 2,
+        clock: '06:46',
+        participants: {
+          kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-85', team: 'V', role: 'returner' },
+        },
+        result: {
+          code: 'returned',
+          endYardLine: 'V28',
+          nextPossession: 'H',
+          fumble: { turnover: true, recoveredByTeam: 'H', recoverySpot: 'V28' },
+          turnover: { type: 'fumble', recoveredBy: 'H', spot: 'V28' },
+        },
+      },
+      {
+        eventId: 'KO-FUMBLE-DRIVE-PLAY-2',
+        sequence: 2,
+        status: 'accepted',
+        type: 'rush',
+        period: 2,
+        clock: '06:38',
+        possession: 'H',
+        preState: {
+          possession: 'H',
+          down: 1,
+          distance: 10,
+          yardLine: 'V28',
+          lineToGain: 'V18',
+          driveId: 'DRV-0010',
+          driveNumber: 10,
+        },
+        result: { code: 'tackle', yards: 2, endYardLine: 'V26' },
+        penalties: [],
+      },
+    ];
+    envelope.drives = {
+      current: null,
+      completed: [{
+        driveId: 'DRV-0010',
+        driveNumber: 10,
+        team: 'H',
+        startYardLine: 'V28',
+        startReason: 'kickoff',
+        plays: 3,
+        yards: 28,
+        result: 'touchdown',
+      }],
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.drives.completed[0].startReason).toBe('fumbleRecovery');
+    expect(envelope.drives.completed[0].startReason).toBe('kickoff');
+  });
+
   it('accepts an exact retry but rejects a reused client event ID for a different play', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const firstRequest = playRequest(envelope, 'fcqi-rush-10-client', {

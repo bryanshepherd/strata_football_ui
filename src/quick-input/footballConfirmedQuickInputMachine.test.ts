@@ -752,6 +752,100 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(state.currentToken).toBe('V14');
   });
 
+  it('prefills NCAA defensive holding from the previous spot with its restored 10-yard value', () => {
+    const context = makeContext({
+      play: { actionTeam: 'V', possession: 'V' },
+      prePlay: { possession: 'V', yardLine: 'V41', lineToGain: 'H49', distance: 8 },
+    });
+    const state = commitPenaltyTokens(
+      startPenalty('immediate', context),
+      ['Defensive Holding', 'H', 'A', ''],
+      context,
+    );
+
+    expect(state).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'penaltyFinalSpot',
+      currentToken: 'H49',
+    });
+    expect(state.tokens.penaltyDefinition?.yards).toBe(10);
+
+    const ready = commitPenaltyTokens(state, ['H49'], context);
+    expect(ready.draft?.penalties[0]).toMatchObject({
+      tableYards: 10,
+      yards: 10,
+      enforcedFrom: 'PREVIOUS',
+      finalSpot: 'H49',
+    });
+  });
+
+  it('calculates NCAA DPI from the foul spot with the 15-yard maximum and two-yard-line cap', () => {
+    const context = makeContext({
+      play: { actionTeam: 'H', possession: 'H' },
+      prePlay: { possession: 'H', yardLine: 'V31', lineToGain: 'V21', distance: 10 },
+    });
+    const queued = transitionWithContext(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' }, context);
+    const atLeastFifteenYards = commitPenaltyTokens(
+      startQueuedPenalty(queued, context),
+      ['Defensive Pass Interference', 'V', 'A', '', 'F', 'V10'],
+      context,
+    );
+
+    expect(atLeastFifteenYards).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'penaltyFinalSpot',
+      currentToken: 'V16',
+    });
+    const completedFifteenYards = commitPenaltyTokens(atLeastFifteenYards, ['V16', 'A'], context);
+    expect(completedFifteenYards.draft?.penalties[0]).toMatchObject({
+      tableYards: 15,
+      yards: 15,
+      enforcedFrom: 'PREVIOUS',
+      spotOfFoul: 'V10',
+      finalSpot: 'V16',
+    });
+
+    const shortFoul = commitPenaltyTokens(
+      startQueuedPenalty(queued, context),
+      ['Defensive Pass Interference', 'V', 'A', '', 'F', 'V25'],
+      context,
+    );
+    expect(shortFoul.currentToken).toBe('V25');
+    const completedShortFoul = commitPenaltyTokens(shortFoul, ['V25', 'A'], context);
+    expect(completedShortFoul.draft?.penalties[0]).toMatchObject({
+      tableYards: 15,
+      yards: 6,
+      enforcedFrom: 'SPOT',
+      spotOfFoul: 'V25',
+      finalSpot: 'V25',
+    });
+
+    const goalLineContext = makeContext({
+      play: { actionTeam: 'H', possession: 'H' },
+      prePlay: { possession: 'H', yardLine: 'V05', lineToGain: 'goal', distance: 5 },
+    });
+    const goalLineQueued = transitionWithContext(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' }, goalLineContext);
+    const endZoneFoul = commitPenaltyTokens(
+      startQueuedPenalty(goalLineQueued, goalLineContext),
+      ['Defensive Pass Interference', 'V', 'A', '', 'F', 'goal'],
+      goalLineContext,
+    );
+
+    expect(endZoneFoul).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'penaltyFinalSpot',
+      currentToken: 'V02',
+    });
+    const completedEndZoneFoul = commitPenaltyTokens(endZoneFoul, ['V02', 'A'], goalLineContext);
+    expect(completedEndZoneFoul.draft?.penalties[0]).toMatchObject({
+      tableYards: 15,
+      yards: 3,
+      enforcedFrom: 'PREVIOUS',
+      spotOfFoul: 'goal',
+      finalSpot: 'V02',
+    });
+  });
+
   it('prefills Yes for catalog entries with automatic ejection', () => {
     const state = commitPenaltyTokens(startPenalty('immediate'), ['Targeting', 'V', 'A', '']);
 

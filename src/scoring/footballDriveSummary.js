@@ -134,7 +134,6 @@ const humanizeDriveReason = (reason) => {
 };
 
 const inferredDriveReason = (events, drive, scoringEvent) => {
-  if (drive?.startReason) return drive.startReason;
   const scoringIndex = events.findIndex((event) => sameEvent(event, scoringEvent));
   let firstDriveIndex = scoringIndex;
   if (drive?.driveId) {
@@ -142,6 +141,12 @@ const inferredDriveReason = (events, drive, scoringEvent) => {
     if (located >= 0) firstDriveIndex = located;
   }
   const acquisition = firstDriveIndex > 0 ? events[firstDriveIndex - 1] : null;
+  const kickoffReturnFumble = acquisition?.type === 'kickoff' && (
+    acquisition.result?.turnover?.type === 'fumble'
+    || acquisition.result?.fumble?.turnover
+  );
+  if (kickoffReturnFumble) return 'fumbleRecovery';
+  if (drive?.startReason) return drive.startReason;
   if (!acquisition) return 'possession';
   if (acquisition.type === 'punt') return 'punt';
   if (acquisition.type === 'kickoff') return 'kickoff';
