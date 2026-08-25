@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { searchFootballPenaltyTable } from '../../quick-input/penaltyTable';
 import { formatFootballClockEntry } from '../../utils/footballClock';
+import FootballClockEntryModal from '../scorer/FootballClockEntryModal';
 import FootballFlowProgress from './FootballFlowProgress';
 
 const yardLineSteps = new Set([
@@ -781,7 +782,8 @@ export default function FootballFlowModal({
       return;
     }
     const selectionKey = `${state.flow || ''}:${state.currentStep || ''}:${state.currentToken}`;
-    if (value !== state.currentToken || selectedPrefillRef.current === selectionKey) return;
+    const visibleToken = normalizeVisibleInput(state.currentStep, state.currentToken || '');
+    if (value !== visibleToken || selectedPrefillRef.current === selectionKey) return;
     inputRef.current?.select();
     selectedPrefillRef.current = selectionKey;
   }, [state.currentStep, state.currentToken, state.flow, state.selectCurrentToken, state.status, value]);
@@ -835,6 +837,22 @@ export default function FootballFlowModal({
     event.preventDefault();
     onTokenCommit(value);
   };
+
+  if (state.currentStep === 'gameControlClock') {
+    const timeoutClock = state.tokens?.gameControlSelection === 'timeout';
+    return (
+      <FootballClockEntryModal
+        ariaLabel={timeoutClock ? 'Timeout Clock' : 'Set Game Clock'}
+        eyebrow={timeoutClock ? 'Timeout' : 'Set Game Clock'}
+        error={state.error?.message || ''}
+        inputId="fcqi-gameControlClock"
+        inputRef={inputRef}
+        onChange={(event) => setValue(normalizeVisibleInput(state.currentStep, event.target.value))}
+        onSubmit={onSubmit}
+        value={value}
+      />
+    );
+  }
 
   return (
     <ModalFrame
@@ -1076,13 +1094,6 @@ function stepCopyForState(state, aliases, teamNames) {
     return {
       ...copy,
       helper: `The kickoff was downed at ${state.tokens?.downedSpot || 'the entered spot'}, before the configured ${state.tokens?.kickDownedTouchbackTargetSpot || 'kickoff touchback spot'}. Advance the ball?`,
-    };
-  }
-  if (step === 'gameControlClock' && state.tokens?.gameControlSelection === 'timeout') {
-    return {
-      ...copy,
-      title: 'Timeout Clock',
-      helper: 'Enter the game-clock time when the timeout was called. Use M:SS or MM:SS; three digits are read as M:SS.',
     };
   }
   if (!copy || !['recoverTeam', 'penaltyTeam', 'offsettingSecondTeam', 'gameControlPossession'].includes(step)) return copy;

@@ -1827,16 +1827,19 @@ describe('footballConfirmedQuickInputMachine', () => {
     const mediaClock = commitToken(inputToken(timeoutMenu, 'M'));
     expect(officialsClock).toMatchObject({ currentStep: 'gameControlClock', tokens: { gameControlTimeoutType: 'officials' } });
     expect(mediaClock).toMatchObject({ currentStep: 'gameControlClock', tokens: { gameControlTimeoutType: 'media' } });
-    const officialsTimeout = commitToken(inputToken(officialsClock, '701'));
+    const officialsTimeout = commitToken(inputToken(officialsClock, '156'));
     const mediaTimeout = commitToken(inputToken(mediaClock, '1234'));
     expect(officialsTimeout.draft).toMatchObject({
-      play: { subtype: 'timeout', clock: '07:01' },
-      result: { clock: '07:01', gameControl: { action: 'timeout', timeoutType: 'officials', clock: '07:01' } },
+      play: { subtype: 'timeout', clock: '01:56' },
+      result: { clock: '01:56', gameControl: { action: 'timeout', timeoutType: 'officials', clock: '01:56' } },
     });
     expect(mediaTimeout.draft).toMatchObject({
       play: { subtype: 'timeout', clock: '12:34' },
       result: { clock: '12:34', gameControl: { action: 'timeout', timeoutType: 'media', clock: '12:34' } },
     });
+    expect(transition(timeout, { type: 'GENERATE_SUMMARY' }).summary?.summaryText).toBe('(6:34) Timeout called by Home State.');
+    expect(transition(officialsTimeout, { type: 'GENERATE_SUMMARY' }).summary?.summaryText).toBe('(1:56) Officials Timeout.');
+    expect(transition(mediaTimeout, { type: 'GENERATE_SUMMARY' }).summary?.summaryText).toBe('(12:34) Media Timeout.');
 
     const challengeMenu = commitToken(inputToken(startGameControl(), 'C'));
     const challengeTeam = commitToken(inputToken(challengeMenu, 'V'));

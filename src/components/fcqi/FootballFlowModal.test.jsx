@@ -285,8 +285,14 @@ describe('FootballFlowModal team aliases', () => {
     );
 
     const dialog = screen.getByRole('dialog', { name: 'Timeout Clock' });
-    expect(within(dialog).getByLabelText('Game Clock')).toHaveValue('8:42');
-    expect(dialog).toHaveTextContent(/time when the timeout was called/i);
+    const input = within(dialog).getByLabelText('Game Clock');
+    expect(dialog).toHaveTextContent('What does the game clock read?');
+    expect(input).toHaveValue('8:42');
+    expect(input).toHaveClass('font-mono', 'text-2xl', 'tracking-widest');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(4);
+    expect(within(dialog).getByRole('button', { name: 'Record Clock' })).toHaveClass('bg-sky-700');
+    expect(within(dialog).queryByRole('button', { name: 'Enter' })).not.toBeInTheDocument();
   });
 
   it('turns yellow and shows the flag shortcut while a penalty is queued', () => {

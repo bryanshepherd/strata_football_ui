@@ -8,6 +8,7 @@ import type {
   TeamCode,
 } from './footballIntentSchema';
 import { isCanonicalSpot } from './footballIntentSchema';
+import { formatFootballClockDisplay } from '../utils/footballClock';
 
 export type FootballPlaySummaryWarning = DraftWarning;
 
@@ -395,9 +396,10 @@ function gameControlSummary(context: SummaryContext): string {
 
   if (control.action === 'setClock') return sentence(`Game clock set to ${control.clock ?? intent.play.clock ?? '00:00'}`);
   if (control.action === 'timeout') {
-    if (control.timeoutType === 'officials') return sentence('Officials timeout');
-    if (control.timeoutType === 'media') return sentence('Media timeout');
-    return sentence(`${teamAbbr(intent, control.teamSide ?? intent.play.actionTeam)} timeout`);
+    const clock = formatFootballClockDisplay(control.clock ?? intent.play.clock, '0:00');
+    if (control.timeoutType === 'officials') return sentence(`(${clock}) Officials Timeout`);
+    if (control.timeoutType === 'media') return sentence(`(${clock}) Media Timeout`);
+    return sentence(`(${clock}) Timeout called by ${teamName(intent, control.teamSide ?? intent.play.actionTeam)}`);
   }
   if (control.action === 'challenge') {
     const status = String(control.challengeStatus ?? 'initiated').replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -697,6 +699,12 @@ function teamAbbr(intent: FootballDraftIntent, team: TeamCode | null | undefined
   if (team === 'H') return intent.game.teams.H.abbr || 'HOM';
   if (team === 'V') return intent.game.teams.V.abbr || 'VIS';
   return 'TEAM';
+}
+
+function teamName(intent: FootballDraftIntent, team: TeamCode | null | undefined): string {
+  if (team === 'H') return intent.game.teams.H.name || teamAbbr(intent, team);
+  if (team === 'V') return intent.game.teams.V.name || teamAbbr(intent, team);
+  return 'Team';
 }
 
 function yardagePhrase(context: SummaryContext, yards: number | undefined, field: string): string {

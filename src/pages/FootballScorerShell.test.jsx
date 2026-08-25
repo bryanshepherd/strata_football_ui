@@ -1050,7 +1050,7 @@ describe('FootballScorerShell', () => {
     fireEvent.submit(clockInput.closest('form'));
 
     const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
-    expect(summaryDialog).toHaveTextContent(/hom timeout/i);
+    expect(summaryDialog).toHaveTextContent('(6:34) Timeout called by Home State.');
     fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
     const scoreboardSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="scoreboard"]');
