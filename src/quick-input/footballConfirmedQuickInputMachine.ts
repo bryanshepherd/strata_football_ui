@@ -2706,9 +2706,7 @@ function commitKickReceiveResult(
   }
 
   if (result === 'touchback') {
-    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot
-      ?? context.game.rules?.touchbackSpot
-      ?? 'H25';
+    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot;
     if (kickoffTouchbackSpot) {
       return {
         state: makeReadyState({
@@ -3211,6 +3209,25 @@ function commitReturnOwnGoalDecision(
         'Choose Touchback (T) or Safety (S).',
         'result.code',
       ),
+    };
+  }
+  const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot;
+  if (
+    decision === 'touchback'
+    && state.tokens.returnFlow?.type === 'Kickoff'
+    && !kickoffTouchbackSpot
+  ) {
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: 'kickTouchbackSpot',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          returnOwnGoalDecision: decision,
+        },
+      },
     };
   }
   return {
@@ -5216,9 +5233,7 @@ function kickoffCatchSpot(tokens: FootballFlowTokens): Spot | undefined {
 
 function kickoffEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputContext): Spot | undefined {
   if (tokens.kickReceiveResult === 'touchback') {
-    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot
-      ?? context.game.rules?.touchbackSpot
-      ?? 'H25';
+    const kickoffTouchbackSpot = context.game.rules?.kickoffTouchbackSpot;
     return tokens.kickTouchbackSpot ?? ruleSpotForTeam(kickoffTouchbackSpot, context.play.actionTeam, 'opponent');
   }
   if (tokens.kickReceiveResult === 'return') return tokens.returnEndSpot;
@@ -5293,7 +5308,7 @@ function resolveReturnGoalOutcome(
   const safety = relativeEnd === 0 && tokens.returnOwnGoalDecision === 'safety';
   const touchback = relativeEnd === 0 && tokens.returnOwnGoalDecision === 'touchback';
   const touchbackRuleSpot = tokens.returnFlow?.type === 'Kickoff'
-    ? context.game.rules?.kickoffTouchbackSpot ?? context.game.rules?.touchbackSpot ?? 'H25'
+    ? tokens.kickTouchbackSpot ?? context.game.rules?.kickoffTouchbackSpot
     : context.game.rules?.nonKickTouchbackSpot ?? 'H20';
   const fieldEndYardLine = touchback && returnTeam
     ? ruleSpotForTeam(touchbackRuleSpot, returnTeam, 'own')

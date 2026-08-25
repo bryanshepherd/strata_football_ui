@@ -346,6 +346,29 @@ describe('footballConfirmedQuickInputMachine', () => {
     }
   });
 
+  it('uses kickoffTouchbackSpot for a kickoff return ruled a touchback', () => {
+    const context = makeContext({ rules: { touchbackSpot: 'H25', kickoffTouchbackSpot: 'H20' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V20', context), context);
+    const withReturn = commitTokenWithContext(inputTokenWithContext(withDestination, 'R', context), context);
+    const duplicateReturner = commitTokenWithContext(inputTokenWithContext(withReturn, '3', context), context);
+    const withReturner = transitionWithContext(
+      duplicateReturner,
+      { type: 'SELECT_DUPLICATE_PLAYER', playerId: 'V-3-PR' },
+      context,
+    );
+    const withTerminal = commitTokenWithContext(inputTokenWithContext(withReturner, '.', context), context);
+    const atOwnGoal = commitTokenWithContext(inputTokenWithContext(withTerminal, 'V00', context), context);
+    const touchback = commitTokenWithContext(inputTokenWithContext(atOwnGoal, 'T', context), context);
+
+    expect(touchback.draft?.result).toMatchObject({
+      code: 'touchback',
+      endYardLine: 'V20',
+      nextPossession: 'V',
+    });
+  });
+
   it('applies the same opponent/own goal rules when a defensive fumble recovery is not returned', () => {
     const touchdown = completeDefensiveFumbleRecoveryAt('H00');
     expect(touchdown.draft?.result).toMatchObject({
@@ -1190,11 +1213,15 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('touchback');
   });
 
-  it('uses the kickoff touchback spot instead of the general touchback spot', () => {
+  it.each([
+    ['NCAA', 'H25', 'V25'],
+    ['NFHS', 'H20', 'V20'],
+    ['custom', 'H30', 'V30'],
+  ])('uses the configured %s kickoff touchback spot', (_ruleset, kickoffTouchbackSpot, expectedSpot) => {
     const context = makeContext({
       rules: {
         touchbackSpot: 'H20',
-        kickoffTouchbackSpot: 'H25',
+        kickoffTouchbackSpot,
       },
     });
     const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
@@ -1204,8 +1231,26 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     expect(touchback.draft?.result).toMatchObject({
       code: 'touchback',
-      endYardLine: 'V25',
+      endYardLine: expectedSpot,
       nextPossession: 'V',
+    });
+  });
+
+  it('does not borrow the general touchback spot when the kickoff setting is missing', () => {
+    const context = makeContext({
+      rules: {
+        touchbackSpot: 'H20',
+        kickoffTouchbackSpot: undefined,
+      },
+    });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V00', context), context);
+    const touchback = commitTokenWithContext(inputTokenWithContext(withDestination, 'T', context), context);
+
+    expect(touchback).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'kickTouchbackSpot',
     });
   });
 
