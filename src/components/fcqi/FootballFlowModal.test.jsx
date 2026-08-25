@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
@@ -258,6 +258,35 @@ describe('FootballFlowModal team aliases', () => {
     expect(screen.getByRole('button', { name: 'Media M' })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'o', code: 'KeyO' });
     expect(onTokenCommit).toHaveBeenCalledWith('O');
+  });
+
+  it('labels the timeout clock prompt and accepts the current clock as a replaceable default', () => {
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          status: 'token.awaiting',
+          flow: 'gameControl',
+          currentStep: 'gameControlClock',
+          currentToken: '08:42',
+          selectCurrentToken: true,
+          tokens: {
+            laterals: [],
+            tacklers: [],
+            hurryDefenders: [],
+            sackDefenders: [],
+            gameControlSelection: 'timeout',
+            gameControlPossession: 'H',
+          },
+        }}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Timeout Clock' });
+    expect(within(dialog).getByLabelText('Game Clock')).toHaveValue('8:42');
+    expect(dialog).toHaveTextContent(/time when the timeout was called/i);
   });
 
   it('turns yellow and shows the flag shortcut while a penalty is queued', () => {

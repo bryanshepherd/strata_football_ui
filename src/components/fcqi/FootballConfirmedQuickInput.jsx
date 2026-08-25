@@ -112,6 +112,9 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'gameControlDistance') return 'Enter distance.';
   if (state.currentStep === 'gameControlSpot') return 'Enter ball spot.';
   if (state.currentStep === 'gameControlPossession') return 'Choose possession team.';
+  if (state.currentStep === 'gameControlClock') return state.tokens?.gameControlSelection === 'timeout'
+    ? 'Enter the game-clock time of the timeout.'
+    : 'Enter the game-clock time.';
   if (state.currentStep === 'endSpot') return 'Enter final ball spot.';
   if (state.currentStep === 'tackleAJersey') return state.tokens?.result === 'tackle'
     ? 'Enter tackler jersey number.'

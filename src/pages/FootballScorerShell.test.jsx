@@ -1036,6 +1036,27 @@ describe('FootballScorerShell', () => {
     expect(screen.getByText(/start quarter 2/i)).toBeInTheDocument();
   });
 
+  it('asks for the game clock after a timeout selection and applies the entered time', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^timeout t$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
+
+    const clockDialog = screen.getByRole('dialog', { name: /timeout clock/i });
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    expect(clockInput).toHaveValue('8:42');
+    fireEvent.change(clockInput, { target: { value: '634' } });
+    expect(clockInput).toHaveValue('6:34');
+    fireEvent.submit(clockInput.closest('form'));
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(summaryDialog).toHaveTextContent(/hom timeout/i);
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const scoreboardSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="scoreboard"]');
+    await waitFor(() => expect(within(scoreboardSlot).getByText('6:34')).toBeInTheDocument());
+  });
+
   it('game control ball context collects values and calculates line to gain', () => {
     const originalFetch = globalThis.fetch;
     const fetchSpy = vi.fn();

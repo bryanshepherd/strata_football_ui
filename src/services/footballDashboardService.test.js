@@ -472,7 +472,11 @@ describe('local football test-game projection', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const timeout = await submitFootballEventLocally(
       envelope,
-      gameControlRequest('LOCAL-TIMEOUT-1', 'timeout', { teamSide: 'H' }),
+      gameControlRequest('LOCAL-TIMEOUT-1', 'timeout', {
+        teamSide: 'H',
+        clock: '06:34',
+        isRunning: false,
+      }),
     );
     const possession = await submitFootballEventLocally(
       timeout.gameEnvelope,
@@ -480,6 +484,7 @@ describe('local football test-game projection', () => {
     );
 
     expect(timeout.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
+    expect(timeout.gameEnvelope.clock).toMatchObject({ clock: '06:34', clockTenths: 3940, isRunning: false });
     expect(possession.gameEnvelope.liveState.possession).toBe('V');
     expect(possession.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
   });

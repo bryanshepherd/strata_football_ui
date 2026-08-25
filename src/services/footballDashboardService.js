@@ -1486,7 +1486,14 @@ const applyGameControlProjection = (envelope, event) => {
   if (control.action === 'timeout') {
     const limit = resolveTimeoutLimit(rules);
     const timeouts = initializeTeamCounts(envelope.liveState?.timeouts, limit);
+    const clock = control.clock || event.result.clock || event.clock || envelope.clock.clock;
     return withEvent({
+      clock: {
+        ...envelope.clock,
+        clock,
+        clockTenths: event.result.clockTenths ?? clockTextToTenths(clock),
+        isRunning: false,
+      },
       liveState: { ...envelope.liveState, timeouts: team ? decrementTeamCount(timeouts, team) : timeouts },
     });
   }

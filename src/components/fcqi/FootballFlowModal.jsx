@@ -1078,6 +1078,13 @@ function stepCopyForState(state, aliases, teamNames) {
       helper: `The kickoff was downed at ${state.tokens?.downedSpot || 'the entered spot'}, before the configured ${state.tokens?.kickDownedTouchbackTargetSpot || 'kickoff touchback spot'}. Advance the ball?`,
     };
   }
+  if (step === 'gameControlClock' && state.tokens?.gameControlSelection === 'timeout') {
+    return {
+      ...copy,
+      title: 'Timeout Clock',
+      helper: 'Enter the game-clock time when the timeout was called. Use M:SS or MM:SS; three digits are read as M:SS.',
+    };
+  }
   if (!copy || !['recoverTeam', 'penaltyTeam', 'offsettingSecondTeam', 'gameControlPossession'].includes(step)) return copy;
   if (step === 'gameControlPossession' && state.tokens?.gameControlSelection === 'timeout') {
     return {

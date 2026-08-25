@@ -2270,7 +2270,16 @@ function commitGameControlToken(
         gameControlPossession: timeoutSelection === 'H' || timeoutSelection === 'V' ? timeoutSelection : undefined,
         gameControlTimeoutType: timeoutSelection === 'officials' || timeoutSelection === 'media' ? timeoutSelection : undefined,
       };
-      return { state: makeReadyState({ ...baseActiveState(state), tokens }, context) };
+      return {
+        state: {
+          ...baseActiveState(state),
+          status: 'token.awaiting',
+          currentStep: 'gameControlClock',
+          currentToken: context.play.clock ?? '',
+          ...(context.play.clock ? { selectCurrentToken: true } : {}),
+          tokens,
+        },
+      };
     }
 
     const team = parseTeamCode(state.currentToken, context);
@@ -4980,7 +4989,9 @@ function buildGameControlDraft(
     : teamSide === 'V'
       ? context.game.visitorTeamId ?? context.game.teams.V.teamId
       : undefined;
-  const clock = action === 'setClock' ? state.tokens.gameControlClock ?? context.play.clock : context.play.clock;
+  const clock = action === 'setClock' || action === 'timeout'
+    ? state.tokens.gameControlClock ?? context.play.clock
+    : context.play.clock;
   const resultCode = action === 'setClock' || action === 'emergency'
     ? 'clockUpdate'
     : action === 'startQuarter' || action === 'endQuarter'
@@ -5004,7 +5015,7 @@ function buildGameControlDraft(
       actionTeam: teamSide ?? context.play.actionTeam,
       possession: context.play.possession,
       period: context.play.period,
-      clock: context.play.clock,
+      clock: action === 'timeout' ? clock : context.play.clock,
     },
     prePlay: { ...context.prePlay },
     participants: {
@@ -5015,7 +5026,9 @@ function buildGameControlDraft(
     },
     result: {
       code: resultCode,
-      ...(resultCode === 'clockUpdate' && clock ? { clock, clockTenths, isRunning: false } : {}),
+      ...((resultCode === 'clockUpdate' || action === 'timeout') && clock
+        ? { clock, clockTenths, isRunning: false }
+        : {}),
       ...(resultCode === 'periodUpdate' ? { period } : {}),
       gameControl: {
         action,

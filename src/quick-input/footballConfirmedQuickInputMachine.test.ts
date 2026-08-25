@@ -1803,17 +1803,39 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(clock.draft).toMatchObject({ result: { code: 'clockUpdate', clock: '09:07', clockTenths: 5470, gameControl: { action: 'setClock' } } });
 
     const timeoutMenu = commitToken(inputToken(startGameControl(), 'T'));
-    const timeout = commitToken(inputToken(timeoutMenu, 'H'));
-    expect(timeout.draft).toMatchObject({ play: { subtype: 'timeout', actionTeam: 'H' }, result: { gameControl: { action: 'timeout', teamSide: 'H' } } });
-    const officialsTimeout = commitToken(inputToken(timeoutMenu, 'O'));
-    const mediaTimeout = commitToken(inputToken(timeoutMenu, 'M'));
+    const timeoutClock = commitToken(inputToken(timeoutMenu, 'H'));
+    expect(timeoutClock).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'gameControlClock',
+      currentToken: '08:42',
+      selectCurrentToken: true,
+      tokens: { gameControlPossession: 'H' },
+    });
+    expect(timeoutClock.draft).toBeUndefined();
+    const timeout = commitToken(inputToken(timeoutClock, '634'));
+    expect(timeout.draft).toMatchObject({
+      play: { subtype: 'timeout', actionTeam: 'H', clock: '06:34' },
+      result: {
+        code: 'noPlay',
+        clock: '06:34',
+        clockTenths: 3940,
+        isRunning: false,
+        gameControl: { action: 'timeout', teamSide: 'H', clock: '06:34' },
+      },
+    });
+    const officialsClock = commitToken(inputToken(timeoutMenu, 'O'));
+    const mediaClock = commitToken(inputToken(timeoutMenu, 'M'));
+    expect(officialsClock).toMatchObject({ currentStep: 'gameControlClock', tokens: { gameControlTimeoutType: 'officials' } });
+    expect(mediaClock).toMatchObject({ currentStep: 'gameControlClock', tokens: { gameControlTimeoutType: 'media' } });
+    const officialsTimeout = commitToken(inputToken(officialsClock, '701'));
+    const mediaTimeout = commitToken(inputToken(mediaClock, '1234'));
     expect(officialsTimeout.draft).toMatchObject({
-      play: { subtype: 'timeout' },
-      result: { gameControl: { action: 'timeout', timeoutType: 'officials' } },
+      play: { subtype: 'timeout', clock: '07:01' },
+      result: { clock: '07:01', gameControl: { action: 'timeout', timeoutType: 'officials', clock: '07:01' } },
     });
     expect(mediaTimeout.draft).toMatchObject({
-      play: { subtype: 'timeout' },
-      result: { gameControl: { action: 'timeout', timeoutType: 'media' } },
+      play: { subtype: 'timeout', clock: '12:34' },
+      result: { clock: '12:34', gameControl: { action: 'timeout', timeoutType: 'media', clock: '12:34' } },
     });
 
     const challengeMenu = commitToken(inputToken(startGameControl(), 'C'));
