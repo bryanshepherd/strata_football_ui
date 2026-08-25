@@ -72,6 +72,12 @@ const rosterPlayersForEnvelope = (envelope) => ['V', 'H'].flatMap((team) => (
 
 const isDebugEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 
+export const shouldUseLocalFootballEnvelope = (envelope) => {
+  if (!envelope) return false;
+  const pregame = pregameForEnvelope(envelope);
+  return pregame.gamePhase !== 'pregame' || pregame.coinToss.status === 'complete';
+};
+
 const getRequestedGameId = (searchParams) =>
   searchParams.get('envelopeGameId')
   || searchParams.get('gameId')
@@ -151,7 +157,7 @@ export default function FootballScorerShell() {
     }
 
     const seededRecord = getDashboardSeededFootballEnvelopeRecord(requestedGameId);
-    if (seededRecord?.envelope) {
+    if (shouldUseLocalFootballEnvelope(seededRecord?.envelope)) {
       setLoadedGameState({
         status: 'ready',
         envelope: seededRecord.envelope,

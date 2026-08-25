@@ -14,7 +14,10 @@ import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { getHighestFootballFcqiSeedCounter } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballDashboard from './FootballDashboard';
 import FootballReportPlaceholder from './FootballReportPlaceholder';
-import FootballScorerShell, { FootballEventLogSlot } from './FootballScorerShell';
+import FootballScorerShell, {
+  FootballEventLogSlot,
+  shouldUseLocalFootballEnvelope,
+} from './FootballScorerShell';
 
 const renderScorer = (initialEntry = '/scorer') =>
   render(
@@ -461,6 +464,75 @@ describe('FootballScorerShell', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('treats a local pregame envelope without a completed coin toss as absent', async () => {
+    createFootballDashboardGame({
+      gameId: 'FB-INCOMPLETE-PREGAME',
+      gameDate: '2026-09-12',
+      startTime: '19:30',
+      venue: 'Dashboard Field',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+    const store = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY));
+    const localEnvelope = store.games['FB-INCOMPLETE-PREGAME'].envelope;
+    localEnvelope.game.status = 'pregame';
+    localEnvelope.pregame = {
+      ...(localEnvelope.pregame || {}),
+      gamePhase: 'pregame',
+      coinToss: { status: 'pending' },
+    };
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, JSON.stringify(store));
+
+    const originalFetch = globalThis.fetch;
+    const serverEnvelope = cloneNormalEnvelope();
+    serverEnvelope.gameId = 'FB-INCOMPLETE-PREGAME';
+    serverEnvelope.rosters.gameId = serverEnvelope.gameId;
+    serverEnvelope.game.teams.H.name = 'Server Home';
+    serverEnvelope.game.teams.V.name = 'Server Visitor';
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => serverEnvelope,
+    });
+    globalThis.fetch = fetchSpy;
+
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-PREGAME&envelopeGameId=FB-INCOMPLETE-PREGAME');
+
+      expect(await screen.findByRole('heading', { name: /server visitor at server home/i })).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-PREGAME/envelope');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('keeps completed coin-toss and post-pregame local envelopes authoritative', () => {
+    const incompletePregame = cloneNormalEnvelope();
+    incompletePregame.game.status = 'pregame';
+    incompletePregame.pregame = {
+      gamePhase: 'pregame',
+      coinToss: { status: 'pending' },
+    };
+    const awaitingKickoff = {
+      ...incompletePregame,
+      pregame: {
+        ...incompletePregame.pregame,
+        gamePhase: 'awaitingKickoff',
+        coinToss: { status: 'complete' },
+      },
+    };
+    const halftime = {
+      ...incompletePregame,
+      game: { ...incompletePregame.game, status: 'halftime' },
+      pregame: { ...incompletePregame.pregame, gamePhase: 'halftime' },
+    };
+
+    expect(shouldUseLocalFootballEnvelope(incompletePregame)).toBe(false);
+    expect(shouldUseLocalFootballEnvelope(awaitingKickoff)).toBe(true);
+    expect(shouldUseLocalFootballEnvelope(halftime)).toBe(true);
   });
 
   it('slots routed football internals into the canonical scorer shell', () => {
