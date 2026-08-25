@@ -927,6 +927,16 @@ describe('FootballScorerShell', () => {
     assertGameControlMenu();
   });
 
+  it('keeps only Game Control available at halftime so the next quarter can start', () => {
+    renderScorer('/scorer?fixture=halftime');
+
+    expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^game control/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+
+    assertGameControlMenu();
+  });
+
   it('opens the roster workspace from the scorer header', () => {
     renderScorer('/scorer?fixture=pregame');
 

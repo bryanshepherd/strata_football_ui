@@ -190,6 +190,7 @@ export function availablePlayFamilies(phase: FootballGamePhase): readonly string
   if (phase === 'pregame') return ['gameControl'];
   if (phase === 'awaitingKickoff') return ['kickoff', 'penalty', 'gameControl'];
   if (phase === 'live') return ['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty', 'gameControl'];
+  if (phase === 'halftime') return ['gameControl'];
   return [];
 }
 

@@ -66,6 +66,8 @@ describe('football pregame coin toss domain', () => {
     expect(isPlayFamilyAvailable('awaitingKickoff', 'kickoff')).toBe(true);
     expect(isPlayFamilyAvailable('awaitingKickoff', 'gameControl')).toBe(true);
     expect(isPlayFamilyAvailable('awaitingKickoff', 'rush')).toBe(false);
+    expect(isPlayFamilyAvailable('halftime', 'gameControl')).toBe(true);
+    expect(isPlayFamilyAvailable('halftime', 'rush')).toBe(false);
     const before = complete({ winnerInitialChoice: 'kick', direction: 'north' });
     expect(isConsequentialTossEdit(before, { ...before, direction: 'south' }, true)).toBe(true);
   });
