@@ -25,11 +25,12 @@ import {
   isFootballDriveSummaryTerminalEvent,
 } from '../scoring/footballDriveSummary';
 import {
-  enqueueFootballServerSync,
+  enqueueFootballEnvelopeMirror,
   fetchFootballEnvelope,
   flushFootballServerSync,
   getDashboardSeededFootballEnvelopeRecord,
   getPendingFootballSyncCount,
+  migratePendingFootballSyncToEnvelopeMirror,
   normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
   saveDashboardSeededFootballEnvelope,
@@ -195,7 +196,14 @@ export default function FootballScorerShell() {
   }, [dashboardGameId, requestedGameId]);
 
   useEffect(() => {
-    if (!requestedGameId || !dashboardGameId) return undefined;
+    if (!requestedGameId || !dashboardGameId || !baseEnvelope) return undefined;
+    const authoritativeEnvelope = getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope
+      || baseEnvelope;
+    migratePendingFootballSyncToEnvelopeMirror({
+      gameId: requestedGameId,
+      dashboardGameId,
+      envelope: authoritativeEnvelope,
+    });
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
     void flushServerSync();
     const retry = window.setInterval(() => void flushServerSync(), 15_000);
@@ -205,7 +213,7 @@ export default function FootballScorerShell() {
       window.clearInterval(retry);
       window.removeEventListener('online', onOnline);
     };
-  }, [dashboardGameId, flushServerSync, requestedGameId]);
+  }, [baseEnvelope, dashboardGameId, flushServerSync, requestedGameId]);
 
   const handleSubmitAccepted = useCallback((result) => {
     setAcceptedScorerState((current) => reduceAcceptedScorerState(current, result));
@@ -247,11 +255,10 @@ export default function FootballScorerShell() {
     if (result?.ok && result?.status !== 'duplicateAccepted') {
       setLocalUndoStack((current) => [...current, previousEnvelope]);
       if (requestedGameId && dashboardGameId) {
-        enqueueFootballServerSync({
+        enqueueFootballEnvelopeMirror({
           gameId: requestedGameId,
           dashboardGameId,
-          kind: 'event',
-          payload: submitRequest,
+          envelope: result.gameEnvelope,
         });
         setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
         void flushServerSync();
@@ -263,16 +270,25 @@ export default function FootballScorerShell() {
   const undoLastLocalEvent = useCallback(() => {
     const previousEnvelope = localUndoStack[localUndoStack.length - 1];
     if (!previousEnvelope) return;
+    const restoredEnvelope = requestedGameId
+      ? saveDashboardSeededFootballEnvelope(requestedGameId, previousEnvelope) || previousEnvelope
+      : previousEnvelope;
     setLocalUndoStack((current) => current.slice(0, -1));
-    setAcceptedScorerState({ gameEnvelope: previousEnvelope, projection: null, acceptedEvents: [] });
+    setAcceptedScorerState({ gameEnvelope: restoredEnvelope, projection: null, acceptedEvents: [] });
     setPossessionClockChange(null);
     setDriveSummary(null);
     setFcqiState(createInitialFootballQuickInputState());
     setFcqiResetKey((current) => current + 1);
-    if (requestedGameId) {
-      saveDashboardSeededFootballEnvelope(requestedGameId, previousEnvelope);
+    if (requestedGameId && dashboardGameId) {
+      enqueueFootballEnvelopeMirror({
+        gameId: requestedGameId,
+        dashboardGameId,
+        envelope: restoredEnvelope,
+      });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
     }
-  }, [localUndoStack, requestedGameId]);
+  }, [dashboardGameId, flushServerSync, localUndoStack, requestedGameId]);
 
   const recordPossessionClock = useCallback((clock) => {
     if (!possessionClockChange) return;
@@ -286,11 +302,20 @@ export default function FootballScorerShell() {
       updatedEnvelope = saveDashboardSeededFootballEnvelope(requestedGameId, updatedEnvelope) || updatedEnvelope;
     }
     setAcceptedScorerState({ gameEnvelope: updatedEnvelope, projection: null, acceptedEvents: [] });
+    if (requestedGameId && dashboardGameId) {
+      enqueueFootballEnvelopeMirror({
+        gameId: requestedGameId,
+        dashboardGameId,
+        envelope: updatedEnvelope,
+      });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
+    }
     if (possessionClockChange.driveSummaryEvent) {
       setDriveSummary(buildFootballDriveSummary(updatedEnvelope, possessionClockChange.driveSummaryEvent));
     }
     setPossessionClockChange(null);
-  }, [possessionClockChange, requestedGameId]);
+  }, [dashboardGameId, flushServerSync, possessionClockChange, requestedGameId]);
 
   const closeDriveSummary = useCallback(() => setDriveSummary(null), []);
   const openPenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(true), []);

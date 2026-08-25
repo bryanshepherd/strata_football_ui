@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
 import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
+  checksumFootballEnvelope,
+  enqueueFootballEnvelopeMirror,
   enqueueFootballServerSync,
   fetchFootballEnvelope,
   flushFootballServerSync,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
+  FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
   getDashboardSeededFootballEnvelopeRecord,
   getPendingFootballSyncCount,
+  migratePendingFootballSyncToEnvelopeMirror,
   normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
   recordFootballPossessionClock,
@@ -17,6 +21,18 @@ import {
 } from './footballDashboardService';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const mirrorAck = (request) => ({
+  schemaVersion: 'football.localEnvelopeMirrorAck.v1',
+  status: 'mirrored',
+  gameId: request.gameId,
+  mirrorSourceId: request.mirrorSourceId,
+  mirrorRevision: request.mirrorRevision,
+  sourceEventSequence: request.sourceEventSequence,
+  eventCount: request.eventCount,
+  envelopeUpdatedAt: request.envelopeUpdatedAt,
+  checksum: request.checksum,
+});
 
 const gameControlRequest = (eventId, action, fields = {}) => ({
   event: {
@@ -56,6 +72,7 @@ const playRequest = (envelope, clientEventId, event) => {
 describe('local-first football persistence', () => {
   beforeEach(() => {
     window.localStorage.removeItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+    window.localStorage.removeItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY);
     window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
   });
 
@@ -111,19 +128,14 @@ describe('local-first football persistence', () => {
     envelope.gameId = 'FB-LOCAL-AUTHORITY-001';
     envelope.game.teams.H.score = 21;
     saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
-    enqueueFootballServerSync({
+    enqueueFootballEnvelopeMirror({
       gameId: envelope.gameId,
       dashboardGameId: 'DASH-LOCAL-AUTHORITY-001',
-      kind: 'event',
-      payload: playRequest(envelope, 'LOCAL-AUTHORITY-EVENT-1', {
-        type: 'rush',
-        result: { code: 'tackle', yards: 1, endYardLine: 'H45' },
-      }),
+      envelope,
     });
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ gameEnvelope: { ...envelope, game: { ...envelope.game, teams: {} } } }),
+    const fetchImpl = vi.fn().mockImplementation(async (_url, init) => {
+      const request = JSON.parse(init.body);
+      return { ok: true, status: 200, json: async () => mirrorAck(request) };
     });
 
     const result = await flushFootballServerSync({ fetchImpl });
@@ -131,7 +143,7 @@ describe('local-first football persistence', () => {
 
     expect(result).toMatchObject({ pendingCount: 0, syncedCount: 1, error: '' });
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/football/games/DASH-LOCAL-AUTHORITY-001/events',
+      '/api/football/games/DASH-LOCAL-AUTHORITY-001/mirror',
       expect.objectContaining({ method: 'POST', credentials: 'same-origin' }),
     );
     expect(local.game.teams.H.score).toBe(21);
@@ -142,14 +154,10 @@ describe('local-first football persistence', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-OFFLINE-001';
     saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
-    enqueueFootballServerSync({
+    enqueueFootballEnvelopeMirror({
       gameId: envelope.gameId,
       dashboardGameId: 'DASH-OFFLINE-001',
-      kind: 'event',
-      payload: playRequest(envelope, 'OFFLINE-EVENT-1', {
-        type: 'rush',
-        result: { code: 'tackle', yards: 2, endYardLine: 'H46' },
-      }),
+      envelope,
     });
 
     const result = await flushFootballServerSync({
@@ -159,6 +167,132 @@ describe('local-first football persistence', () => {
     expect(result).toMatchObject({ pendingCount: 1, syncedCount: 0, error: 'offline' });
     expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.liveState.yardLine).toBe(envelope.liveState.yardLine);
+  });
+
+  it('migrates a legacy nine-event queue into one exact envelope snapshot', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-LEGACY-MIGRATION-001';
+    envelope.events = Array.from({ length: 9 }, (_, index) => ({
+      clientEventId: `legacy-${index + 1}`,
+      eventId: `LOCAL-${String(index + 1).padStart(6, '0')}`,
+      sequence: index + 1,
+      type: index === 5 ? 'punt' : 'rush',
+      penalties: index === 8 ? [{ penaltyId: 'penalty-9', status: 'accepted' }] : [],
+    }));
+    envelope.stats.sourceEventSequence = 9;
+    const saved = saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    envelope.events.forEach((event) => enqueueFootballServerSync({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-LEGACY-MIGRATION-001',
+      kind: 'event',
+      payload: { gameId: envelope.gameId, event },
+    }));
+
+    const migrated = migratePendingFootballSyncToEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-LEGACY-MIGRATION-001',
+      envelope: saved,
+    });
+    const queue = JSON.parse(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY));
+
+    expect(migrated.kind).toBe('envelope');
+    expect(queue.items).toHaveLength(1);
+    expect(queue.items[0].payload.envelope.events).toEqual(saved.events);
+    expect(queue.items[0].payload.sourceEventSequence).toBe(9);
+    expect(queue.items[0].payload.checksum).toBe(checksumFootballEnvelope(saved));
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.events).toEqual(saved.events);
+  });
+
+  it('keeps a mirror queued when the server acknowledgment does not match it', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-ACK-MISMATCH-001';
+    const saved = saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-ACK-MISMATCH-001',
+      envelope: saved,
+    });
+
+    const result = await flushFootballServerSync({
+      fetchImpl: vi.fn().mockImplementation(async (_url, init) => {
+        const request = JSON.parse(init.body);
+        return { ok: true, status: 200, json: async () => ({ ...mirrorAck(request), checksum: 'wrong' }) };
+      }),
+    });
+
+    expect(result).toMatchObject({ pendingCount: 1, syncedCount: 0 });
+    expect(result.error).toContain('did not match');
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.events).toEqual(saved.events);
+  });
+
+  it('does not drop a newer local snapshot enqueued while an older mirror request is in flight', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-CONCURRENT-MIRROR-001';
+    const first = saveDashboardSeededFootballEnvelope(envelope.gameId, envelope);
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-CONCURRENT-MIRROR-001',
+      envelope: first,
+    });
+    let releaseFirst;
+    const firstResponse = new Promise((resolve) => { releaseFirst = resolve; });
+    const fetchImpl = vi.fn().mockImplementation(async (_url, init) => {
+      const request = JSON.parse(init.body);
+      if (request.mirrorRevision === 1) {
+        await firstResponse;
+      }
+      return { ok: true, status: 200, json: async () => mirrorAck(request) };
+    });
+
+    const flushing = flushFootballServerSync({ fetchImpl });
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const second = saveDashboardSeededFootballEnvelope(envelope.gameId, {
+      ...first,
+      events: [{ clientEventId: 'newer-event', eventId: 'LOCAL-000001', sequence: 1, type: 'punt' }],
+      stats: { ...first.stats, sourceEventSequence: 1 },
+    });
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-CONCURRENT-MIRROR-001',
+      envelope: second,
+    });
+    releaseFirst();
+    const result = await flushing;
+
+    expect(result).toMatchObject({ pendingCount: 0, syncedCount: 2, error: '' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).envelope.events).toEqual(second.events);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.events).toEqual(second.events);
+  });
+
+  it('continues the stored mirror identity when recovering an envelope from the server', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-MIRROR-RECOVERY-001';
+    const recovered = await fetchFootballEnvelope(envelope.gameId, {
+      dashboardGameId: 'DASH-MIRROR-RECOVERY-001',
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name) => ({
+            'X-Strata-Football-Mirror-Source': 'mirror-original-browser',
+            'X-Strata-Football-Mirror-Revision': '7',
+          }[name] || null),
+        },
+        json: async () => envelope,
+      }),
+    });
+    enqueueFootballEnvelopeMirror({
+      gameId: envelope.gameId,
+      dashboardGameId: 'DASH-MIRROR-RECOVERY-001',
+      envelope: recovered,
+    });
+    const queue = JSON.parse(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY));
+
+    expect(queue.items[0].payload.mirrorSourceId).toBe('mirror-original-browser');
+    expect(queue.items[0].payload.mirrorRevision).toBe(8);
+    expect(queue.items[0].payload.envelope).toEqual(envelope);
   });
 });
 

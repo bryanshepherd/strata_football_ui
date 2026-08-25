@@ -7,6 +7,7 @@ import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
   createFootballDashboardGame,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
+  FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
@@ -31,6 +32,26 @@ function mockSubmitSuccess(overrides = {}) {
   const originalFetch = globalThis.fetch;
   const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
     const request = JSON.parse(init.body);
+    if (request.schemaVersion === 'football.localEnvelopeMirrorRequest.v1') {
+      const payload = {
+        schemaVersion: 'football.localEnvelopeMirrorAck.v1',
+        status: 'mirrored',
+        gameId: request.gameId,
+        mirrorSourceId: request.mirrorSourceId,
+        mirrorRevision: request.mirrorRevision,
+        sourceEventSequence: request.sourceEventSequence,
+        eventCount: request.eventCount,
+        envelopeUpdatedAt: request.envelopeUpdatedAt,
+        checksum: request.checksum,
+      };
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => JSON.stringify(payload),
+        json: async () => payload,
+      };
+    }
     const canonicalEvent = ['rush', 'pass'].includes(request.event.type) && !request.event.source;
     const base = canonicalEvent
       ? makeCanonicalSubmitSuccess(request)
@@ -201,6 +222,7 @@ function makeReturnedEnvelope(request) {
 describe('FootballScorerShell', () => {
   beforeEach(() => {
     window.localStorage.removeItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+    window.localStorage.removeItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY);
     window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
   });
 
@@ -340,9 +362,73 @@ describe('FootballScorerShell', () => {
       fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
       await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
-      expect(submittedRequest(submitMock.fetchSpy).gameId).toBe('FB-DASH-FCQI');
-      expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FCQI/events');
+      const mirrorRequest = submittedRequest(submitMock.fetchSpy);
+      expect(mirrorRequest.gameId).toBe('FB-DASH-FCQI');
+      expect(mirrorRequest.envelope.events.at(-1).type).toBe('rush');
+      expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FCQI/mirror');
       expect(screen.getByText('Server mirror current')).toBeInTheDocument();
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('migrates legacy sync entries from the exact stored envelope, not its display normalization', async () => {
+    const submitMock = mockSubmitSuccess();
+    createFootballDashboardGame({
+      gameId: 'FB-EXACT-MIRROR',
+      gameDate: '2026-09-12',
+      startTime: '19:30',
+      venue: 'Dashboard Field',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+    const store = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY));
+    const authoritativeEnvelope = store.games['FB-EXACT-MIRROR'].envelope;
+    authoritativeEnvelope.liveState = {
+      ...authoritativeEnvelope.liveState,
+      possession: null,
+      yardLine: null,
+      kickoffTeam: 'V',
+      nextPlayContext: 'awaitingKickoff',
+    };
+    authoritativeEnvelope.pregame = {
+      ...(authoritativeEnvelope.pregame || {}),
+      coinToss: {
+        status: 'complete',
+        winner: 'H',
+        firstHalfChoice: 'receive',
+        firstHalfReceivingTeam: 'H',
+        firstHalfKickingTeam: 'V',
+      },
+    };
+    authoritativeEnvelope.events = Array.from({ length: 9 }, (_, index) => ({
+      eventId: `LOCAL-${String(index + 1).padStart(6, '0')}`,
+      clientEventId: `legacy-${index + 1}`,
+      sequence: index + 1,
+      type: 'rush',
+    }));
+    authoritativeEnvelope.stats.sourceEventSequence = 9;
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, JSON.stringify(store));
+    window.localStorage.setItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      items: authoritativeEnvelope.events.map((event) => ({
+        id: `event:${event.clientEventId}`,
+        gameId: authoritativeEnvelope.gameId,
+        dashboardGameId: 'DASH-EXACT-MIRROR',
+        kind: 'event',
+        payload: { gameId: authoritativeEnvelope.gameId, event },
+      })),
+    }));
+
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-EXACT-MIRROR&envelopeGameId=FB-EXACT-MIRROR');
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
+      const mirrorRequest = submittedRequest(submitMock.fetchSpy);
+
+      expect(mirrorRequest.eventCount).toBe(9);
+      expect(mirrorRequest.envelope.events).toEqual(authoritativeEnvelope.events);
+      expect(mirrorRequest.envelope.liveState.yardLine).toBeNull();
+      expect(JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY)).games['FB-EXACT-MIRROR'].envelope.liveState.yardLine).toBeNull();
     } finally {
       submitMock.restore();
     }

@@ -12,6 +12,7 @@ import {
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
 export const FOOTBALL_SYNC_QUEUE_STORAGE_KEY = 'strata.football.syncQueue.v1';
+export const FOOTBALL_MIRROR_SOURCE_STORAGE_KEY = 'strata.football.mirrorSource.v1';
 export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/strata_football/api/football/games/envelope.php';
 export const FOOTBALL_PREGAME_ENDPOINT = '/strata_football/api/football/games/pregame.php';
 export const FOOTBALL_EVENT_ENDPOINT = '/strata_football/api/football/events/submit.php';
@@ -68,10 +69,81 @@ const readSyncQueue = () => {
 const writeSyncQueue = (items) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
-    version: 1,
+    version: 2,
     items,
   }));
 };
+
+const createMirrorSourceId = () => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `mirror-${globalThis.crypto.randomUUID()}`;
+  }
+  return `mirror-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+};
+
+const readMirrorSource = () => {
+  if (typeof window === 'undefined') return { sources: {} };
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY) || 'null');
+    if (parsed?.sources && typeof parsed.sources === 'object') {
+      return { sources: parsed.sources };
+    }
+  } catch (error) {
+    console.warn('Unable to read football mirror source identity', error);
+  }
+  return { sources: {} };
+};
+
+const nextMirrorIdentity = (gameId) => {
+  const state = readMirrorSource();
+  const source = state.sources?.[gameId];
+  const mirrorSourceId = typeof source?.sourceId === 'string' && source.sourceId
+    ? source.sourceId
+    : createMirrorSourceId();
+  const mirrorRevision = Math.max(0, Number(source?.revision || 0)) + 1;
+  const next = {
+    sources: {
+      ...state.sources,
+      [gameId]: { sourceId: mirrorSourceId, revision: mirrorRevision },
+    },
+  };
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({ version: 2, ...next }));
+  }
+  return { mirrorSourceId, mirrorRevision };
+};
+
+const adoptMirrorIdentity = (gameId, sourceId, revision) => {
+  if (typeof window === 'undefined' || typeof sourceId !== 'string' || !sourceId || !Number.isSafeInteger(revision) || revision < 1) return;
+  const state = readMirrorSource();
+  window.localStorage.setItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({
+    version: 2,
+    sources: {
+      ...state.sources,
+      [gameId]: { sourceId, revision },
+    },
+  }));
+};
+
+export function checksumFootballEnvelope(envelope) {
+  const serialized = JSON.stringify(envelope);
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    hash ^= BigInt(code & 0xff);
+    hash = (hash * prime) & mask;
+    hash ^= BigInt((code >>> 8) & 0xff);
+    hash = (hash * prime) & mask;
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, '0')}:${serialized.length}`;
+}
+
+const envelopeSourceEventSequence = (envelope) => Math.max(
+  Number(envelope?.stats?.sourceEventSequence || 0),
+  ...(envelope?.events || []).map((event) => Number(event?.sequence || 0)),
+);
 
 const teamById = (teamId, fallback) =>
   footballTeamOptions.find((team) => team.teamId === teamId) || fallback;
@@ -246,6 +318,9 @@ export function saveDashboardSeededFootballEnvelope(gameId, envelope) {
 }
 
 const footballSyncItemId = ({ kind, payload }) => {
+  if (kind === 'envelope') {
+    return `envelope:${payload.gameId}:${payload.mirrorSourceId}:${payload.mirrorRevision}`;
+  }
   if (kind === 'event' && payload?.event?.clientEventId) {
     return `event:${payload.event.clientEventId}`;
   }
@@ -255,9 +330,9 @@ const footballSyncItemId = ({ kind, payload }) => {
 const footballSyncEndpoint = (item) => {
   if (item.dashboardGameId) {
     const gameId = encodeURIComponent(String(item.dashboardGameId));
-    return item.kind === 'event'
-      ? `/api/football/games/${gameId}/events`
-      : `/api/football/games/${gameId}/pregame`;
+    if (item.kind === 'envelope') return `/api/football/games/${gameId}/mirror`;
+    if (item.kind === 'event') return `/api/football/games/${gameId}/events`;
+    return `/api/football/games/${gameId}/pregame`;
   }
   return item.kind === 'event' ? FOOTBALL_EVENT_ENDPOINT : FOOTBALL_PREGAME_ENDPOINT;
 };
@@ -267,7 +342,7 @@ export function getPendingFootballSyncCount(gameId = '') {
 }
 
 export function enqueueFootballServerSync({ gameId, dashboardGameId = '', kind, payload }) {
-  if (!gameId || !payload || !['event', 'pregame'].includes(kind)) return null;
+  if (!gameId || !payload || !['event', 'pregame', 'envelope'].includes(kind)) return null;
   const items = readSyncQueue();
   const item = {
     id: footballSyncItemId({ kind, payload }),
@@ -285,6 +360,85 @@ export function enqueueFootballServerSync({ gameId, dashboardGameId = '', kind, 
   return clone(item);
 }
 
+/**
+ * Replaces every older per-play/pregame queue item for this game with one
+ * complete local envelope snapshot. The local envelope remains stored under
+ * FOOTBALL_DASHBOARD_STORAGE_KEY; this queue is only a recoverable server
+ * replication journal.
+ */
+export function enqueueFootballEnvelopeMirror({ gameId, dashboardGameId, envelope }) {
+  if (!gameId || !dashboardGameId || !envelope || envelope.gameId !== String(gameId)) return null;
+  const { mirrorSourceId, mirrorRevision } = nextMirrorIdentity(String(gameId));
+  const payload = {
+    schemaVersion: 'football.localEnvelopeMirrorRequest.v1',
+    gameId: String(gameId),
+    mirrorSourceId,
+    mirrorRevision,
+    sourceEventSequence: envelopeSourceEventSequence(envelope),
+    eventCount: Array.isArray(envelope.events) ? envelope.events.length : 0,
+    envelopeUpdatedAt: String(envelope.updatedAt || ''),
+    checksum: checksumFootballEnvelope(envelope),
+    envelope: clone(envelope),
+  };
+  const item = {
+    id: footballSyncItemId({ kind: 'envelope', payload }),
+    gameId: String(gameId),
+    dashboardGameId: String(dashboardGameId),
+    kind: 'envelope',
+    payload,
+    attempts: 0,
+    createdAt: new Date().toISOString(),
+    lastAttemptAt: null,
+    lastError: '',
+  };
+  const otherGames = readSyncQueue().filter((candidate) => candidate.gameId !== String(gameId));
+  writeSyncQueue([...otherGames, item]);
+  return clone(item);
+}
+
+export function migratePendingFootballSyncToEnvelopeMirror({ gameId, dashboardGameId, envelope }) {
+  const pending = readSyncQueue().filter((item) => item.gameId === String(gameId));
+  if (!pending.some((item) => item.kind !== 'envelope')) return null;
+  return enqueueFootballEnvelopeMirror({ gameId, dashboardGameId, envelope });
+}
+
+const removeSyncItem = (itemId) => {
+  const current = readSyncQueue();
+  const next = current.filter((item) => item.id !== itemId);
+  if (next.length !== current.length) writeSyncQueue(next);
+};
+
+const markSyncItemFailed = (itemId, error) => {
+  const current = readSyncQueue();
+  const next = current.map((item) => item.id === itemId ? {
+    ...item,
+    attempts: Number(item.attempts || 0) + 1,
+    lastAttemptAt: new Date().toISOString(),
+    lastError: error,
+  } : item);
+  writeSyncQueue(next);
+};
+
+const mirrorAckError = (item, payload) => {
+  if (!payload || payload.schemaVersion !== 'football.localEnvelopeMirrorAck.v1') {
+    return 'Server mirror returned an invalid acknowledgment.';
+  }
+  const expected = item.payload;
+  if (
+    !['mirrored', 'duplicate'].includes(payload.status)
+    || payload.gameId !== expected.gameId
+    || payload.mirrorSourceId !== expected.mirrorSourceId
+    || payload.mirrorRevision !== expected.mirrorRevision
+    || payload.checksum !== expected.checksum
+    || payload.sourceEventSequence !== expected.sourceEventSequence
+    || payload.eventCount !== expected.eventCount
+    || payload.envelopeUpdatedAt !== expected.envelopeUpdatedAt
+  ) {
+    return 'Server mirror acknowledgment did not match the local envelope snapshot.';
+  }
+  return '';
+};
+
 let activeFootballSync = null;
 
 export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } = {}) {
@@ -293,12 +447,12 @@ export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } =
     if (typeof fetchImpl !== 'function') {
       return { pendingCount: readSyncQueue().length, syncedCount: 0, error: 'No network connection is available.' };
     }
-    let items = readSyncQueue();
     let syncedCount = 0;
     let error = '';
-    while (items.length > 0) {
-      const item = items[0];
+    while (readSyncQueue().length > 0) {
+      const item = readSyncQueue()[0];
       let response;
+      let responsePayload = null;
       try {
         response = await fetchImpl(footballSyncEndpoint(item), {
           method: 'POST',
@@ -306,29 +460,29 @@ export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } =
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(item.payload),
         });
+        responsePayload = await response.json().catch(() => null);
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'Server sync failed.';
       }
       if (response?.ok) {
-        items = items.slice(1);
-        writeSyncQueue(items);
+        if (item.kind === 'envelope') {
+          error = mirrorAckError(item, responsePayload);
+          if (error) {
+            markSyncItemFailed(item.id, error);
+            break;
+          }
+        }
+        removeSyncItem(item.id);
         syncedCount += 1;
         continue;
       }
-      if (!error) error = `Server sync failed (${response?.status || 'network'}).`;
-      items = [
-        {
-          ...item,
-          attempts: Number(item.attempts || 0) + 1,
-          lastAttemptAt: new Date().toISOString(),
-          lastError: error,
-        },
-        ...items.slice(1),
-      ];
-      writeSyncQueue(items);
+      if (!error) {
+        error = responsePayload?.error || `Server sync failed (${response?.status || 'network'}).`;
+      }
+      markSyncItemFailed(item.id, error);
       break;
     }
-    return { pendingCount: items.length, syncedCount, error };
+    return { pendingCount: readSyncQueue().length, syncedCount, error };
   })();
   try {
     return await activeFootballSync;
@@ -341,16 +495,10 @@ export async function persistFootballPregameEnvelope(gameId, envelope, { dashboa
   const localEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
   if (!localEnvelope) throw new Error('Pregame configuration could not be saved to this browser.');
   if (dashboardGameId) {
-    enqueueFootballServerSync({
+    enqueueFootballEnvelopeMirror({
       gameId,
       dashboardGameId,
-      kind: 'pregame',
-      payload: {
-        gameId,
-        baseEnvelopeVersion: envelope.updatedAt,
-        pregame: envelope.pregame,
-        rosters: envelope.rosters,
-      },
+      envelope: localEnvelope,
     });
   }
   return localEnvelope;
@@ -381,6 +529,11 @@ export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', sign
   }
   if (!payload || payload.schemaVersion !== 'football.gameEnvelope.v1') {
     throw new Error('Football envelope API returned an unexpected payload.');
+  }
+  if (dashboardGameId) {
+    const mirrorSourceId = response.headers?.get?.('X-Strata-Football-Mirror-Source');
+    const mirrorRevision = Number(response.headers?.get?.('X-Strata-Football-Mirror-Revision') || 0);
+    adoptMirrorIdentity(String(gameId), mirrorSourceId, mirrorRevision);
   }
 
   return payload;
@@ -1412,16 +1565,17 @@ export async function submitFootballEventLocally(baseEnvelope, submitRequest) {
   const projected = duplicate
     ? { envelope: baseEnvelope, projection: null, diagnostics: [] }
     : applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent);
-  saveDashboardSeededFootballEnvelope(baseEnvelope.gameId, projected.envelope);
+  const localEnvelope = saveDashboardSeededFootballEnvelope(baseEnvelope.gameId, projected.envelope)
+    || projected.envelope;
   const status = duplicate ? 'duplicateAccepted' : 'accepted';
   return {
     ok: true,
     status,
     acceptedEvent,
-    gameEnvelope: projected.envelope,
-    envelope: projected.envelope,
+    gameEnvelope: localEnvelope,
+    envelope: localEnvelope,
     projection: projected.projection,
     warnings: projected.diagnostics.map((diagnostic) => ({ ...diagnostic, severity: 'warning', source: 'localTestGame' })),
-    rawResponse: { schemaVersion: 'football.submitEventResponse.v1', success: true, status, acceptedEvent, gameEnvelope: projected.envelope, warnings: [], errors: [] },
+    rawResponse: { schemaVersion: 'football.submitEventResponse.v1', success: true, status, acceptedEvent, gameEnvelope: localEnvelope, warnings: [], errors: [] },
   };
 }
