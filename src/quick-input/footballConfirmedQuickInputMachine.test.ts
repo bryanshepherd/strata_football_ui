@@ -1566,6 +1566,13 @@ describe('footballConfirmedQuickInputMachine', () => {
       code: 'muffed',
       nextPossession: 'H',
       fumble: { fumblerPlayerId: 'V-3-PR', recoveredByPlayerId: 'H-22' },
+      return: {
+        type: 'Kickoff',
+        returnerPlayerId: 'V-3-PR',
+        returnYards: 4,
+        returnStartYardLine: 'V20',
+        returnEndYardLine: 'V24',
+      },
     });
     expect(downed.status).toBe('draft.ready');
     expect(downed.draft?.result).toMatchObject({ code: 'downed', endYardLine: 'V30', nextPossession: 'V' });

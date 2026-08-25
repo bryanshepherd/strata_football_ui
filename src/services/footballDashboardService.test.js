@@ -808,6 +808,7 @@ describe('local football test-game projection', () => {
       nextPlayContext: 'awaitingTry',
     });
     expect(touchdown.gameEnvelope.stats.teams.V).toMatchObject({ rushAttempts: 1, rushYards: 5, plays: 1, yards: 5 });
+    expect(touchdown.gameEnvelope.stats.teams.V.firstDowns).toBeUndefined();
     expect(touchdown.gameEnvelope.stats.players['V-10']).toMatchObject({ rushAttempts: 1, rushYards: 5 });
     expect(touchdown.gameEnvelope.drives.completed.at(-1)).toMatchObject({ team: 'V', plays: 1, yards: 5, result: 'touchdown' });
 
@@ -830,6 +831,64 @@ describe('local football test-game projection', () => {
         nextPlayContext: 'awaitingKickoff',
       });
     }
+  });
+
+  it.each([
+    ['inside the 10', 'H05', 4, undefined],
+    ['at the 10', 'H10', 9, 1],
+  ])('applies the NCAA touchdown first-down rule when a goal-to-go series starts %s', async (
+    _label,
+    startYardLine,
+    openingYards,
+    expectedFirstDowns,
+  ) => {
+    let envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events = [];
+    envelope.stats = { sourceEventSequence: 0, teams: {}, players: {} };
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 1,
+      distance: Number(startYardLine.slice(1)),
+      yardLine: startYardLine,
+      lineToGain: 'goal',
+      goalToGo: true,
+      driveId: 'DRV-GOAL-TO-GO-FIRST-DOWN',
+      driveNumber: 7,
+    };
+    envelope.drives.current = {
+      driveId: 'DRV-GOAL-TO-GO-FIRST-DOWN',
+      driveNumber: 7,
+      team: 'V',
+      startYardLine,
+      startReason: 'firstDown',
+      plays: 0,
+      yards: 0,
+      result: null,
+    };
+
+    const openingPlay = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-GOAL-TO-GO-OPENING-1', {
+      type: 'rush',
+      subtype: null,
+      participants: { primary: { playerId: 'V-10', team: 'V', role: 'rusher' }, secondary: null, defenders: [] },
+      result: { code: 'tackle', yards: openingYards, endYardLine: 'H01' },
+    }));
+    envelope = openingPlay.gameEnvelope;
+
+    const touchdown = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-GOAL-TO-GO-TOUCHDOWN-2', {
+      type: 'rush',
+      subtype: null,
+      participants: { primary: { playerId: 'V-10', team: 'V', role: 'rusher' }, secondary: null, defenders: [] },
+      result: {
+        code: 'touchdown',
+        yards: 1,
+        endYardLine: 'H00',
+        firstDown: true,
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+    }));
+
+    expect(touchdown.gameEnvelope.stats.teams.V.firstDowns).toBe(expectedFirstDowns);
   });
 
   it('advances the live state from the canonical endpoint of a complete pass', async () => {
@@ -1114,6 +1173,55 @@ describe('local football test-game projection', () => {
 
     expect(response.gameEnvelope.stats.teams.V.fumbles).toEqual({ num: 1, lost: 1 });
     expect(response.gameEnvelope.stats.players['V-3']).toMatchObject({ fumbles: 1, fumblesLost: 1 });
+  });
+
+  it('derives a kickoff return from legacy muff and recovery spots', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H35',
+      lineToGain: null,
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-KICK-MUFF-STAT-1', {
+      type: 'kickoff',
+      subtype: 'muffed',
+      possession: null,
+      participants: {
+        primary: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-80', team: 'V', role: 'returner' },
+        fumbler: { playerId: 'V-80', team: 'V', role: 'returner' },
+        recoveredBy: { playerId: 'V-80', team: 'V', role: 'recoverer' },
+        defenders: [],
+      },
+      result: {
+        code: 'muffed',
+        endYardLine: 'V32',
+        nextPossession: 'V',
+        driveEnds: false,
+        kick: { kickYards: 35, catchYardLine: 'V30', receiveResultCode: 'M' },
+        fumble: {
+          fumblerPlayerId: 'V-80',
+          spot: 'V32',
+          recoveredByPlayerId: 'V-80',
+          recoveredByTeam: 'V',
+          recoverySpot: 'V32',
+          turnover: false,
+        },
+        turnover: { type: 'muffedKick', team: 'V', playerId: 'V-80', spot: 'V32', recoveredBy: 'V' },
+      },
+    }));
+
+    expect(response.gameEnvelope.stats.teams.V.kickReturns).toEqual({ num: 1, yds: 2 });
+    expect(response.gameEnvelope.stats.players['V-80']).toMatchObject({ kickReturns: 1, kickReturnYards: 2 });
   });
 
   it('counts third- and fourth-down attempts only on scrimmage conversion tries', async () => {

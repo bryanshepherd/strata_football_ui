@@ -4836,6 +4836,9 @@ function buildKickoffResult(tokens: FootballFlowTokens, context: FootballQuickIn
     const receivingTeam = opposingTeam(context.play.possession ?? context.play.actionTeam);
     const nextPossession = tokens.recoverTeam ?? receivingTeam;
     const end = tokens.fumbleReturned ? tokens.returnEndSpot : tokens.recoverSpot;
+    const kickoffReturnYards = catchYardLine && tokens.recoverSpot
+      ? deriveReturnYards(context, catchYardLine, tokens.recoverSpot)
+      : undefined;
     const returnYards = tokens.fumbleReturned && tokens.recoverSpot && tokens.returnEndSpot
       ? deriveReturnYardsForTeam(tokens.recoverSpot, tokens.returnEndSpot, nextPossession)
       : undefined;
@@ -4871,16 +4874,15 @@ function buildKickoffResult(tokens: FootballFlowTokens, context: FootballQuickIn
         returnEndYardLine: tokens.fumbleReturned ? tokens.returnEndSpot : undefined,
         recoveredBy: nextPossession,
       },
-      return: tokens.fumbleReturned
+      return: catchYardLine && tokens.recoverSpot
         ? {
-            type: 'Fumble',
-            returnerPlayerId: tokens.recoverPlayer?.playerId,
-            returnYards,
-            returnStartYardLine: tokens.recoverSpot,
-            returnEndYardLine: tokens.returnEndSpot,
-            resultCode: returnTerminalResultCode(tokens.returnTerminalResult),
-            tackledByPlayerIds: tokens.tacklers.map((tackler) => tackler.playerId),
-        }
+            type: 'Kickoff',
+            returnerPlayerId: tokens.muffingPlayer?.playerId ?? tokens.returner?.playerId,
+            returnYards: kickoffReturnYards,
+            returnStartYardLine: catchYardLine,
+            returnEndYardLine: tokens.recoverSpot,
+            tackledByPlayerIds: [],
+          }
         : undefined,
       scoring: returnOutcome.scoring,
     };

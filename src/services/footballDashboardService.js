@@ -7,7 +7,9 @@ import {
   calculateYardsGained,
   calculateYardsToGain,
   createLiveState,
+  oppositeTeam,
   parseSpot,
+  spotToPossessionRelative,
 } from '../utils/footballRulesEngine';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
@@ -788,13 +790,53 @@ const hasAcceptedAutomaticFirstDownPenalty = (event) => (event?.penalties || [])
   penalty.status === 'accepted' && penalty.automaticFirstDown
 ));
 
-const playEarnedFirstDown = (event, projection) => {
+const sameDrive = (left, right) => {
+  const leftDriveId = left?.preState?.driveId;
+  const rightDriveId = right?.preState?.driveId;
+  if (leftDriveId && rightDriveId) return leftDriveId === rightDriveId;
+  return Number.isFinite(Number(left?.preState?.driveNumber))
+    && Number(left.preState.driveNumber) === Number(right?.preState?.driveNumber);
+};
+
+const touchdownEarnsFirstDown = (event, projection, eventHistory = []) => {
+  const touchdown = event?.result?.scoring?.type === 'touchdown'
+    || projection?.scoringUpdate?.type === 'touchdown';
+  if (!touchdown || !['rush', 'pass'].includes(event?.type)) return false;
+
+  if (String(event?.preState?.lineToGain || '').toLowerCase() !== 'goal') return true;
+
+  let seriesStartSpot = Number(event?.preState?.down) === 1
+    ? event?.preState?.yardLine
+    : null;
+  if (!seriesStartSpot) {
+    const priorSeriesPlay = [...eventHistory]
+      .reverse()
+      .find((candidate) => (
+        (!candidate?.status || candidate.status === 'accepted')
+        && Number(candidate?.sequence) < Number(event?.sequence)
+        && candidate?.possession === event?.possession
+        && ['rush', 'pass', 'penalty'].includes(candidate?.type)
+        && Number(candidate?.preState?.down) === 1
+        && sameDrive(candidate, event)
+      ));
+    seriesStartSpot = priorSeriesPlay?.preState?.yardLine ?? null;
+  }
+
+  const seriesStart = spotToPossessionRelative(seriesStartSpot, event?.possession);
+  return Number.isFinite(seriesStart) && 100 - seriesStart >= 10;
+};
+
+const playEarnedFirstDown = (event, projection, eventHistory) => {
   if (
     !['rush', 'pass'].includes(event?.type)
     || hasAcceptedPreviousSpotPenalty(event)
     || hasReplayDownPenalty(event)
   ) return false;
-  if (event?.result?.firstDown === true || event?.result?.scoring?.type === 'touchdown') return true;
+  if (event?.result?.firstDown === true) return true;
+  if (
+    event?.result?.scoring?.type === 'touchdown'
+    || projection?.scoringUpdate?.type === 'touchdown'
+  ) return touchdownEarnsFirstDown(event, projection, eventHistory);
   const yardsToGain = calculateYardsToGain(
     event?.preState?.yardLine,
     event?.preState?.lineToGain,
@@ -805,7 +847,36 @@ const playEarnedFirstDown = (event, projection) => {
     && projection.yardsGained >= yardsToGain;
 };
 
-const projectFootballStats = (stats = {}, event, projection) => {
+const kickoffReturnStat = (event) => {
+  if (event?.type !== 'kickoff') return null;
+  const result = event?.result || {};
+  const returner = event?.participants?.returner || event?.participants?.fumbler;
+  const kickingTeam = event?.participants?.kicker?.team || event?.participants?.primary?.team;
+  const returnTeam = returner?.team || oppositeTeam(kickingTeam);
+
+  if (result.return?.type === 'Kickoff') {
+    return {
+      returner,
+      returnTeam,
+      returnYards: finiteNumber(result.return.returnYards),
+    };
+  }
+
+  const muffed = event?.subtype === 'muffed'
+    || result.code === 'muffed'
+    || result.kick?.receiveResultCode === 'M';
+  if (!muffed || !validTeamCode(returnTeam)) return null;
+
+  const returnYards = calculateYardsGained(
+    result.kick?.catchYardLine,
+    result.fumble?.recoverySpot || result.endYardLine,
+    returnTeam,
+  );
+  if (!Number.isFinite(returnYards)) return null;
+  return { returner, returnTeam, returnYards };
+};
+
+const projectFootballStats = (stats = {}, event, projection, eventHistory = []) => {
   let teams = { ...(stats.teams || {}) };
   let players = { ...(stats.players || {}) };
   const offense = event?.possession;
@@ -911,10 +982,9 @@ const projectFootballStats = (stats = {}, event, projection) => {
     }));
   }
 
-  if (event.type === 'kickoff' && result.return?.type === 'Kickoff') {
-    const returner = event?.participants?.returner;
-    const returnTeam = returner?.team || result.nextPossession;
-    const returnYards = finiteNumber(result.return?.returnYards);
+  const kickoffReturn = kickoffReturnStat(event);
+  if (kickoffReturn) {
+    const { returner, returnTeam, returnYards } = kickoffReturn;
     teams = updateTeamStat(teams, returnTeam, (current) => ({
       ...current,
       kickReturns: {
@@ -996,13 +1066,13 @@ const projectFootballStats = (stats = {}, event, projection) => {
     }));
   }
 
-  const baseFirstDownCredit = Boolean(
-    projection?.firstDown
-    || result.firstDown
-    || result.scoring?.type === 'touchdown'
-  );
+  const touchdown = result.scoring?.type === 'touchdown'
+    || projection?.scoringUpdate?.type === 'touchdown';
+  const baseFirstDownCredit = touchdown
+    ? touchdownEarnsFirstDown(event, projection, eventHistory)
+    : Boolean(projection?.firstDown || result.firstDown);
   const additionalAutomaticFirstDownCredit = (
-    playEarnedFirstDown(event, projection)
+    playEarnedFirstDown(event, projection, eventHistory)
     && hasAcceptedAutomaticFirstDownPenalty(event)
   );
   const firstDownCredits = Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
@@ -1096,7 +1166,7 @@ function repairFootballStatsFromCompleteEventLog(envelope) {
       liveState: { ...(envelope.liveState || {}), ...(event.preState || {}) },
     };
     const projection = applyFootballEventToEnvelope(replayEnvelope, event);
-    replayedStats = projectFootballStats(replayedStats, event, projection);
+    replayedStats = projectFootballStats(replayedStats, event, projection, acceptedEvents);
   });
 
   const currentTeams = envelope.stats?.teams || {};
@@ -1625,7 +1695,7 @@ export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) 
       liveState: { ...baseEnvelope.liveState, ...projection.liveState },
       drives: updateDrives(baseEnvelope.drives, projection, event),
       events: appendEvent(baseEnvelope.events, event),
-      stats: projectFootballStats(baseEnvelope.stats, event, projection),
+      stats: projectFootballStats(baseEnvelope.stats, event, projection, baseEnvelope.events),
     },
     projection,
     diagnostics: [],
