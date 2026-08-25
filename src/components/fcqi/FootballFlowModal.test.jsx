@@ -4,6 +4,45 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('shows the full ruleset penalty catalog before the operator filters it', () => {
+    const { rerender } = render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        penaltyRuleset="NCAA"
+        state={{
+          status: 'token.awaiting',
+          flow: 'penalty',
+          currentStep: 'penaltyName',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /helping ball carrier/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /incidental face mask/i })).not.toBeInTheDocument();
+
+    rerender(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        penaltyRuleset="NFHS"
+        state={{
+          status: 'token.awaiting',
+          flow: 'penalty',
+          currentStep: 'penaltyName',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /incidental face mask/i })).toBeInTheDocument();
+  });
+
   it('capitalizes a recovering-team letter as it is entered', () => {
     render(
       <FootballFlowModal

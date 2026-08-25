@@ -10,6 +10,12 @@ import FootballPenaltyCodeEditorModal from './FootballPenaltyCodeEditorModal';
 afterEach(() => resetFootballPenaltyTableForTests());
 
 describe('FootballPenaltyCodeEditorModal', () => {
+  it('lists catalog penalties whose official code is still pending', () => {
+    render(<FootballPenaltyCodeEditorModal onClose={vi.fn()} open />);
+
+    expect(screen.getByRole('button', { name: /code pending helping ball carrier/i })).toBeInTheDocument();
+  });
+
   it('adds a penalty type that becomes available to quick input immediately', () => {
     render(<FootballPenaltyCodeEditorModal onClose={vi.fn()} open />);
 

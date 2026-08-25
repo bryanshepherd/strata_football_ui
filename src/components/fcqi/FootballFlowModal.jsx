@@ -743,7 +743,7 @@ export default function FootballFlowModal({
   const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state);
   const buttonOnly = Boolean(activeButtons);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
-    ? searchFootballPenaltyTable(value, 8, penaltyRuleset)
+    ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
     : [];
 
   useEffect(() => {
