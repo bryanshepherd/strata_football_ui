@@ -920,6 +920,46 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it('derives a kickoff end-of-return penalty from the receiving team field direction', () => {
+    const kickoff = completeKickoffReturnDraft({
+      terminalResult: '.',
+      startSpot: 'V20',
+      endSpot: 'V26',
+    });
+    const queued = transition(kickoff, { type: 'QUEUE_PENALTY_REQUEST' });
+    const accepted = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Offside', 'H', 'A', '', 'S', 'V31', 'D'],
+    );
+
+    expect(accepted.status).toBe('summary.reviewing');
+    expect(accepted.draft?.penalties[0]).toMatchObject({
+      team: 'H',
+      yards: 5,
+      enforcedFrom: 'END',
+      finalSpot: 'V31',
+      downConsequence: 'DOWN_COUNTS',
+      downCounts: true,
+    });
+
+    const nestedEndOnly: FootballConfirmedQuickInputState = {
+      ...kickoff,
+      draft: kickoff.draft
+        ? {
+            ...kickoff.draft,
+            result: { ...kickoff.draft.result, endYardLine: undefined },
+          }
+        : undefined,
+    };
+    const acceptedWithNestedEnd = commitPenaltyTokens(
+      startQueuedPenalty(transition(nestedEndOnly, { type: 'QUEUE_PENALTY_REQUEST' })),
+      ['Offside', 'H', 'A', '', 'S', 'V31', 'D'],
+    );
+
+    expect(acceptedWithNestedEnd.status).toBe('summary.reviewing');
+    expect(acceptedWithNestedEnd.draft?.penalties[0].yards).toBe(5);
+  });
+
   it('defaults an offensive succeeding-spot foul to Down Counts and rejects it elsewhere', () => {
     const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
     const downCounts = commitPenaltyTokens(

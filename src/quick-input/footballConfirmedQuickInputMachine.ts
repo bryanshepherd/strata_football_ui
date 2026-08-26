@@ -5495,11 +5495,7 @@ function derivePenaltyYards(
     ? context.prePlay.yardLine
     : penaltyEnforcementBasisSpot(context, tokens, baseDraft, enforcedFrom);
   if (!basisSpot) return undefined;
-  const possession = baseDraft?.play.possession
-    ?? baseDraft?.play.actionTeam
-    ?? context.prePlay.possession
-    ?? context.play.possession
-    ?? context.play.actionTeam;
+  const possession = penaltyEnforcementPossession(context, baseDraft, enforcedFrom);
   const yards = context.calculateRushYards?.({
     startYardLine: basisSpot,
     endYardLine: finalSpot,
@@ -5532,11 +5528,7 @@ function suggestedPenaltyFinalSpot(
   const basisSpot = penaltyEnforcementBasisSpot(context, tokens, baseDraft, enforcedFrom);
   if (!basisSpot) return undefined;
 
-  const possession = baseDraft?.play.possession
-    ?? baseDraft?.play.actionTeam
-    ?? context.prePlay.possession
-    ?? context.play.possession
-    ?? context.play.actionTeam;
+  const possession = penaltyEnforcementPossession(context, baseDraft, enforcedFrom);
   return calculateFootballPenaltyFinalSpot({
     enforcementSpot: basisSpot,
     possession,
@@ -5604,8 +5596,30 @@ function penaltyEnforcementBasisSpot(
 ): Spot | undefined {
   if (enforcedFrom === 'PREVIOUS') return context.prePlay.yardLine;
   if (enforcedFrom === 'SPOT') return tokens.penaltySpotOfFoul;
-  if (enforcedFrom === 'END') return baseDraft?.result.endYardLine;
+  if (enforcedFrom === 'END') {
+    return baseDraft?.result.endYardLine
+      ?? baseDraft?.result.return?.returnEndYardLine
+      ?? baseDraft?.result.fumble?.returnEndYardLine
+      ?? baseDraft?.result.turnover?.returnEndYardLine
+      ?? baseDraft?.result.fumble?.recoverySpot
+      ?? baseDraft?.result.turnover?.spot;
+  }
   return undefined;
+}
+
+function penaltyEnforcementPossession(
+  context: FootballQuickInputContext,
+  baseDraft: FootballDraftIntent | undefined,
+  enforcedFrom: PenaltyEnforcedFromSelection,
+): TeamCode {
+  if (enforcedFrom === 'END' && baseDraft?.result.nextPossession) {
+    return baseDraft.result.nextPossession;
+  }
+  return baseDraft?.play.possession
+    ?? baseDraft?.play.actionTeam
+    ?? context.prePlay.possession
+    ?? context.play.possession
+    ?? context.play.actionTeam;
 }
 
 function participantFromCandidate(
