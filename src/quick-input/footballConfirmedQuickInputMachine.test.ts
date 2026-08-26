@@ -2469,7 +2469,12 @@ describe('footballConfirmedQuickInputMachine', () => {
 
   it('runs an aborted play through team fumble recovery without an individual fumbler', () => {
     const selected = commitToken(inputToken(startTeamPlay(), 'A'));
-    const forcedBySkipped = commitToken(inputToken(selected, ''));
+    expect(selected).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'teamPlayFumbleSpot',
+    });
+    const withFumbleSpot = commitToken(inputToken(selected, 'H42'));
+    const forcedBySkipped = commitToken(inputToken(withFumbleSpot, ''));
     const withTeam = commitToken(inputToken(forcedBySkipped, 'H'));
     const withRecoverer = commitToken(inputToken(withTeam, '22'));
     const withSpot = commitToken(inputToken(withRecoverer, 'H43'));
@@ -2484,7 +2489,14 @@ describe('footballConfirmedQuickInputMachine', () => {
         play: { family: 'rush', subtype: 'aborted' },
         result: {
           teamCharged: true,
-          fumble: { fumblerPlayerId: 'TM', recoveredByPlayerId: 'H-22', recoveredByTeam: 'H' },
+          yards: -2,
+          fumble: {
+            fumblerPlayerId: 'TM',
+            spot: 'H42',
+            recoveredByPlayerId: 'H-22',
+            recoveredByTeam: 'H',
+            recoverySpot: 'H43',
+          },
         },
       },
     });
@@ -2496,7 +2508,11 @@ describe('footballConfirmedQuickInputMachine', () => {
         type: 'rush',
         subtype: 'aborted',
         participants: { primary: null },
-        result: { teamCharged: true, fumble: { fumblerPlayerId: 'TM' } },
+        result: {
+          yards: -2,
+          teamCharged: true,
+          fumble: { fumblerPlayerId: 'TM', spot: 'H42', recoverySpot: 'H43' },
+        },
       },
     });
   });

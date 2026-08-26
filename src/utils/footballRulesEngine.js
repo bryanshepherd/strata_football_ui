@@ -274,10 +274,21 @@ function applyScrimmagePlay(envelope, event, preState, endYardLine, options, tra
   const automaticFirstDown = hasAutomaticFirstDown(event);
   const replayDown = hasReplayDown(event);
   const explicitPlayResultCounts = !acceptedPreviousSpotPenalty(event) && !acceptedSpotOfFoul(event);
-  const firstDown = automaticFirstDown || (!replayDown && (
-    (explicitPlayResultCounts && event.result?.firstDown === true)
-    || (typeof yardsGained === 'number' && typeof yardsToGain === 'number' && yardsGained >= yardsToGain)
-  ));
+  const reachedLineToGain = typeof yardsGained === 'number'
+    && typeof yardsToGain === 'number'
+    && yardsGained >= yardsToGain;
+  const enforcedYardsGained = calculateYardsGained(preState.yardLine, endYardLine, possession);
+  const enforcementEarnedFirstDown = replayDown
+    && hasAcceptedPenaltyFinalSpot(event)
+    && typeof enforcedYardsGained === 'number'
+    && typeof yardsToGain === 'number'
+    && enforcedYardsGained >= yardsToGain;
+  const firstDown = automaticFirstDown
+    || enforcementEarnedFirstDown
+    || (!replayDown && (
+      (explicitPlayResultCounts && event.result?.firstDown === true)
+      || reachedLineToGain
+    ));
 
   addTrace(trace, 'field', 'possession-relative yard math', {
     input: { start: preState.yardLine, statisticalEnd: statisticalEndYardLine, enforcedEnd: endYardLine, possession },
@@ -286,7 +297,15 @@ function applyScrimmagePlay(envelope, event, preState, endYardLine, options, tra
   });
 
   addTrace(trace, 'down-distance', 'first-down checks', {
-    input: { yardsGained, yardsToGain, resultFirstDown: event.result?.firstDown, automaticFirstDown, replayDown },
+    input: {
+      yardsGained,
+      yardsToGain,
+      resultFirstDown: event.result?.firstDown,
+      automaticFirstDown,
+      replayDown,
+      enforcedYardsGained,
+      enforcementEarnedFirstDown,
+    },
     result: firstDown ? 'first down' : 'no first down',
     reason: 'First down can come from yardage, accepted result metadata, or typed penalty flag.',
   });
@@ -730,6 +749,10 @@ function hasAutomaticFirstDown(event) {
 
 function hasReplayDown(event) {
   return Boolean(event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.replayDown));
+}
+
+function hasAcceptedPenaltyFinalSpot(event) {
+  return Boolean(event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.finalSpot));
 }
 
 function penaltyDownAdjustment(event) {

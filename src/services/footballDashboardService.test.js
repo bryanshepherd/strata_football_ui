@@ -730,6 +730,90 @@ describe('local football test-game projection', () => {
     });
   });
 
+  it('starts a new series when replay-down enforcement reaches the line to gain and repairs an already-saved zero distance', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 3,
+      distance: 4,
+      yardLine: 'H24',
+      lineToGain: 'H20',
+      goalToGo: false,
+      redZone: false,
+      driveId: 'DRV-0023',
+      driveNumber: 23,
+    };
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-ABORTED-REPLAY-FIRST-DOWN-1', {
+      type: 'rush',
+      subtype: 'aborted',
+      participants: {
+        primary: null,
+        secondary: null,
+        defenders: [{ playerId: 'V-5', team: 'V', role: 'recoverer' }],
+      },
+      result: {
+        code: 'fumble',
+        yards: -50,
+        teamCharged: true,
+        endYardLine: 'V26',
+        nextPossession: 'V',
+        fumble: {
+          fumblerPlayerId: 'TM',
+          spot: 'V26',
+          recoveredByPlayerId: 'V-5',
+          recoveredByTeam: 'V',
+          recoverySpot: 'V26',
+          turnover: false,
+        },
+      },
+      penalties: [{
+        penaltyId: 'LOCAL-ABORTED-REPLAY-FIRST-DOWN-PENALTY-1',
+        code: 'SUB',
+        team: 'H',
+        status: 'accepted',
+        yards: 5,
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'H19',
+        replayDown: true,
+      }],
+    }));
+
+    expect(response.projection).toMatchObject({ firstDown: true });
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'H19',
+      lineToGain: 'H09',
+      nextPlayContext: 'V,1,10,H19',
+    });
+    expect(response.gameEnvelope.stats.teams.V).toMatchObject({ firstDowns: 1 });
+    expect(response.gameEnvelope.stats.teams.V.rushAttempts).toBeUndefined();
+
+    const staleEnvelope = {
+      ...response.gameEnvelope,
+      liveState: {
+        ...response.gameEnvelope.liveState,
+        down: 3,
+        distance: 0,
+        lineToGain: 'H20',
+        nextPlayContext: 'V,3,0,H19',
+      },
+    };
+    expect(normalizeFootballScoringSetupEnvelope(staleEnvelope).liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'H19',
+      lineToGain: 'H09',
+      nextPlayContext: 'V,1,10,H19',
+    });
+  });
+
   it('credits a spot-of-foul rush only through the foul spot while preserving its description', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.liveState = {

@@ -24,8 +24,37 @@ describe('FootballFlowModal team aliases', () => {
     expect(screen.getByRole('button', { name: /^Spike\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Kneel Down\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Aborted Play\b/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Team incomplete pass/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Team rush; player retained/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Team rush and team fumble/i)).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'k', code: 'KeyK' });
     expect(onTokenCommit).toHaveBeenCalledWith('K');
+  });
+
+  it('asks for the fumble yard line first in the Aborted Play flow', () => {
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={vi.fn()}
+        state={{
+          status: 'token.awaiting',
+          flow: 'teamPlay',
+          currentStep: 'teamPlayFumbleSpot',
+          currentToken: '',
+          tokens: {
+            teamPlaySelection: 'aborted',
+            result: 'fumble',
+            laterals: [],
+            tacklers: [],
+            hurryDefenders: [],
+            sackDefenders: [],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Fumbled At' })).toBeInTheDocument();
   });
 
   it('uses Backspace for text editing until the field is empty, then goes back a step', () => {

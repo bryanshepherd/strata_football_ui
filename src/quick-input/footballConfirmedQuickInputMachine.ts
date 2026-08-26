@@ -87,7 +87,8 @@ export type RushTokenStep =
   | 'lateralSpot';
 export type TeamPlayTokenStep =
   | 'teamPlayMenu'
-  | 'teamPlayPlayerJersey';
+  | 'teamPlayPlayerJersey'
+  | 'teamPlayFumbleSpot';
 export type PassTokenStep =
   | 'passerJersey'
   | 'passResult'
@@ -202,6 +203,7 @@ export type RushFlowTokens = {
   result?: RushResultSelection;
   yards?: number;
   endYardLine?: Spot;
+  fumbleSpot?: Spot;
   forcedBy?: DraftParticipant;
   recoverTeam?: TeamCode;
   recoverPlayer?: DraftParticipant;
@@ -772,7 +774,7 @@ function commitCurrentToken(
         state: {
           ...baseActiveState(state),
           status: 'token.awaiting',
-          currentStep: 'forcedByJersey',
+          currentStep: 'teamPlayFumbleSpot',
           currentToken: '',
           tokens: {
             ...cloneTokens(state.tokens),
@@ -791,6 +793,37 @@ function commitCurrentToken(
         tokens: {
           ...cloneTokens(state.tokens),
           teamPlaySelection: selection,
+        },
+      },
+    };
+  }
+
+  if (state.flow === 'teamPlay' && state.currentStep === 'teamPlayFumbleSpot') {
+    const fumbleSpot = parseSpot(state.currentToken, context);
+    if (!fumbleSpot) {
+      return { state: tokenError(state, 'INVALID_SPOT', 'Fumbled At must use canonical spot format', 'result.fumble.spot') };
+    }
+    const yards = deriveRushYards(context, fumbleSpot);
+    if (typeof yards !== 'number') {
+      return {
+        state: tokenError(
+          state,
+          'INVALID_YARDS_DERIVATION',
+          'Rush yards could not be derived from the pre-play spot and fumble spot',
+          'result.yards',
+        ),
+      };
+    }
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: 'forcedByJersey',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          fumbleSpot,
+          yards,
         },
       },
     };
@@ -6388,7 +6421,8 @@ function buildRushResult(tokens: RushFlowTokens, context: FootballQuickInputCont
     : tokens.result === 'lateral' && tokens.returnTerminalResult === 'outOfBounds'
       ? 'outOfBounds'
       : rushResultCode(tokens.result);
-  const yards = endYardLine ? (tokens.yards ?? deriveRushYards(context, endYardLine)) : tokens.yards;
+  const rushEndYardLine = tokens.result === 'fumble' ? tokens.fumbleSpot ?? endYardLine : endYardLine;
+  const yards = rushEndYardLine ? (tokens.yards ?? deriveRushYards(context, rushEndYardLine)) : tokens.yards;
   const base = {
     code,
     yards,
@@ -6422,7 +6456,7 @@ function buildRushResult(tokens: RushFlowTokens, context: FootballQuickInputCont
     fumble: {
       fumblerPlayerId: tokens.rusher?.playerId ?? '',
       forcedByPlayerId: tokens.forcedBy?.playerId,
-      spot: tokens.recoverSpot,
+      spot: tokens.fumbleSpot ?? tokens.recoverSpot,
       recoveredByPlayerId: tokens.recoverPlayer?.playerId,
       recoveredByTeam: tokens.recoverTeam,
       recoverySpot: tokens.recoverSpot,
@@ -6713,6 +6747,7 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     result: tokens.result,
     yards: tokens.yards,
     endYardLine: tokens.endYardLine,
+    fumbleSpot: tokens.fumbleSpot,
     forcedBy: tokens.forcedBy ? cloneParticipant(tokens.forcedBy) : undefined,
     recoverTeam: tokens.recoverTeam,
     recoverPlayer: tokens.recoverPlayer ? cloneParticipant(tokens.recoverPlayer) : undefined,

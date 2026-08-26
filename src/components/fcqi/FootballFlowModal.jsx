@@ -6,6 +6,7 @@ import FootballFlowProgress from './FootballFlowProgress';
 
 const yardLineSteps = new Set([
   'endSpot',
+  'teamPlayFumbleSpot',
   'recoverSpot',
   'lateralSpot',
   'caughtAtSpot',
@@ -43,6 +44,12 @@ const stepCopy = {
     label: 'Player jersey',
     helper: 'Enter the player for the play-by-play record. No individual attempt will be charged.',
     placeholder: '12',
+  },
+  teamPlayFumbleSpot: {
+    title: 'Aborted Play',
+    label: 'Fumbled At',
+    helper: 'Enter the yard line where the aborted play was fumbled.',
+    placeholder: 'H43',
   },
   rusherJersey: {
     title: 'Rush',
@@ -601,9 +608,9 @@ const rushResultButtons = [
 ];
 
 const teamPlayButtons = [
-  { label: 'Spike', hotkey: 'S', value: 'S', description: 'Team incomplete pass; player retained for play-by-play only.' },
-  { label: 'Kneel Down', hotkey: 'K', value: 'K', description: 'Team rush; player retained for play-by-play only.' },
-  { label: 'Aborted Play', hotkey: 'A', value: 'A', description: 'Team rush and team fumble through the recovery flow.' },
+  { label: 'Spike', hotkey: 'S', value: 'S' },
+  { label: 'Kneel Down', hotkey: 'K', value: 'K' },
+  { label: 'Aborted Play', hotkey: 'A', value: 'A' },
 ];
 
 const passResultButtons = [

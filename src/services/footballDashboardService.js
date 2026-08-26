@@ -739,9 +739,38 @@ const repairMissingOpeningKickoffSpot = (envelope) => {
   };
 };
 
+const repairReplayDownThatReachedLineToGain = (envelope) => {
+  const liveState = envelope?.liveState;
+  if (!validTeamCode(liveState?.possession) || !Number.isFinite(Number(liveState?.down))) return envelope;
+  const yardsToGain = calculateYardsToGain(liveState.yardLine, liveState.lineToGain, liveState.possession);
+  if (yardsToGain !== 0) return envelope;
+
+  const latestEvent = [...(envelope?.events || [])]
+    .reverse()
+    .find((event) => !event.status || event.status === 'accepted');
+  const replayPenaltyReachedLine = latestEvent?.penalties?.some((penalty) => (
+    penalty.status === 'accepted'
+    && penalty.replayDown
+    && penalty.finalSpot === liveState.yardLine
+  ));
+  if (!replayPenaltyReachedLine || !latestEvent?.preState) return envelope;
+
+  const projection = applyFootballEventToEnvelope({
+    ...envelope,
+    liveState: { ...liveState, ...latestEvent.preState },
+  }, latestEvent);
+  if (!projection.firstDown || projection.liveState?.down !== 1) return envelope;
+
+  return {
+    ...envelope,
+    liveState: { ...liveState, ...projection.liveState },
+  };
+};
+
 export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(envelope);
-  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedOpeningEnvelope);
+  const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
+  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedSeriesEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
   const normalizedEnvelope = repairedStats === repairedDriveEnvelope?.stats

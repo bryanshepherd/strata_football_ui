@@ -69,6 +69,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     }
     if (isAbortedPlay && fumble?.fumblerPlayerId !== 'TM') {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Aborted Play fumble must be charged to TM.', field: 'result.fumble.fumblerPlayerId' });
+    } else if (isAbortedPlay && !fumble?.spot) {
+      errors.push({ code: 'MISSING_REQUIRED_RESULT', message: 'Aborted Play requires the Fumbled At yard line.', field: 'result.fumble.spot' });
     } else if (!isAbortedPlay && fumble?.fumblerPlayerId !== rusher?.playerId) {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Rush fumbler must resolve to the rusher.', field: 'result.fumble.fumblerPlayerId' });
     }
