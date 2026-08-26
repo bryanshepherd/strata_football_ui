@@ -33,6 +33,71 @@ describe('FootballScoreboard', () => {
     expect(screen.getByText('Yards')).toBeInTheDocument();
   });
 
+  it('shows the completed drive and TOP while a try is pending after a touchdown', () => {
+    const fixture = getGameEnvelopeFixture('normal');
+    const touchdown = {
+      eventId: 'EVT-TD-1',
+      sequence: 13,
+      status: 'accepted',
+      type: 'rush',
+      period: 1,
+      clock: '08:42',
+      possession: 'H',
+      preState: { ...fixture.liveState, driveId: 'DRV-0002' },
+      result: {
+        code: 'touchdown',
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+    };
+    const postTouchdownPenalty = {
+      eventId: 'EVT-PEN-1',
+      sequence: 14,
+      status: 'accepted',
+      type: 'penalty',
+      period: 1,
+      clock: '08:42',
+      possession: null,
+      result: { code: 'accepted', endYardLine: 'V01' },
+    };
+    const envelope = {
+      ...fixture,
+      events: [...fixture.events, touchdown, postTouchdownPenalty],
+      liveState: {
+        ...fixture.liveState,
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V01',
+        lineToGain: null,
+        driveId: null,
+        pendingTryTeam: 'H',
+        nextPlayContext: 'awaitingTry',
+      },
+      drives: {
+        current: null,
+        completed: [{
+          ...fixture.drives.current,
+          driveNumber: 2,
+          startPeriod: 1,
+          endPeriod: 1,
+          endClock: '08:42',
+          plays: 5,
+          yards: 56,
+          result: 'touchdown',
+        }],
+      },
+    };
+
+    render(<FootballScoreboard envelope={envelope} />);
+
+    expect(screen.getByText('Drive').parentElement).toHaveTextContent('DRV-0002 · Touchdown');
+    expect(screen.getByText('Team').parentElement).toHaveTextContent('HOM');
+    expect(screen.getByText('TOP').parentElement).toHaveTextContent('3:18');
+    expect(screen.getByText('Plays').parentElement).toHaveTextContent('5');
+    expect(screen.getByText('Yards').parentElement).toHaveTextContent('56');
+    expect(screen.queryByText('Start')).not.toBeInTheDocument();
+  });
+
   it('shows timeout ovals and challenge circles as filled availability or empty spent indicators', () => {
     const fixture = getGameEnvelopeFixture('normal');
     const envelope = {

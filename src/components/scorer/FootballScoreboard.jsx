@@ -1,4 +1,5 @@
 import React from 'react';
+import { footballDriveTimeOfPossession } from '../../scoring/footballDriveSummary';
 import { formatFootballClockDisplay } from '../../utils/footballClock';
 
 const formatStatus = (status) =>
@@ -19,6 +20,33 @@ const formatDownDistance = (liveState) => {
 };
 
 const formatSpot = (liveState) => liveState.yardLine || 'Not set';
+
+const isTouchdownEvent = (event) => (
+  event?.result?.scoring?.type === 'touchdown'
+  || event?.result?.code === 'touchdown'
+);
+
+const completedTouchdownContext = (envelope) => {
+  if (envelope.liveState?.nextPlayContext !== 'awaitingTry') return null;
+
+  const touchdownEvent = [...(envelope.events || [])]
+    .reverse()
+    .find((event) => (!event.status || event.status === 'accepted') && isTouchdownEvent(event));
+  const completedDrives = [...(envelope.drives?.completed || [])].reverse();
+  const exactDriveId = touchdownEvent?.preState?.driveId;
+  const scoringTeam = envelope.liveState?.pendingTryTeam
+    || touchdownEvent?.result?.scoring?.team
+    || touchdownEvent?.possession;
+  const drive = (exactDriveId
+    ? completedDrives.find((candidate) => candidate.driveId === exactDriveId)
+    : null)
+    || completedDrives.find((candidate) => (
+      candidate.result === 'touchdown'
+      && (!scoringTeam || candidate.team === scoringTeam)
+    ));
+
+  return drive ? { drive, touchdownEvent } : null;
+};
 
 const resolveTeamTimeoutLimit = (envelope) => {
   const rules = envelope.game.rules || {};
@@ -48,7 +76,11 @@ const resolveChallengeLimit = (envelope) => {
 export default function FootballScoreboard({ envelope }) {
   const liveState = envelope.liveState;
   const currentDrive = envelope.drives?.current;
-  const driveTeam = currentDrive?.team ? envelope.game.teams[currentDrive.team] : null;
+  const touchdownContext = currentDrive ? null : completedTouchdownContext(envelope);
+  const displayDrive = currentDrive || touchdownContext?.drive || null;
+  const driveTeam = displayDrive?.team ? envelope.game.teams[displayDrive.team] : null;
+  const showingCompletedTouchdown = Boolean(touchdownContext);
+  const driveResult = displayDrive?.result ? formatStatus(displayDrive.result) : 'Active';
   // `game.status` remains "pregame" until a kickoff is accepted. The explicit
   // pregame lifecycle is the authoritative display state in that interval.
   const displayStatus = envelope.pregame?.gamePhase || envelope.game.status;
@@ -77,12 +109,17 @@ export default function FootballScoreboard({ envelope }) {
         <StripCell label="Line To Gain" value={liveState.lineToGain || 'None'} />
         <StripCell
           label="Drive"
-          value={currentDrive ? `${currentDrive.driveId} · ${currentDrive.result || 'Active'}` : 'None'}
+          value={displayDrive ? `${displayDrive.driveId} · ${driveResult}` : 'None'}
         />
         <StripCell label="Team" value={driveTeam?.abbr || 'None'} />
-        <StripCell label="Start" value={currentDrive?.startYardLine || 'None'} />
-        <StripCell label="Plays" value={String(currentDrive?.plays ?? 0)} />
-        <StripCell label="Yards" value={String(currentDrive?.yards ?? 0)} />
+        <StripCell
+          label={showingCompletedTouchdown ? 'TOP' : 'Start'}
+          value={showingCompletedTouchdown
+            ? footballDriveTimeOfPossession(envelope, displayDrive, touchdownContext.touchdownEvent)
+            : displayDrive?.startYardLine || 'None'}
+        />
+        <StripCell label="Plays" value={String(displayDrive?.plays ?? 0)} />
+        <StripCell label="Yards" value={String(displayDrive?.yards ?? 0)} />
       </section>
     </div>
   );

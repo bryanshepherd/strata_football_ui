@@ -124,6 +124,10 @@ const driveElapsedSeconds = (envelope, drive, scoringEvent) => {
     + Math.max(0, periodSeconds - end);
 };
 
+export const footballDriveTimeOfPossession = (envelope, drive, terminalEvent = null) => (
+  formatElapsed(driveElapsedSeconds(envelope, drive, terminalEvent))
+);
+
 const humanizeDriveReason = (reason) => {
   const normalized = String(reason || 'possession')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -238,7 +242,7 @@ export function buildFootballDriveSummary(envelope, terminalEvent) {
     teamName: envelope.game?.teams?.[teamCode]?.name || envelope.game?.teams?.[teamCode]?.abbr || teamCode || 'Scoring Team',
     plays: finiteNumber(drive.plays),
     yards: finiteNumber(drive.yards),
-    timeOfPossession: formatElapsed(driveElapsedSeconds(envelope, drive, scoringEvent)),
+    timeOfPossession: footballDriveTimeOfPossession(envelope, drive, scoringEvent),
     scoringPlay: summarizedScoringPlay,
     startInfo: `Start: ${formatFootballClockDisplay(drive.startClock, '--:--')} at ${drive.startYardLine || 'Unknown Spot'} by ${reason}`,
   };
