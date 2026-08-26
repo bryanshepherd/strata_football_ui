@@ -220,6 +220,10 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     });
   }
 
+  if (eventType === 'penalty' && isPossessionFreeSetupPenalty(envelope, preState)) {
+    return applyPossessionFreeSetupPenalty(envelope, event, preState, endYardLine, trace);
+  }
+
   if (isTouchdownEvent(event, statisticalEndYardLine, possession, explicitScoringCounts)) {
     const scoring = event.result?.scoring || { team: possession, points: 6, type: 'touchdown' };
     const scoringTeam = normalizeTeamCode(scoring.team) || possession;
@@ -405,6 +409,44 @@ function applyKickoffRekick(envelope, event, preState, endYardLine, trace) {
       startedDrive: null,
       driveResult: 'rekick',
       reason: 'freeKickInfraction',
+    },
+    yardsGained: null,
+    firstDown: false,
+    scoringUpdate: null,
+  });
+}
+
+function isPossessionFreeSetupPenalty(envelope, preState) {
+  return !normalizeTeamCode(preState.possession)
+    && ['awaitingTry', 'awaitingKickoff', 'awaitingSafetyKick'].includes(envelope?.liveState?.nextPlayContext);
+}
+
+function applyPossessionFreeSetupPenalty(envelope, event, preState, endYardLine, trace) {
+  const setupState = envelope.liveState || {};
+  const nextPlayContext = setupState.nextPlayContext;
+
+  addTrace(trace, 'state', 'possession-free setup penalty', {
+    input: { nextPlayContext, start: preState.yardLine, enforcedEnd: endYardLine },
+    result: `remain ${nextPlayContext} at ${endYardLine}`,
+    reason: 'A standalone penalty during a try or free-kick setup changes the setup spot without creating a scrimmage down or drive.',
+  });
+
+  return finish({
+    envelope,
+    event,
+    trace,
+    liveState: createInactiveLiveState(preState, endYardLine, {
+      pendingTryTeam: normalizeTeamCode(setupState.pendingTryTeam),
+      kickoffTeam: normalizeTeamCode(setupState.kickoffTeam),
+      nextPlayContext,
+    }),
+    driveTransition: {
+      shouldEndCurrent: false,
+      shouldStartNew: false,
+      endedDriveId: null,
+      startedDrive: null,
+      driveResult: 'penalty',
+      reason: 'penaltyDuringSetup',
     },
     yardsGained: null,
     firstDown: false,

@@ -117,6 +117,7 @@ export type DraftPrePlayContext = {
   distance: number | null;
   yardLine: Spot | null;
   lineToGain: Spot | null;
+  setupContext?: 'awaitingTry' | 'awaitingKickoff' | 'awaitingSafetyKick';
   goalToGo?: boolean;
   redZone?: boolean;
   driveId: string | null;
@@ -822,8 +823,20 @@ function validatePrePlayContext(
     errors.push(error('INVALID_PRE_PLAY_CONTEXT', 'prePlay.driveNumber must be a non-negative integer', 'prePlay.driveNumber'));
   }
 
-  const family = isRecord(play) ? play.family : null;
-  const isPossessionFree = family === 'kickoff' || family === 'try' || family === 'gameControl';
+  const playContext = isRecord(play) ? play : null;
+  const family = playContext?.family ?? null;
+  const setupContext = prePlay.setupContext;
+  const validSetupContexts = ['awaitingTry', 'awaitingKickoff', 'awaitingSafetyKick'];
+  if (setupContext !== undefined && !validSetupContexts.includes(String(setupContext))) {
+    errors.push(error('INVALID_PRE_PLAY_CONTEXT', 'prePlay.setupContext is invalid', 'prePlay.setupContext'));
+  }
+  const isSetupPenalty = family === 'penalty'
+    && playContext?.possession === null
+    && validSetupContexts.includes(String(setupContext));
+  const isPossessionFree = family === 'kickoff'
+    || family === 'try'
+    || family === 'gameControl'
+    || isSetupPenalty;
 
   if (!isPossessionFree) {
     for (const field of ['possession', 'down', 'distance', 'yardLine', 'lineToGain']) {

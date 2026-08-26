@@ -298,7 +298,8 @@ function mapRequiredParticipant(participant: DraftParticipant): FootballEventPar
 }
 
 function copyPreState(preState: DraftPrePlayContext): DraftPrePlayContext {
-  return { ...preState };
+  const { setupContext: _setupContext, ...eventPreState } = preState;
+  return eventPreState;
 }
 
 function copyResult(result: DraftResult): DraftResult {

@@ -710,6 +710,9 @@ function buildQuickInputContext(envelope, startMeta, teamAliases) {
     || envelope.liveState.kickoffTeam
     || (phase === 'awaitingKickoff' ? pregame.coinToss.firstHalfKickingTeam : null);
   const baseEventSequence = envelope.events.at(-1)?.sequence ?? 0;
+  const setupContext = ['awaitingTry', 'awaitingKickoff', 'awaitingSafetyKick'].includes(envelope.liveState.nextPlayContext)
+    ? envelope.liveState.nextPlayContext
+    : undefined;
 
   return {
     game: {
@@ -742,6 +745,7 @@ function buildQuickInputContext(envelope, startMeta, teamAliases) {
       distance: envelope.liveState.distance,
       yardLine: envelope.liveState.yardLine,
       lineToGain: envelope.liveState.lineToGain,
+      setupContext,
       goalToGo: envelope.liveState.goalToGo,
       redZone: envelope.liveState.redZone,
       driveId: envelope.liveState.driveId,

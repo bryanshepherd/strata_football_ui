@@ -83,6 +83,64 @@ describe('footballRulesEngine event application', () => {
     expect(result.scoringUpdate).toEqual({ team: 'H', points: 6, type: 'touchdown' });
   });
 
+  it('keeps a try pending after a standalone pre-snap penalty', () => {
+    const awaitingTryEnvelope = {
+      ...normalEnvelope,
+      liveState: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V03',
+        lineToGain: null,
+        goalToGo: false,
+        redZone: false,
+        driveId: null,
+        driveNumber: 3,
+        pendingTryTeam: 'H',
+        kickoffTeam: null,
+        nextPlayContext: 'awaitingTry',
+      },
+    };
+    const result = applyFootballEventToEnvelope(awaitingTryEnvelope, {
+      clientEventId: 'test-pending-try-penalty',
+      type: 'penalty',
+      subtype: 'accepted',
+      possession: null,
+      preState: awaitingTryEnvelope.liveState,
+      result: { code: 'accepted', endYardLine: 'V01' },
+      penalties: [{
+        penaltyId: 'pen-try-offside',
+        team: 'V',
+        status: 'accepted',
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'V01',
+        replayDown: true,
+      }],
+    });
+
+    expect(result.liveState).toEqual({
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V01',
+      lineToGain: null,
+      goalToGo: false,
+      redZone: false,
+      driveId: null,
+      driveNumber: 3,
+      pendingTryTeam: 'H',
+      kickoffTeam: null,
+      nextPlayContext: 'awaitingTry',
+    });
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: false,
+      reason: 'penaltyDuringSetup',
+    });
+    expect(result.yardsGained).toBeNull();
+    expect(result.firstDown).toBe(false);
+  });
+
   it('calculates a normal first down without mutating the envelope', () => {
     const event = {
       clientEventId: 'test-first-down',

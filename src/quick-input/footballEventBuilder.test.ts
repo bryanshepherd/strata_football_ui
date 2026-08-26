@@ -445,6 +445,37 @@ describe('footballEventBuilder', () => {
     ]);
   });
 
+  it('builds a pending-try penalty without leaking the local setup marker', () => {
+    const intent = makePenaltyOnlyIntent();
+    intent.play.possession = null;
+    intent.prePlay = {
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V03',
+      lineToGain: null,
+      setupContext: 'awaitingTry',
+      driveId: null,
+      driveNumber: 3,
+    };
+    intent.result.endYardLine = 'V01';
+    intent.penalties[0].finalSpot = 'V01';
+    intent.penalties[0].yards = 2;
+
+    const result = expectBuilt(intent);
+
+    expect(result.event.preState).toEqual({
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V03',
+      lineToGain: null,
+      driveId: null,
+      driveNumber: 3,
+    });
+    expect(result.event.result.endYardLine).toBe('V01');
+  });
+
   it('rejects unconfirmed draft', () => {
     const intent = makeRushIntent();
     intent.status = 'readyForSummary';

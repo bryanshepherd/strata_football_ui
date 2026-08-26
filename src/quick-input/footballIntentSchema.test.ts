@@ -254,6 +254,49 @@ describe('footballIntentSchema', () => {
     expect(validateFootballDraftIntent(intent).ok).toBe(true);
   });
 
+  it('accepts a penalty-only intent while a try is pending', () => {
+    const intent = makePenaltyOnlyIntent();
+    intent.play.possession = null;
+    intent.prePlay = {
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V03',
+      lineToGain: null,
+      setupContext: 'awaitingTry',
+      driveId: null,
+      driveNumber: 3,
+    };
+    intent.result.endYardLine = 'V01';
+    intent.penalties[0].finalSpot = 'V01';
+    intent.penalties[0].yards = 2;
+
+    expect(validateFootballDraftIntent(intent).ok).toBe(true);
+  });
+
+  it('still rejects an incomplete penalty pre-play state without an active setup context', () => {
+    const intent = makePenaltyOnlyIntent();
+    intent.play.possession = null;
+    intent.prePlay = {
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'V03',
+      lineToGain: null,
+      driveId: null,
+      driveNumber: 3,
+    };
+
+    const result = validateFootballDraftIntent(intent);
+    expect(result.ok).toBe(false);
+    expect(result.errors.map((error) => error.field)).toEqual(expect.arrayContaining([
+      'prePlay.possession',
+      'prePlay.down',
+      'prePlay.distance',
+      'prePlay.lineToGain',
+    ]));
+  });
+
   it('rejects invalid team codes', () => {
     const intent = makeRushIntent();
     intent.play.actionTeam = 'HOME' as never;

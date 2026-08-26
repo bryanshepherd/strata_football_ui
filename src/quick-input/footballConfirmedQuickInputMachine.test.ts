@@ -564,6 +564,45 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('Penalty: Offsides on VIS');
   });
 
+  it('builds an immediate penalty from a pending try setup', () => {
+    const context = makeContext({
+      play: { actionTeam: 'H', possession: null },
+      prePlay: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V03',
+        lineToGain: null,
+        setupContext: 'awaitingTry',
+        driveId: null,
+        driveNumber: 3,
+      },
+    });
+    const ready = commitPenaltyTokens(
+      startPenalty('immediate', context),
+      ['Offside', 'V', 'A', '', 'V01'],
+      context,
+    );
+
+    expect(ready.status).toBe('draft.ready');
+    expect(ready.draft).toMatchObject({
+      play: { family: 'penalty', possession: null },
+      prePlay: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V03',
+        lineToGain: null,
+        setupContext: 'awaitingTry',
+      },
+      result: { endYardLine: 'V01' },
+      penalties: [{ yards: 2, finalSpot: 'V01', downConsequence: 'REPEAT' }],
+    });
+
+    const reviewing = transitionWithContext(ready, { type: 'GENERATE_SUMMARY' }, context);
+    expect(reviewing.summary?.summaryText).toContain('2 yards, from the previous spot, to the V1, replay down, accepted');
+  });
+
   it('accepted immediate penalty does not ask for yards', () => {
     const state = commitPenaltyTokens(startPenalty('immediate'), ['Offside', 'V', 'A', '']);
 
