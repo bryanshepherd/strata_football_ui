@@ -136,6 +136,7 @@ export type KickTokenStep =
   | 'kickOutOfBoundsAwardedSpot'
   | 'kickRekickPenaltyReview'
   | 'kickDownedTouchbackDecision'
+  | 'kickFairCatchTouchbackDecision'
   | 'downingPlayerJersey'
   | 'downedSpot';
 export type FieldGoalTokenStep =
@@ -266,6 +267,8 @@ export type KickFlowTokens = PuntFlowTokens & {
   kickRekickSpot?: Spot;
   kickDownedTouchbackTargetSpot?: Spot;
   kickAdvanceDownedToTouchback?: boolean;
+  kickFairCatchTouchbackTargetSpot?: Spot;
+  kickAdvanceFairCatchToTouchback?: boolean;
   fieldGoalSpot?: Spot;
   fieldGoalResult?: FieldGoalResultSelection;
   fieldGoalMissedReason?: KickMissedReasonSelection;
@@ -1593,7 +1596,9 @@ function commitKickToken(
       nextStep: !kickoffReturn
         ? 'kickReturnStartSpot'
         : state.tokens.kickReceiveResult === 'fairCatch'
-          ? undefined
+          ? state.tokens.kickFairCatchTouchbackTargetSpot
+            ? 'kickFairCatchTouchbackDecision'
+            : undefined
           : state.tokens.kickReceiveResult === 'muffed'
             ? 'recoverTeam'
             : 'returnTerminalResult',
@@ -1637,7 +1642,7 @@ function commitKickToken(
     if (!downedSpot) {
       return { state: tokenError(state, 'INVALID_SPOT', 'Downed spot must use canonical spot format', 'result.endYardLine') };
     }
-    const kickDownedTouchbackTargetSpot = kickoffDownedTouchbackTargetSpot(downedSpot, context);
+    const kickDownedTouchbackTargetSpot = kickoffTouchbackAdvanceTargetSpot(downedSpot, context);
     const tokens = {
       ...cloneTokens(state.tokens),
       downedSpot,
@@ -1683,6 +1688,29 @@ function commitKickToken(
           kickAdvanceDownedToTouchback: advance,
         },
       },
+    };
+  }
+
+  if (state.currentStep === 'kickFairCatchTouchbackDecision') {
+    const advance = parseBooleanToken(state.currentToken);
+    if (advance === null) {
+      return {
+        state: tokenError(
+          state,
+          'INVALID_KICK_FAIR_CATCH_TOUCHBACK_DECISION',
+          'Choose Advance Ball (Y) or Keep Fair Catch Spot (N).',
+          'result.endYardLine',
+        ),
+      };
+    }
+    return {
+      state: makeReadyState({
+        ...baseActiveState(state),
+        tokens: {
+          ...cloneTokens(state.tokens),
+          kickAdvanceFairCatchToTouchback: advance,
+        },
+      }, context),
     };
   }
 
@@ -1766,15 +1794,25 @@ function commitKickToken(
     if (!kickFairCatchSpot) {
       return { state: tokenError(state, 'INVALID_SPOT', 'Fair catch spot must use canonical spot format', 'result.kick.catchYardLine') };
     }
-    return {
-      state: makeReadyState({
-        ...baseActiveState(state),
-        tokens: {
-          ...cloneTokens(state.tokens),
-          kickFairCatchSpot,
-        },
-      }, context),
+    const kickFairCatchTouchbackTargetSpot = kickoffTouchbackAdvanceTargetSpot(kickFairCatchSpot, context);
+    const tokens = {
+      ...cloneTokens(state.tokens),
+      kickFairCatchSpot,
+      kickFairCatchTouchbackTargetSpot,
+      kickAdvanceFairCatchToTouchback: undefined,
     };
+    if (kickFairCatchTouchbackTargetSpot) {
+      return {
+        state: {
+          ...baseActiveState(state),
+          status: 'token.awaiting',
+          currentStep: 'kickFairCatchTouchbackDecision',
+          currentToken: '',
+          tokens,
+        },
+      };
+    }
+    return { state: makeReadyState({ ...baseActiveState(state), tokens }, context) };
   }
 
   if (state.currentStep === 'kickOutOfBoundsSpot') {
@@ -2846,7 +2884,13 @@ function commitKickReceiveResult(
   const tokens = {
     ...cloneTokens(state.tokens),
     kickReceiveResult: result,
-    ...(result === 'fairCatch' ? { kickFairCatchSpot: state.tokens.kickReturnStartSpot } : {}),
+    ...(result === 'fairCatch'
+      ? {
+          kickFairCatchSpot: state.tokens.kickReturnStartSpot,
+          kickFairCatchTouchbackTargetSpot: kickoffTouchbackAdvanceTargetSpot(state.tokens.kickReturnStartSpot, context),
+          kickAdvanceFairCatchToTouchback: undefined,
+        }
+      : {}),
     ...(result === 'outOfBounds' ? { kickOutOfBoundsSpot: state.tokens.kickReturnStartSpot } : {}),
     ...(result === 'downed' ? { downedSpot: state.tokens.kickReturnStartSpot } : {}),
   };
@@ -2867,7 +2911,7 @@ function commitKickReceiveResult(
   }
 
   if (result === 'downed') {
-    const kickDownedTouchbackTargetSpot = kickoffDownedTouchbackTargetSpot(tokens.downedSpot, context);
+    const kickDownedTouchbackTargetSpot = kickoffTouchbackAdvanceTargetSpot(tokens.downedSpot, context);
     return {
       state: {
         ...baseActiveState(state),
@@ -3740,6 +3784,8 @@ function editPlay(state: FootballConfirmedQuickInputState): FootballQuickInputTr
     tokens.kickRekickSpot = undefined;
     tokens.kickDownedTouchbackTargetSpot = undefined;
     tokens.kickAdvanceDownedToTouchback = undefined;
+    tokens.kickFairCatchTouchbackTargetSpot = undefined;
+    tokens.kickAdvanceFairCatchToTouchback = undefined;
     tokens.downingPlayer = undefined;
     tokens.downedSpot = undefined;
     tokens.tacklers = [];
@@ -5570,7 +5616,11 @@ function kickoffEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputC
     return tokens.kickTouchbackSpot ?? ruleSpotForTeam(kickoffTouchbackSpot, context.play.actionTeam, 'opponent');
   }
   if (tokens.kickReceiveResult === 'return') return tokens.returnEndSpot;
-  if (tokens.kickReceiveResult === 'fairCatch') return tokens.kickFairCatchSpot;
+  if (tokens.kickReceiveResult === 'fairCatch') {
+    return tokens.kickAdvanceFairCatchToTouchback
+      ? tokens.kickFairCatchTouchbackTargetSpot ?? tokens.kickFairCatchSpot
+      : tokens.kickFairCatchSpot;
+  }
   if (tokens.kickReceiveResult === 'outOfBounds') return tokens.kickOutOfBoundsDecision === 'rekick'
     ? tokens.kickRekickSpot
     : tokens.kickOutOfBoundsAwardedSpot;
@@ -5630,8 +5680,8 @@ function ruleSpotForTeam(spot: Spot | undefined, team: TeamCode, fieldSide: 'own
   return `${side}${yard}` as Spot;
 }
 
-function kickoffDownedTouchbackTargetSpot(
-  downedSpot: Spot | undefined,
+function kickoffTouchbackAdvanceTargetSpot(
+  kickSpot: Spot | undefined,
   context: FootballQuickInputContext,
 ): Spot | undefined {
   const configuredSpot = ruleSpotForTeam(
@@ -5639,11 +5689,11 @@ function kickoffDownedTouchbackTargetSpot(
     context.play.actionTeam,
     'opponent',
   );
-  if (!downedSpot || !configuredSpot) return undefined;
+  if (!kickSpot || !configuredSpot) return undefined;
   const receivingTeam = opposingTeam(context.play.actionTeam);
-  const downedYard = spotToTeamEngineYard(downedSpot, receivingTeam);
+  const kickYard = spotToTeamEngineYard(kickSpot, receivingTeam);
   const touchbackYard = spotToTeamEngineYard(configuredSpot, receivingTeam);
-  if (typeof downedYard !== 'number' || typeof touchbackYard !== 'number' || downedYard >= touchbackYard) {
+  if (typeof kickYard !== 'number' || typeof touchbackYard !== 'number' || kickYard >= touchbackYard) {
     return undefined;
   }
   return configuredSpot;
@@ -6286,7 +6336,11 @@ function nextStepAfterDuplicate(
   if (role === 'returner') {
     if (state.flow === 'kick') {
       if (state.tokens.kickMenuSelection !== 'kickoff') return 'kickReturnStartSpot';
-      if (state.tokens.kickReceiveResult === 'fairCatch') return undefined;
+      if (state.tokens.kickReceiveResult === 'fairCatch') {
+        return state.tokens.kickFairCatchTouchbackTargetSpot
+          ? 'kickFairCatchTouchbackDecision'
+          : undefined;
+      }
       if (state.tokens.kickReceiveResult === 'muffed') return 'recoverTeam';
       return 'returnTerminalResult';
     }
@@ -6643,6 +6697,7 @@ function isKickSpecificTokenStep(step: FootballTokenStep): step is KickTokenStep
     'kickOutOfBoundsAwardedSpot',
     'kickRekickPenaltyReview',
     'kickDownedTouchbackDecision',
+    'kickFairCatchTouchbackDecision',
     'downingPlayerJersey',
     'downedSpot',
     'fieldGoalSpot',
@@ -6798,6 +6853,8 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     kickRekickSpot: tokens.kickRekickSpot,
     kickDownedTouchbackTargetSpot: tokens.kickDownedTouchbackTargetSpot,
     kickAdvanceDownedToTouchback: tokens.kickAdvanceDownedToTouchback,
+    kickFairCatchTouchbackTargetSpot: tokens.kickFairCatchTouchbackTargetSpot,
+    kickAdvanceFairCatchToTouchback: tokens.kickAdvanceFairCatchToTouchback,
     fieldGoalSpot: tokens.fieldGoalSpot,
     fieldGoalResult: tokens.fieldGoalResult,
     fieldGoalMissedReason: tokens.fieldGoalMissedReason,

@@ -369,6 +369,12 @@ const stepCopy = {
     helper: 'Choose whether to advance the ball to the configured kickoff touchback spot.',
     placeholder: 'Y',
   },
+  kickFairCatchTouchbackDecision: {
+    title: 'Advance Ball To Touchback Spot?',
+    label: 'Fair catch spot',
+    helper: 'Choose whether to advance the ball to the configured kickoff touchback spot.',
+    placeholder: 'Y',
+  },
   fieldGoalSpot: {
     title: 'Field goal',
     label: 'Yardline kicked from',
@@ -655,6 +661,11 @@ const kickRekickPenaltyReviewButtons = [
 const kickDownedTouchbackDecisionButtons = [
   { label: 'Advance Ball', hotkey: 'Y', value: 'Y' },
   { label: 'Keep Downed Spot', hotkey: 'N', value: 'N' },
+];
+
+const kickFairCatchTouchbackDecisionButtons = [
+  { label: 'Advance Ball', hotkey: 'Y', value: 'Y' },
+  { label: 'Keep Fair Catch Spot', hotkey: 'N', value: 'N' },
 ];
 
 const kickMenuButtons = [
@@ -1055,6 +1066,7 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'kickOutOfBoundsDecision') return kickOutOfBoundsDecisionButtons;
   if (step === 'kickRekickPenaltyReview') return kickRekickPenaltyReviewButtons;
   if (step === 'kickDownedTouchbackDecision') return kickDownedTouchbackDecisionButtons;
+  if (step === 'kickFairCatchTouchbackDecision') return kickFairCatchTouchbackDecisionButtons;
   if (step === 'returnTerminalResult') return returnTerminalResultButtons;
   if (step === 'returnOwnGoalDecision') return returnOwnGoalDecisionButtons;
   if (step === 'fumbleReturned') return returnAttemptedButtons;
@@ -1140,6 +1152,12 @@ function stepCopyForState(state, aliases, teamNames) {
     return {
       ...copy,
       helper: `The kickoff was downed at ${state.tokens?.downedSpot || 'the entered spot'}, before the configured ${state.tokens?.kickDownedTouchbackTargetSpot || 'kickoff touchback spot'}. Advance the ball?`,
+    };
+  }
+  if (step === 'kickFairCatchTouchbackDecision') {
+    return {
+      ...copy,
+      helper: `The kickoff was fair caught at ${state.tokens?.kickFairCatchSpot || 'the entered spot'}, before the configured ${state.tokens?.kickFairCatchTouchbackTargetSpot || 'kickoff touchback spot'}. Advance the ball?`,
     };
   }
   if (!copy || !['recoverTeam', 'penaltyTeam', 'offsettingSecondTeam', 'gameControlPossession'].includes(step)) return copy;

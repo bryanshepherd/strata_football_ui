@@ -1620,6 +1620,85 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('fair catch by #3 Davis');
   });
 
+  it('offers to advance a kickoff fair catch inside the configured kickoff touchback spot', () => {
+    const context = makeContext({
+      rules: { touchbackSpot: 'H25', kickoffTouchbackSpot: 'H20' },
+    });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V10', context), context);
+    const withFairCatch = commitTokenWithContext(inputTokenWithContext(withDestination, 'C', context), context);
+    const duplicateReturner = commitTokenWithContext(inputTokenWithContext(withFairCatch, '3', context), context);
+    const decision = transitionWithContext(duplicateReturner, {
+      type: 'SELECT_DUPLICATE_PLAYER',
+      playerId: 'V-3-PR',
+    }, context);
+
+    expect(decision).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'kickFairCatchTouchbackDecision',
+      tokens: {
+        kickFairCatchSpot: 'V10',
+        kickFairCatchTouchbackTargetSpot: 'V20',
+        returner: { playerId: 'V-3-PR' },
+      },
+    });
+
+    const ready = commitTokenWithContext(inputTokenWithContext(decision, 'Y', context), context);
+    expect(ready).toMatchObject({
+      status: 'draft.ready',
+      tokens: { kickAdvanceFairCatchToTouchback: true },
+      draft: {
+        result: {
+          code: 'fairCatch',
+          endYardLine: 'V20',
+          nextPossession: 'V',
+          kick: { catchYardLine: 'V10', kickYards: 55, receiveResultCode: 'C' },
+        },
+      },
+    });
+
+    const reviewing = transitionWithContext(ready, { type: 'GENERATE_SUMMARY' }, context);
+    expect(reviewing.summary?.summaryText).toContain('kickoff 55 yards to the V10');
+    expect(reviewing.summary?.summaryText).toContain('fair catch by #3 Davis');
+    expect(reviewing.summary?.summaryText).toContain('ball spotted at the V20');
+  });
+
+  it('preserves the actual kickoff fair catch spot when the operator declines advancement', () => {
+    const context = makeContext({ rules: { kickoffTouchbackSpot: 'H30' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V12', context), context);
+    const withFairCatch = commitTokenWithContext(inputTokenWithContext(withDestination, 'C', context), context);
+    const decision = commitTokenWithContext(inputTokenWithContext(withFairCatch, '44', context), context);
+    const ready = commitTokenWithContext(inputTokenWithContext(decision, 'N', context), context);
+
+    expect(ready.tokens).toMatchObject({
+      kickFairCatchSpot: 'V12',
+      kickFairCatchTouchbackTargetSpot: 'V30',
+      kickAdvanceFairCatchToTouchback: false,
+    });
+    expect(ready.draft?.result).toMatchObject({
+      code: 'fairCatch',
+      endYardLine: 'V12',
+      kick: { catchYardLine: 'V12' },
+      nextPossession: 'V',
+    });
+  });
+
+  it.each(['V20', 'V31'])('does not prompt when a kickoff is fair caught at or beyond the configured spot (%s)', (spot) => {
+    const context = makeContext({ rules: { kickoffTouchbackSpot: 'H20' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, spot, context), context);
+    const withFairCatch = commitTokenWithContext(inputTokenWithContext(withDestination, 'C', context), context);
+    const ready = commitTokenWithContext(inputTokenWithContext(withFairCatch, '44', context), context);
+
+    expect(ready.status).toBe('draft.ready');
+    expect(ready.tokens.kickFairCatchTouchbackTargetSpot).toBeUndefined();
+    expect(ready.draft?.result.endYardLine).toBe(spot);
+  });
+
   it('kickoff out-of-bounds builds request only with no returner', () => {
     const reviewing = transition(completeKickoffReceiveDraft({ receiveResult: 'O', outOfBoundsSpot: 'V08', spot: 'V35' }), { type: 'GENERATE_SUMMARY' });
 

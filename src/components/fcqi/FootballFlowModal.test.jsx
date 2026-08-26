@@ -161,6 +161,39 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
   });
 
+  it('offers the configured fair-catch touchback advance decision with fair-catch wording', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting',
+          flow: 'kick',
+          currentStep: 'kickFairCatchTouchbackDecision',
+          currentToken: '',
+          tokens: {
+            laterals: [],
+            tacklers: [],
+            hurryDefenders: [],
+            sackDefenders: [],
+            kickFairCatchSpot: 'V10',
+            kickFairCatchTouchbackTargetSpot: 'V20',
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Advance Ball To Touchback Spot?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Advance Ball Y' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep Fair Catch Spot N' })).toBeInTheDocument();
+    expect(screen.getByText(/fair caught at V10, before the configured V20/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'n', code: 'KeyN' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('N');
+  });
+
   it('shows the full ruleset penalty catalog before the operator filters it', () => {
     const { rerender } = render(
       <FootballFlowModal

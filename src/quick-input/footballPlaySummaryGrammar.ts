@@ -351,6 +351,9 @@ function kickoffSummary(context: SummaryContext): string {
     clauses.push(`recovered by ${formatPlayer(recovery)} for ${teamAbbr(intent, intent.result.fumble?.recoveredByTeam ?? intent.result.nextPossession ?? intent.play.actionTeam)} ${spotPhrase(context, 'at', intent.result.fumble?.recoverySpot ?? intent.result.endYardLine, 'result.fumble.recoverySpot')}`);
   } else if (intent.result.code === 'fairCatch' || intent.play.subtype === 'fairCatch') {
     clauses.push(returner ? `fair catch by ${formatPlayer(returner)}` : 'fair catch');
+    if (intent.result.endYardLine && intent.result.endYardLine !== catchSpot) {
+      clauses.push(`ball spotted ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
+    }
   } else if (intent.result.code === 'muffed' || intent.play.subtype === 'muffed') {
     clauses.push(returner ? `muffed by ${formatPlayer(returner)}` : 'muffed');
     appendRecoveryClause(context, clauses);
