@@ -883,6 +883,15 @@ const playEarnedFirstDown = (event, projection, eventHistory) => {
     && projection.yardsGained >= yardsToGain;
 };
 
+const acceptedReturnTeamSpotOfFoul = (event, returnTeam) => [...(event?.penalties || [])]
+  .reverse()
+  .find((penalty) => (
+    penalty.status === 'accepted'
+    && penalty.team === returnTeam
+    && penalty.spotOfFoul
+    && (penalty.enforcedFrom === 'SPOT' || penalty.enforcedFrom === 'spotOfFoul')
+  ));
+
 const kickoffReturnStat = (event) => {
   if (event?.type !== 'kickoff') return null;
   const result = event?.result || {};
@@ -891,10 +900,17 @@ const kickoffReturnStat = (event) => {
   const returnTeam = returner?.team || oppositeTeam(kickingTeam);
 
   if (result.return?.type === 'Kickoff') {
+    const spotOfFoul = acceptedReturnTeamSpotOfFoul(event, returnTeam)?.spotOfFoul;
+    const returnStartYardLine = result.return.returnStartYardLine || result.kick?.catchYardLine;
+    const spotOfFoulYards = spotOfFoul
+      ? calculateYardsGained(returnStartYardLine, spotOfFoul, returnTeam)
+      : null;
     return {
       returner,
       returnTeam,
-      returnYards: finiteNumber(result.return.returnYards),
+      returnYards: Number.isFinite(spotOfFoulYards)
+        ? spotOfFoulYards
+        : finiteNumber(result.return.returnYards),
     };
   }
 
@@ -910,6 +926,58 @@ const kickoffReturnStat = (event) => {
   );
   if (!Number.isFinite(returnYards)) return null;
   return { returner, returnTeam, returnYards };
+};
+
+const blockedPuntStat = (event) => {
+  if (event?.type !== 'punt') return null;
+  const blockedByPlayerId = event?.result?.kick?.blockedByPlayerId;
+  const blocker = (event?.participants?.defenders || []).find((participant) => (
+    participant?.playerId === blockedByPlayerId || participant?.role === 'blocker'
+  ));
+  if (!blockedByPlayerId && !blocker) return null;
+
+  const rawPuntYards = finiteNumber(event?.result?.kick?.kickYards ?? event?.result?.kickYards);
+  return {
+    blocker,
+    blockingTeam: blocker?.team || oppositeTeam(event?.possession),
+    puntYards: Math.max(0, rawPuntYards),
+    returnYardsBeforeRecovery: Math.max(0, -rawPuntYards),
+  };
+};
+
+const puntReturnStat = (event, blockedPunt) => {
+  const result = event?.result || {};
+  const returner = event?.participants?.returner;
+  const hasReturn = result.return?.type === 'Punt';
+  const returnYardsAfterRecovery = hasReturn ? finiteNumber(result.return?.returnYards) : 0;
+
+  if (blockedPunt?.returnYardsBeforeRecovery > 0) {
+    const blockerIsReturner = blockedPunt.blocker?.playerId
+      && blockedPunt.blocker.playerId === returner?.playerId;
+    return {
+      returnTeam: blockedPunt.blockingTeam,
+      returnYards: blockedPunt.returnYardsBeforeRecovery + returnYardsAfterRecovery,
+      playerCredits: [
+        blockedPunt.blocker && {
+          participant: blockedPunt.blocker,
+          attempts: 1,
+          yards: blockedPunt.returnYardsBeforeRecovery + (blockerIsReturner ? returnYardsAfterRecovery : 0),
+        },
+        hasReturn && returner && !blockerIsReturner && {
+          participant: returner,
+          attempts: 0,
+          yards: returnYardsAfterRecovery,
+        },
+      ].filter(Boolean),
+    };
+  }
+
+  if (!hasReturn) return null;
+  return {
+    returnTeam: returner?.team || result.nextPossession,
+    returnYards: returnYardsAfterRecovery,
+    playerCredits: returner ? [{ participant: returner, attempts: 1, yards: returnYardsAfterRecovery }] : [],
+  };
 };
 
 const projectFootballStats = (stats = {}, event, projection, eventHistory = []) => {
@@ -1036,8 +1104,10 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     }));
   }
 
+  const blockedPunt = blockedPuntStat(event);
   if (validTeamCode(offense) && event.type === 'punt') {
-    const puntYards = finiteNumber(result.kick?.kickYards ?? result.kickYards);
+    const puntYards = blockedPunt?.puntYards
+      ?? finiteNumber(result.kick?.kickYards ?? result.kickYards);
     teams = updateTeamStat(teams, offense, (current) => {
       const count = finiteNumber(current.punts?.num ?? current.punts) + 1;
       const yards = finiteNumber(current.punts?.yds ?? current.puntYards) + puntYards;
@@ -1051,18 +1121,19 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         },
       };
     });
-    const punter = event?.participants?.punter || primary;
-    players = updatePlayerStat(players, punter?.playerId, offense, (current) => ({
-      ...current,
-      punts: finiteNumber(current.punts) + 1,
-      puntYards: finiteNumber(current.puntYards) + puntYards,
-    }));
+    if (!blockedPunt) {
+      const punter = event?.participants?.punter || primary;
+      players = updatePlayerStat(players, punter?.playerId, offense, (current) => ({
+        ...current,
+        punts: finiteNumber(current.punts) + 1,
+        puntYards: finiteNumber(current.puntYards) + puntYards,
+      }));
+    }
   }
 
-  if (event.type === 'punt' && result.return?.type === 'Punt') {
-    const returner = event?.participants?.returner;
-    const returnTeam = returner?.team || result.nextPossession;
-    const returnYards = finiteNumber(result.return?.returnYards);
+  const puntReturn = event.type === 'punt' ? puntReturnStat(event, blockedPunt) : null;
+  if (puntReturn) {
+    const { returnTeam, returnYards, playerCredits } = puntReturn;
     teams = updateTeamStat(teams, returnTeam, (current) => ({
       ...current,
       puntReturns: {
@@ -1071,11 +1142,13 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         yds: finiteNumber(current.puntReturns?.yds ?? current.puntReturnYds) + returnYards,
       },
     }));
-    players = updatePlayerStat(players, returner?.playerId, returnTeam, (current) => ({
-      ...current,
-      puntReturns: finiteNumber(current.puntReturns) + 1,
-      puntReturnYards: finiteNumber(current.puntReturnYards) + returnYards,
-    }));
+    for (const credit of playerCredits) {
+      players = updatePlayerStat(players, credit.participant?.playerId, credit.participant?.team || returnTeam, (current) => ({
+        ...current,
+        puntReturns: finiteNumber(current.puntReturns) + credit.attempts,
+        puntReturnYards: finiteNumber(current.puntReturnYards) + credit.yards,
+      }));
+    }
   }
 
   const prePlayDown = Number(event?.preState?.down);

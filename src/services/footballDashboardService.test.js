@@ -1266,6 +1266,106 @@ describe('local football test-game projection', () => {
     expect(punt.gameEnvelope.stats.players['V-3']).toMatchObject({ kickReturns: 1, kickReturnYards: 26 });
   });
 
+  it('ends kickoff return statistics at an accepted return-team spot of foul', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H20',
+      lineToGain: null,
+      kickoffTeam: 'H',
+      nextPlayContext: 'awaitingKickoff',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-KICK-SPOT-FOUL-STAT-1', {
+      type: 'kickoff',
+      subtype: 'returned',
+      possession: null,
+      participants: {
+        primary: { playerId: 'H-38', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-38', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-6', team: 'V', role: 'returner' },
+        defenders: [],
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'H40',
+        nextPossession: 'V',
+        driveEnds: false,
+        kick: { catchYardLine: 'V27', kickYards: 38, receiveResultCode: 'R' },
+        return: {
+          type: 'Kickoff',
+          returnerPlayerId: 'V-6',
+          returnYards: 33,
+          returnStartYardLine: 'V27',
+          returnEndYardLine: 'H40',
+        },
+      },
+      penalties: [{
+        penaltyId: 'LOCAL-KICK-SPOT-FOUL-PENALTY-1',
+        code: 'HOLD',
+        team: 'V',
+        status: 'accepted',
+        yards: 10,
+        enforcedFrom: 'spotOfFoul',
+        spotOfFoul: 'V48',
+        finalSpot: 'V38',
+        replayDown: true,
+      }],
+    }));
+
+    expect(response.gameEnvelope.stats.teams.V.kickReturns).toEqual({ num: 1, yds: 21 });
+    expect(response.gameEnvelope.stats.players['V-6']).toMatchObject({ kickReturns: 1, kickReturnYards: 21 });
+    expect(response.gameEnvelope.stats.teams.V.penalties).toEqual({ num: 1, yds: 10 });
+  });
+
+  it('records a negative blocked punt as a zero-yard team punt and blocker return', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 4,
+      distance: 17,
+      yardLine: 'V34',
+      lineToGain: 'H49',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-BLOCKED-PUNT-STAT-1', {
+      type: 'punt',
+      subtype: 'outOfBounds',
+      participants: {
+        primary: { playerId: 'V-31', team: 'V', role: 'punter' },
+        punter: { playerId: 'V-31', team: 'V', role: 'punter' },
+        returner: null,
+        defenders: [{ playerId: 'H-6', team: 'H', role: 'blocker' }],
+      },
+      result: {
+        code: 'outOfBounds',
+        endYardLine: 'V26',
+        nextPossession: 'H',
+        driveEnds: true,
+        kick: {
+          catchYardLine: 'V26',
+          kickYards: -8,
+          receiveResultCode: 'O',
+          blockedByPlayerId: 'H-6',
+        },
+      },
+    }));
+
+    expect(response.gameEnvelope.stats.teams.V.punts).toEqual({ num: 1, yds: 0, avg: 0 });
+    expect(response.gameEnvelope.stats.players['V-31']).toBeUndefined();
+    expect(response.gameEnvelope.stats.teams.H.puntReturns).toEqual({ num: 1, yds: 8 });
+    expect(response.gameEnvelope.stats.players['H-6']).toMatchObject({ puntReturns: 1, puntReturnYards: 8 });
+    expect(response.gameEnvelope.stats.teams.V.fourthDown).toBeUndefined();
+  });
+
   it('counts a kickoff-return fumble and lost fumble for the receiving team', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.stats.teams = {};
