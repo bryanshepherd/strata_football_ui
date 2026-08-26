@@ -48,6 +48,9 @@ function summaryForPlay(context: SummaryContext): string {
   }
 
   if (intent.play.family === 'try') return trySummary(context);
+  if (intent.play.subtype === 'kneel') return kneelSummary(context);
+  if (intent.play.subtype === 'spike') return spikeSummary(context);
+  if (intent.play.subtype === 'aborted') return abortedPlaySummary(context);
   if (intent.play.family === 'rush') return rushSummary(context);
   if (intent.result.code === 'fumble') return fumbleSummary(context);
   if (intent.play.family === 'pass' && intent.play.subtype === 'sack') return sackSummary(context);
@@ -60,6 +63,29 @@ function summaryForPlay(context: SummaryContext): string {
 
   addWarning(context, 'UNSUPPORTED_PLAY_FAMILY', `No summary template for ${intent.play.family}`, 'play.family');
   return `${teamAbbr(intent, intent.play.actionTeam)} play summary pending.`;
+}
+
+function kneelSummary(context: SummaryContext): string {
+  const player = requiredPlayer(context, primaryParticipant(context.intent), 'participants.primary');
+  return sentence(`Kneel down by ${formatPlayerName(player)}`);
+}
+
+function spikeSummary(context: SummaryContext): string {
+  const player = requiredPlayer(context, primaryParticipant(context.intent), 'participants.primary');
+  return sentence(`Spike by ${formatPlayerName(player)}`);
+}
+
+function abortedPlaySummary(context: SummaryContext): string {
+  const { intent } = context;
+  const fumble = intent.result.fumble;
+  const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, fumble?.forcedByPlayerId);
+  const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, fumble?.recoveredByPlayerId);
+  const clauses = [`Aborted play, fumbled ${spotPhrase(context, 'at', fumble?.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`];
+  if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
+  if (recoveredBy || fumble?.recoveredByTeam) {
+    clauses.push(`recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, fumble?.recoveredByTeam)} ${spotPhrase(context, 'at', fumble?.recoverySpot, 'result.fumble.recoverySpot')}`);
+  }
+  return sentence(joinClauses(clauses));
 }
 
 function rushSummary(context: SummaryContext): string {
@@ -684,6 +710,10 @@ function formatPlayer(participant: DraftParticipant | undefined): string {
   const jersey = participant.jersey ? `#${participant.jersey}` : '';
   const name = participant.displayName?.trim();
   return [jersey, name].filter(Boolean).join(' ') || 'unknown player';
+}
+
+function formatPlayerName(participant: DraftParticipant | undefined): string {
+  return participant?.displayName?.trim() || formatPlayer(participant);
 }
 
 function formatPlayerList(participants: readonly DraftParticipant[]): string {

@@ -17,6 +17,9 @@ export type FootballPlayFamily =
 export type FootballPlaySubtype =
   | 'complete'
   | 'incomplete'
+  | 'spike'
+  | 'kneel'
+  | 'aborted'
   | 'sack'
   | 'interception'
   | 'returned'
@@ -186,6 +189,7 @@ export type DraftPlayerResolution = {
 
 export type DraftResult = {
   code: DraftResultCode;
+  teamCharged?: boolean;
   yards?: number;
   endYardLine?: Spot;
   firstDown?: boolean;
@@ -493,6 +497,9 @@ const PLAY_FAMILIES = new Set<FootballPlayFamily>([
 const PLAY_SUBTYPES = new Set<Exclude<FootballPlaySubtype, null>>([
   'complete',
   'incomplete',
+  'spike',
+  'kneel',
+  'aborted',
   'sack',
   'interception',
   'returned',
@@ -1167,7 +1174,9 @@ function validatePlayFamilyRequirements(
   const subtype = play.subtype;
 
   if (family === 'rush') {
-    requireParticipant(participants.primary, 'rusher', 'participants.primary', errors);
+    if (subtype !== 'aborted') {
+      requireParticipant(participants.primary, 'rusher', 'participants.primary', errors);
+    }
     if (result.code !== 'touchdown') requireEndYardLine(result, errors);
   }
 
@@ -1189,7 +1198,7 @@ function validatePlayFamilyRequirements(
       requireEndYardLine(result, errors);
     }
 
-    if (subtype === 'incomplete') {
+    if (subtype === 'incomplete' || subtype === 'spike') {
       requireResultCode(result, 'incomplete', errors);
     }
 

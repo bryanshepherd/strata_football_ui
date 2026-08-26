@@ -988,6 +988,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
   const primary = event?.participants?.primary;
   const secondary = event?.participants?.receiver || event?.participants?.secondary || event?.participants?.target;
   const suppressPlayStats = hasAcceptedPreviousSpotPenalty(event);
+  const teamCharged = result.teamCharged === true;
 
   if (validTeamCode(offense) && event.type === 'rush' && !suppressPlayStats) {
     const yards = hasAcceptedSpotOfFoulPenalty(event)
@@ -1000,11 +1001,13 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
       plays: finiteNumber(current.plays) + 1,
       yards: finiteNumber(current.yards) + yards,
     }));
-    players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
-      ...current,
-      rushAttempts: finiteNumber(current.rushAttempts) + 1,
-      rushYards: finiteNumber(current.rushYards) + yards,
-    }));
+    if (!teamCharged) {
+      players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
+        ...current,
+        rushAttempts: finiteNumber(current.rushAttempts) + 1,
+        rushYards: finiteNumber(current.rushYards) + yards,
+      }));
+    }
   }
 
   if (validTeamCode(offense) && event.type === 'pass' && !suppressPlayStats) {
@@ -1032,19 +1035,21 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         yards: finiteNumber(current.yards) + passingYards,
       };
     });
-    players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
-      ...current,
-      passAttempts: finiteNumber(current.passAttempts) + (isAttempt ? 1 : 0),
-      passCompletions: finiteNumber(current.passCompletions) + (outcome === 'complete' ? 1 : 0),
-      passInterceptions: finiteNumber(current.passInterceptions) + (outcome === 'interception' ? 1 : 0),
-      passYards: finiteNumber(current.passYards) + (outcome === 'complete' ? passingYards : 0),
-    }));
-    players = updatePlayerStat(players, secondary?.playerId, secondary?.team || offense, (current) => ({
-      ...current,
-      targets: finiteNumber(current.targets) + (isAttempt ? 1 : 0),
-      receptions: finiteNumber(current.receptions) + (outcome === 'complete' ? 1 : 0),
-      receivingYards: finiteNumber(current.receivingYards) + (outcome === 'complete' ? passingYards : 0),
-    }));
+    if (!teamCharged) {
+      players = updatePlayerStat(players, primary?.playerId, offense, (current) => ({
+        ...current,
+        passAttempts: finiteNumber(current.passAttempts) + (isAttempt ? 1 : 0),
+        passCompletions: finiteNumber(current.passCompletions) + (outcome === 'complete' ? 1 : 0),
+        passInterceptions: finiteNumber(current.passInterceptions) + (outcome === 'interception' ? 1 : 0),
+        passYards: finiteNumber(current.passYards) + (outcome === 'complete' ? passingYards : 0),
+      }));
+      players = updatePlayerStat(players, secondary?.playerId, secondary?.team || offense, (current) => ({
+        ...current,
+        targets: finiteNumber(current.targets) + (isAttempt ? 1 : 0),
+        receptions: finiteNumber(current.receptions) + (outcome === 'complete' ? 1 : 0),
+        receivingYards: finiteNumber(current.receivingYards) + (outcome === 'complete' ? passingYards : 0),
+      }));
+    }
 
     if (event.subtype === 'sack' || outcome === 'sack') {
       const sackYards = finiteNumber(result.yards, projection?.yardsGained);
@@ -1070,7 +1075,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         event?.participants?.secondary,
         event?.participants?.primary,
       ].find((participant) => participant?.playerId === fumblerPlayerId);
-    const fumbleTeam = fumbler?.team;
+    const fumbleTeam = teamCharged ? offense : fumbler?.team;
     teams = updateTeamStat(teams, fumbleTeam, (current) => ({
       ...current,
       fumbles: {
@@ -1079,11 +1084,13 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         lost: finiteNumber(current.fumbles?.lost ?? current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
       },
     }));
-    players = updatePlayerStat(players, fumblerPlayerId, fumbleTeam, (current) => ({
-      ...current,
-      fumbles: finiteNumber(current.fumbles) + 1,
-      fumblesLost: finiteNumber(current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
-    }));
+    if (!teamCharged) {
+      players = updatePlayerStat(players, fumblerPlayerId, fumbleTeam, (current) => ({
+        ...current,
+        fumbles: finiteNumber(current.fumbles) + 1,
+        fumblesLost: finiteNumber(current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
+      }));
+    }
   }
 
   const kickoffReturn = kickoffReturnStat(event);

@@ -2426,6 +2426,81 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it('records a spike player for play-by-play while charging the incomplete pass to the team', () => {
+    const selected = commitToken(inputToken(startTeamPlay(), 'S'));
+    const ready = commitToken(inputToken(selected, '10'));
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
+    const submitting = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+
+    expect(ready).toMatchObject({
+      status: 'draft.ready',
+      flow: 'teamPlay',
+      draft: {
+        play: { family: 'pass', subtype: 'spike' },
+        participants: { primary: { playerId: 'H-10', role: 'passer' } },
+        result: { code: 'incomplete', teamCharged: true, pass: { outcome: 'incomplete' } },
+      },
+    });
+    expect(reviewing.summary?.summaryText).toBe('Spike by James Barbor.');
+    expect(submitting.buildResult).toMatchObject({
+      ok: true,
+      event: { type: 'pass', subtype: 'spike', result: { code: 'incomplete', teamCharged: true } },
+    });
+  });
+
+  it('uses the named kneeling player only for the exact play-by-play wording', () => {
+    const selected = commitToken(inputToken(startTeamPlay(), 'K'));
+    const withPlayer = commitToken(inputToken(selected, '10'));
+    const ready = commitToken(inputToken(withPlayer, 'H43'));
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
+    const submitting = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+
+    expect(ready.draft).toMatchObject({
+      play: { family: 'rush', subtype: 'kneel' },
+      participants: { primary: { playerId: 'H-10', role: 'rusher' } },
+      result: { code: 'tackle', yards: -1, endYardLine: 'H43', teamCharged: true },
+    });
+    expect(reviewing.summary?.summaryText).toBe('Kneel down by James Barbor.');
+    expect(submitting.buildResult).toMatchObject({
+      ok: true,
+      event: { type: 'rush', subtype: 'kneel', result: { teamCharged: true } },
+    });
+  });
+
+  it('runs an aborted play through team fumble recovery without an individual fumbler', () => {
+    const selected = commitToken(inputToken(startTeamPlay(), 'A'));
+    const forcedBySkipped = commitToken(inputToken(selected, ''));
+    const withTeam = commitToken(inputToken(forcedBySkipped, 'H'));
+    const withRecoverer = commitToken(inputToken(withTeam, '22'));
+    const withSpot = commitToken(inputToken(withRecoverer, 'H43'));
+    const ready = commitToken(inputToken(withSpot, 'N'));
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
+    const submitting = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+
+    expect(ready).toMatchObject({
+      status: 'draft.ready',
+      flow: 'teamPlay',
+      draft: {
+        play: { family: 'rush', subtype: 'aborted' },
+        result: {
+          teamCharged: true,
+          fumble: { fumblerPlayerId: 'TM', recoveredByPlayerId: 'H-22', recoveredByTeam: 'H' },
+        },
+      },
+    });
+    expect(ready.draft?.participants.primary).toBeUndefined();
+    expect(ready.draft?.participants.fumbler).toBeUndefined();
+    expect(submitting.buildResult).toMatchObject({
+      ok: true,
+      event: {
+        type: 'rush',
+        subtype: 'aborted',
+        participants: { primary: null },
+        result: { teamCharged: true, fumble: { fumblerPlayerId: 'TM' } },
+      },
+    });
+  });
+
   it('does not mutate state/input', () => {
     const state = completeRushDraft();
     const beforeState = clone(state);
@@ -2454,6 +2529,14 @@ function startPass(): FootballConfirmedQuickInputState {
     type: 'START_PASS',
     startedBy: 'hotkey',
     hotkey: 'P',
+  });
+}
+
+function startTeamPlay(): FootballConfirmedQuickInputState {
+  return transition(createInitialFootballQuickInputState(), {
+    type: 'START_TEAM_PLAY',
+    startedBy: 'hotkey',
+    hotkey: 'T',
   });
 }
 
@@ -3040,6 +3123,7 @@ function makeContext(options: {
 
 function roster(): PlayerResolutionRosterPlayer[] {
   return [
+    player('H-10', 'H', '10', 'James Barbor', { position: 'QB', off_position: 'QB' }),
     player('H-22', 'H', '22', 'Jordan Smith', { position: 'RB', off_position: 'RB' }),
     player('H-9', 'H', '9', 'Owen Clark', { position: 'P', off_position: 'P' }),
     player('H-44', 'H', '44', 'Home Moss', { position: 'LB', def_position: 'LB' }),

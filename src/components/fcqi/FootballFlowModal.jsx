@@ -32,6 +32,18 @@ const normalizeVisibleInput = (step, value) => {
 };
 
 const stepCopy = {
+  teamPlayMenu: {
+    title: 'Team Play',
+    label: 'Team Play',
+    helper: 'Choose the team-charged play.',
+    placeholder: 'K',
+  },
+  teamPlayPlayerJersey: {
+    title: 'Team Play',
+    label: 'Player jersey',
+    helper: 'Enter the player for the play-by-play record. No individual attempt will be charged.',
+    placeholder: '12',
+  },
   rusherJersey: {
     title: 'Rush',
     label: 'Rusher jersey',
@@ -588,6 +600,12 @@ const rushResultButtons = [
   { label: 'End of Play', hotkey: '.', value: '.' },
 ];
 
+const teamPlayButtons = [
+  { label: 'Spike', hotkey: 'S', value: 'S', description: 'Team incomplete pass; player retained for play-by-play only.' },
+  { label: 'Kneel Down', hotkey: 'K', value: 'K', description: 'Team rush; player retained for play-by-play only.' },
+  { label: 'Aborted Play', hotkey: 'A', value: 'A', description: 'Team rush and team fumble through the recovery flow.' },
+];
+
 const passResultButtons = [
   { label: 'Complete', hotkey: 'C', value: 'C' },
   { label: 'Incomplete', hotkey: 'I', value: 'I' },
@@ -868,7 +886,7 @@ export default function FootballFlowModal({
       onCancel={onCancel}
       onStepClick={onStepClick}
       queuedPenaltyActive={Boolean(state.queuedPenaltyRequested)}
-      showPenaltyShortcut={['rush', 'pass', 'punt', 'kick'].includes(state.flow)}
+      showPenaltyShortcut={['rush', 'pass', 'punt', 'kick', 'teamPlay'].includes(state.flow)}
       progressSteps={state.flow === 'gameControl' ? [] : progressSteps}
       title={activeStep.title}
     >
@@ -1018,6 +1036,7 @@ const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, q
 );
 
 function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
+  if (step === 'teamPlayMenu') return teamPlayButtons;
   if (step === 'result') return rushResultButtons;
   if (step === 'passResult') return passResultButtons;
   if (step === 'completeResult') return completeResultButtons;

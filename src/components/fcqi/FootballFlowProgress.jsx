@@ -1,6 +1,11 @@
 import React from 'react';
 
 const GENERIC_FLOW_STEPS = {
+  teamPlay: [
+    ['teamPlay.type', 'Team Play'],
+    ['teamPlay.player', 'Player'],
+    ['teamPlay.detail', 'Details'],
+  ],
   pass: [
     ['pass.passer', 'Passer'],
     ['pass.result', 'Result'],
@@ -184,6 +189,11 @@ function currentRushStepId(state) {
 
 function genericCurrentIndex(state) {
   const step = state.currentStep;
+  if (state.flow === 'teamPlay') {
+    if (step === 'teamPlayMenu') return 0;
+    if (step === 'teamPlayPlayerJersey') return 1;
+    return 2;
+  }
   if (state.flow === 'pass') {
     if (step === 'passerJersey') return 0;
     if (step === 'passResult') return 1;

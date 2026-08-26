@@ -121,7 +121,7 @@ export function buildFootballEvent(intent: FootballDraftIntent): FootballEventBu
   if (intent.play.family === 'rush') {
     return buildCanonicalRushEvent(intent) as unknown as FootballEventBuildResult;
   }
-  if (intent.play.family === 'pass' && intent.result.pass?.outcome && ['complete', 'incomplete', 'interception'].includes(String(intent.play.subtype))) {
+  if (intent.play.family === 'pass' && intent.result.pass?.outcome && ['complete', 'incomplete', 'spike', 'interception'].includes(String(intent.play.subtype))) {
     return buildCanonicalPassEvent(intent) as unknown as FootballEventBuildResult;
   }
   const preflightErrors = validateBuilderPreconditions(intent);

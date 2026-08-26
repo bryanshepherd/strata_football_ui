@@ -44,7 +44,8 @@ export type FootballQuickInputStateName =
   | 'submitted'
   | 'cancelled';
 
-export type FootballQuickInputFlow = 'rush' | 'pass' | 'punt' | 'kick' | 'penalty' | 'gameControl';
+export type FootballQuickInputFlow = 'rush' | 'pass' | 'punt' | 'kick' | 'teamPlay' | 'penalty' | 'gameControl';
+export type TeamPlaySelection = 'spike' | 'kneel' | 'aborted';
 export type RushResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
 export type PassPrimaryResultSelection = 'complete' | 'incomplete' | 'sack' | 'sackFumble' | 'rushConversion' | 'interception';
 export type CompletePassResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
@@ -84,6 +85,9 @@ export type RushTokenStep =
   | 'returnOwnGoalDecision'
   | 'lateralToJersey'
   | 'lateralSpot';
+export type TeamPlayTokenStep =
+  | 'teamPlayMenu'
+  | 'teamPlayPlayerJersey';
 export type PassTokenStep =
   | 'passerJersey'
   | 'passResult'
@@ -175,7 +179,7 @@ export type GameControlTokenStep =
   | 'gameControlDriveSpot'
   | 'gameControlClock'
   | 'gameControlChallengeStatus';
-export type FootballTokenStep = RushTokenStep | PassTokenStep | PuntTokenStep | KickTokenStep | FieldGoalTokenStep | PatTokenStep | PenaltyTokenStep | GameControlTokenStep;
+export type FootballTokenStep = RushTokenStep | PassTokenStep | PuntTokenStep | KickTokenStep | FieldGoalTokenStep | PatTokenStep | TeamPlayTokenStep | PenaltyTokenStep | GameControlTokenStep;
 
 export type FootballConfirmedQuickInputState = {
   status: FootballQuickInputStateName;
@@ -193,6 +197,7 @@ export type FootballConfirmedQuickInputState = {
 };
 
 export type RushFlowTokens = {
+  teamPlaySelection?: TeamPlaySelection;
   rusher?: DraftParticipant;
   result?: RushResultSelection;
   yards?: number;
@@ -412,6 +417,13 @@ export type FootballQuickInputEvent =
       clientEventId?: string;
     }
   | {
+      type: 'START_TEAM_PLAY';
+      startedBy: 'hotkey' | 'button';
+      hotkey?: 'T';
+      intentId?: string;
+      clientEventId?: string;
+    }
+  | {
       type: 'START_PENALTY';
       startedBy: 'hotkey' | 'button';
       hotkey?: 'E';
@@ -510,6 +522,19 @@ export function transitionFootballQuickInput(
         status: 'token.awaiting',
         flow: 'kick',
         currentStep: 'kickMenu',
+        currentToken: '',
+        tokens: initialTokens(),
+      },
+    };
+  }
+
+  if (event.type === 'START_TEAM_PLAY') {
+    if (!canStartFamily(context, 'rush')) return { state: phaseBlockedState(state, 'rush', context.gamePhase) };
+    return {
+      state: {
+        status: 'token.awaiting',
+        flow: 'teamPlay',
+        currentStep: 'teamPlayMenu',
         currentToken: '',
         tokens: initialTokens(),
       },
@@ -735,6 +760,50 @@ function commitCurrentToken(
 
   if (state.flow === 'gameControl' && isGameControlSpecificTokenStep(state.currentStep)) {
     return commitGameControlToken(state, context);
+  }
+
+  if (state.flow === 'teamPlay' && state.currentStep === 'teamPlayMenu') {
+    const selection = parseTeamPlaySelection(state.currentToken);
+    if (!selection) {
+      return { state: tokenError(state, 'INVALID_TEAM_PLAY', 'Choose Spike, Kneel Down, or Aborted Play.', 'play.subtype') };
+    }
+    if (selection === 'aborted') {
+      return {
+        state: {
+          ...baseActiveState(state),
+          status: 'token.awaiting',
+          currentStep: 'forcedByJersey',
+          currentToken: '',
+          tokens: {
+            ...cloneTokens(state.tokens),
+            teamPlaySelection: selection,
+            result: 'fumble',
+          },
+        },
+      };
+    }
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: 'teamPlayPlayerJersey',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          teamPlaySelection: selection,
+        },
+      },
+    };
+  }
+
+  if (state.flow === 'teamPlay' && state.currentStep === 'teamPlayPlayerJersey') {
+    const role = state.tokens.teamPlaySelection === 'spike' ? 'passer' : 'rusher';
+    return resolveJerseyToken(state, context, {
+      role,
+      teamScope: context.play.possession ?? context.play.actionTeam,
+      actionContext: 'offense',
+      nextStep: state.tokens.teamPlaySelection === 'kneel' ? 'endSpot' : undefined,
+    });
   }
 
   if (state.currentStep === 'rusherJersey') {
@@ -3407,7 +3476,9 @@ function makeReadyState(
 
   return {
     ...readyState,
-    draft: readyState.flow === 'pass'
+    draft: readyState.flow === 'teamPlay'
+      ? buildTeamPlayDraft(readyState, context)
+      : readyState.flow === 'pass'
       ? buildPassDraft(readyState, context)
       : readyState.flow === 'punt'
         ? buildPuntDraft(readyState, context)
@@ -3468,6 +3539,14 @@ function advanceAfterPlayerCommit(
       : defaultPenaltyDownConsequence(tokens.penaltyDefinition);
   }
 
+  if (state.flow === 'teamPlay' && state.tokens.teamPlaySelection === 'spike' && role === 'passer') {
+    return makeReadyState({
+      ...baseActiveState(state),
+      tokens,
+      duplicate: undefined,
+    }, context);
+  }
+
   if ((role === 'tackler' || role === 'blocker' || role === 'sack' || role === 'hurry' || role === 'returner' || role === 'downingPlayer' || role === 'penalizedPlayer') && !nextStep) {
     return makeReadyState({
       ...baseActiveState(state),
@@ -3506,7 +3585,9 @@ function generateSummary(
   }
 
   const draft = state.draft ?? (
-    state.flow === 'pass'
+    state.flow === 'teamPlay'
+      ? buildTeamPlayDraft(state, context)
+      : state.flow === 'pass'
       ? buildPassDraft(state, context)
       : state.flow === 'punt'
         ? buildPuntDraft(state, context)
@@ -3543,6 +3624,22 @@ function editPlay(state: FootballConfirmedQuickInputState): FootballQuickInputTr
   }
 
   const tokens = cloneTokens(state.tokens);
+  if (state.flow === 'teamPlay') {
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: 'teamPlayMenu',
+        currentToken: '',
+        tokens: initialTokens(),
+        draft: undefined,
+        summary: undefined,
+        buildResult: undefined,
+        error: undefined,
+      },
+    };
+  }
+
   if (state.flow === 'kick' && tokens.kickMenuSelection === 'fieldGoal') {
     tokens.fieldGoalResult = undefined;
     tokens.fieldGoalMissedReason = undefined;
@@ -3904,6 +4001,86 @@ function buildRushDraft(
       others: state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
     },
     result: buildRushResult(state.tokens, context),
+    penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
+    warnings: [],
+  };
+}
+
+function buildTeamPlayDraft(
+  state: Pick<FootballConfirmedQuickInputState, 'tokens'>,
+  context: FootballQuickInputContext,
+): FootballDraftIntent {
+  const selection = state.tokens.teamPlaySelection;
+  if (!selection) throw new Error('Cannot build team play draft without a selection');
+
+  if (selection === 'spike') {
+    if (!state.tokens.passer) throw new Error('Cannot build spike draft without a resolved player');
+    const draft = buildPassDraft({
+      tokens: {
+        ...cloneTokens(state.tokens),
+        passResult: 'incomplete',
+      },
+    }, context);
+    return {
+      ...draft,
+      play: { ...draft.play, subtype: 'spike' },
+      result: { ...draft.result, teamCharged: true },
+    };
+  }
+
+  if (selection === 'kneel') {
+    if (!state.tokens.rusher) throw new Error('Cannot build kneel draft without a resolved player');
+    const draft = buildRushDraft({
+      tokens: {
+        ...cloneTokens(state.tokens),
+        result: 'endOfPlay',
+      },
+    }, context);
+    return {
+      ...draft,
+      play: { ...draft.play, subtype: 'kneel' },
+      result: { ...draft.result, teamCharged: true },
+    };
+  }
+
+  const result = buildRushResult({
+    ...cloneTokens(state.tokens),
+    result: 'fumble',
+  }, context);
+  return {
+    schemaVersion: 'football.draftIntent.v1',
+    intentId: context.intentId ?? 'fcqi-team-play-draft-1',
+    clientEventId: context.clientEventId ?? 'fcqi-team-play-client-1',
+    status: 'readyForSummary',
+    createdAt: context.source.startedAt,
+    updatedAt: context.now ?? context.source.startedAt,
+    revision: 1,
+    game: cloneGameContext(context.game),
+    source: { ...context.source, startedBy: context.source.startedBy ?? 'hotkey', hotkey: context.source.hotkey ?? 'T' },
+    play: {
+      family: 'rush',
+      subtype: 'aborted',
+      actionTeam: context.play.actionTeam,
+      possession: context.play.possession,
+      period: context.play.period,
+      clock: context.play.clock,
+    },
+    prePlay: { ...context.prePlay },
+    participants: {
+      forcedBy: state.tokens.forcedBy ? cloneParticipant(state.tokens.forcedBy) : undefined,
+      recoveredBy: state.tokens.recoverPlayer ? cloneParticipant(state.tokens.recoverPlayer) : undefined,
+      returner: state.tokens.fumbleReturned && state.tokens.returner
+        ? cloneParticipant(state.tokens.returner)
+        : undefined,
+      defenders: state.tokens.tacklers.map(cloneParticipant),
+      penalizedPlayers: [],
+      others: state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
+    },
+    result: {
+      ...result,
+      teamCharged: true,
+      fumble: result.fumble ? { ...result.fumble, fumblerPlayerId: 'TM' } : undefined,
+    },
     penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
     warnings: [],
   };
@@ -5732,6 +5909,14 @@ function parseRushResult(value: string): RushResultSelection | null {
   return null;
 }
 
+function parseTeamPlaySelection(value: string): TeamPlaySelection | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'S' || normalized === 'SPIKE') return 'spike';
+  if (normalized === 'K' || normalized === 'KNEEL' || normalized === 'KNEEL DOWN') return 'kneel';
+  if (normalized === 'A' || normalized === 'ABORTED' || normalized === 'ABORTED PLAY') return 'aborted';
+  return null;
+}
+
 function rushResultInputCode(value: RushResultSelection | undefined): string {
   if (value === 'tackle') return 'T';
   if (value === 'outOfBounds') return 'O';
@@ -6046,8 +6231,14 @@ function nextStepAfterDuplicate(
   role: FootballQuickInputDuplicateResolution['role'],
   state: FootballConfirmedQuickInputState,
 ): FootballTokenStep | undefined {
-  if (role === 'rusher') return state.flow === 'kick' && state.tokens.patType === 'rush' ? 'patRushResult' : 'result';
-  if (role === 'passer') return state.flow === 'kick' && state.tokens.patType === 'pass' ? 'patReceiverJersey' : 'passResult';
+  if (role === 'rusher') {
+    if (state.flow === 'teamPlay' && state.tokens.teamPlaySelection === 'kneel') return 'endSpot';
+    return state.flow === 'kick' && state.tokens.patType === 'rush' ? 'patRushResult' : 'result';
+  }
+  if (role === 'passer') {
+    if (state.flow === 'teamPlay' && state.tokens.teamPlaySelection === 'spike') return undefined;
+    return state.flow === 'kick' && state.tokens.patType === 'pass' ? 'patReceiverJersey' : 'passResult';
+  }
   if (role === 'receiver') return state.flow === 'kick' && state.tokens.patType === 'pass' ? 'patPassResult' : 'caughtAtSpot';
   if (role === 'intendedReceiver') return 'passYardLine';
   if (role === 'interceptor') return 'passYardLine';
@@ -6472,7 +6663,7 @@ function isGameControlSpecificTokenStep(step: FootballTokenStep): step is GameCo
 }
 
 function isActivePlayState(state: FootballConfirmedQuickInputState): boolean {
-  return (state.flow === 'rush' || state.flow === 'pass' || state.flow === 'punt' || state.flow === 'kick' || state.flow === 'penalty')
+  return (state.flow === 'rush' || state.flow === 'pass' || state.flow === 'punt' || state.flow === 'kick' || state.flow === 'teamPlay' || state.flow === 'penalty')
     && state.status !== 'idle'
     && state.status !== 'cancelled'
     && state.status !== 'submitted';
@@ -6517,6 +6708,7 @@ function initialTokens(): FootballFlowTokens {
 
 function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
   return {
+    teamPlaySelection: tokens.teamPlaySelection,
     rusher: tokens.rusher ? cloneParticipant(tokens.rusher) : undefined,
     result: tokens.result,
     yards: tokens.yards,

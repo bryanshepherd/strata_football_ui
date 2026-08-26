@@ -1244,6 +1244,79 @@ describe('local football test-game projection', () => {
     expect(penalty.gameEnvelope.drives.current).toMatchObject({ plays: 7, yards: 22 });
   });
 
+  it('charges spike, kneel, and aborted play statistics to the team without individual attempts', async () => {
+    let envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'H44',
+      lineToGain: 'V46',
+    };
+
+    const kneel = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-TEAM-KNEEL-1', {
+      type: 'rush',
+      subtype: 'kneel',
+      participants: {
+        primary: { playerId: 'H-10', team: 'H', role: 'rusher' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'tackle', yards: -1, endYardLine: 'H43', teamCharged: true },
+    }));
+    envelope = kneel.gameEnvelope;
+
+    const spike = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-TEAM-SPIKE-1', {
+      type: 'pass',
+      subtype: 'spike',
+      participants: {
+        primary: { playerId: 'H-10', team: 'H', role: 'passer' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'incomplete', teamCharged: true, pass: { outcome: 'incomplete' } },
+    }));
+    envelope = spike.gameEnvelope;
+
+    const aborted = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-TEAM-ABORTED-1', {
+      type: 'rush',
+      subtype: 'aborted',
+      participants: {
+        primary: null,
+        secondary: null,
+        defenders: [{ playerId: 'H-22', team: 'H', role: 'recoverer' }],
+      },
+      result: {
+        code: 'fumble',
+        yards: -3,
+        endYardLine: 'H40',
+        nextPossession: 'H',
+        teamCharged: true,
+        fumble: {
+          fumblerPlayerId: 'TM',
+          recoveredByPlayerId: 'H-22',
+          recoveredByTeam: 'H',
+          recoverySpot: 'H40',
+          turnover: false,
+        },
+      },
+    }));
+
+    expect(aborted.gameEnvelope.stats.teams.H).toMatchObject({
+      rushAttempts: 2,
+      rushYards: -4,
+      pass: { att: 1, cmp: 0, int: 0, yds: 0 },
+      plays: 3,
+      yards: -4,
+      fumbles: { num: 1, lost: 0 },
+    });
+    expect(aborted.gameEnvelope.stats.players['H-10']).toBeUndefined();
+    expect(aborted.gameEnvelope.stats.players.TM).toBeUndefined();
+  });
+
   it('credits sacks as team and quarterback rushes without double-counting total plays', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.stats.teams = {};

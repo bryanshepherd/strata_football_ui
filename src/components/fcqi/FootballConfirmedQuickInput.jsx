@@ -16,6 +16,7 @@ import { footballPenaltyRulesetFromRules } from '../../quick-input/penaltyTable'
 const PLAY_BUTTONS = [
   { label: 'Rush', hotkey: 'R', enabled: true },
   { label: 'Pass', hotkey: 'P', enabled: true },
+  { label: 'Team Play', hotkey: 'T', enabled: true },
   { label: 'Punt', hotkey: 'U', enabled: true },
   { label: 'Kick', hotkey: 'K', enabled: true },
   { label: 'Penalty', hotkey: 'E', enabled: true },
@@ -43,6 +44,10 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'rusherJersey') return 'Enter rusher jersey number.';
   if (state.currentStep === 'result') return 'Choose rush result.';
   if (state.currentStep === 'passerJersey') return 'Enter passer jersey number.';
+  if (state.currentStep === 'teamPlayMenu') return 'Choose Spike, Kneel Down, or Aborted Play.';
+  if (state.currentStep === 'teamPlayPlayerJersey') return state.tokens?.teamPlaySelection === 'spike'
+    ? 'Enter the player who spiked the ball.'
+    : 'Enter the player who kneeled down.';
   if (state.currentStep === 'passResult') return 'Choose pass result.';
   if (state.currentStep === 'receiverJersey') return 'Enter receiver jersey number.';
   if (state.currentStep === 'caughtAtSpot') return 'Enter caught-at yardline or skip.';
@@ -230,6 +235,20 @@ export default function FootballConfirmedQuickInput({
     ));
   };
 
+  const startTeamPlay = (startedBy) => {
+    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
+    const nextStartMeta = createStartMeta('team-play', startedBy, 'T');
+    const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
+    setStartMeta(nextStartMeta);
+    clearModalStepHistory();
+    setPenaltyMessage('');
+    clearSubmitStatus();
+    publishState(applyEvent(
+      { type: 'START_TEAM_PLAY', startedBy, hotkey: startedBy === 'hotkey' ? 'T' : undefined },
+      nextContext,
+    ));
+  };
+
   const startPunt = (startedBy) => {
     if (!isPlayFamilyAvailable(gamePhase, 'punt')) return;
     const nextStartMeta = createStartMeta('punt', startedBy, 'U');
@@ -313,7 +332,7 @@ export default function FootballConfirmedQuickInput({
       }
       if (event.target?.closest?.(editableSelector)) return;
       const key = event.key.toLowerCase();
-      if (key !== 'r' && key !== 'p' && key !== 'u' && key !== 'k' && key !== 'e' && key !== 'g' && key !== 'a') return;
+      if (key !== 'r' && key !== 'p' && key !== 't' && key !== 'u' && key !== 'k' && key !== 'e' && key !== 'g' && key !== 'a') return;
       if (key === 'a' && !awaitingPatTry) return;
       event.preventDefault();
       if (key === 'a') {
@@ -326,6 +345,8 @@ export default function FootballConfirmedQuickInput({
         startPunt('hotkey');
       } else if (key === 'p') {
         startPass('hotkey');
+      } else if (key === 't') {
+        startTeamPlay('hotkey');
       } else if (key === 'e') {
         startPenalty('hotkey', 'immediate');
       } else {
@@ -509,7 +530,13 @@ export default function FootballConfirmedQuickInput({
             </button>
           )}
           {PLAY_BUTTONS.map((button) => {
-            const family = button.label === 'Kick' ? 'kickoff' : button.label === 'Game Control' ? 'gameControl' : button.label.toLowerCase();
+            const family = button.label === 'Kick'
+              ? 'kickoff'
+              : button.label === 'Game Control'
+                ? 'gameControl'
+                : button.label === 'Team Play'
+                  ? 'rush'
+                  : button.label.toLowerCase();
             const enabled = button.enabled
               && isPlayFamilyAvailable(gamePhase, family)
               && (family !== 'kickoff' || kickoffContextReady);
@@ -526,6 +553,8 @@ export default function FootballConfirmedQuickInput({
                 if (!enabled) return;
                 if (button.label === 'Pass') {
                   startPass('button');
+                } else if (button.label === 'Team Play') {
+                  startTeamPlay('button');
                 } else if (button.label === 'Punt') {
                   startPunt('button');
                 } else if (button.label === 'Kick') {

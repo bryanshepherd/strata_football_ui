@@ -4,6 +4,30 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('offers Spike, Kneel Down, and Aborted Play as team-charged choices', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting',
+          flow: 'teamPlay',
+          currentStep: 'teamPlayMenu',
+          currentToken: '',
+          tokens: { laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /^Spike\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Kneel Down\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Aborted Play\b/ })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'k', code: 'KeyK' });
+    expect(onTokenCommit).toHaveBeenCalledWith('K');
+  });
+
   it('uses Backspace for text editing until the field is empty, then goes back a step', () => {
     const onBackStep = vi.fn();
     render(

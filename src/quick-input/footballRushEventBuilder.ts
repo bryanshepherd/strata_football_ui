@@ -43,7 +43,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
   }
 
   const rusher = intent.participants.primary;
-  if (!rusher || rusher.role !== 'rusher' || rusher.team !== intent.play.possession) {
+  const isAbortedPlay = intent.play.subtype === 'aborted' && intent.result.teamCharged === true;
+  if (!isAbortedPlay && (!rusher || rusher.role !== 'rusher' || rusher.team !== intent.play.possession)) {
     errors.push({ code: 'MISSING_REQUIRED_PARTICIPANT', message: 'Rush primary participant must resolve to the possessing-team rusher.', field: 'participants.primary' });
   }
   if (!['tackle', 'outOfBounds', 'touchdown', 'safety', 'touchback', 'fumble'].includes(intent.result.code)) {
@@ -66,7 +67,9 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     ] as const) {
       if (!value) errors.push({ code: 'MISSING_REQUIRED_RESULT', message: `Rush fumble requires ${field}.`, field: `result.fumble.${field}` });
     }
-    if (fumble?.fumblerPlayerId !== rusher?.playerId) {
+    if (isAbortedPlay && fumble?.fumblerPlayerId !== 'TM') {
+      errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Aborted Play fumble must be charged to TM.', field: 'result.fumble.fumblerPlayerId' });
+    } else if (!isAbortedPlay && fumble?.fumblerPlayerId !== rusher?.playerId) {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Rush fumbler must resolve to the rusher.', field: 'result.fumble.fumblerPlayerId' });
     }
     if (fumble?.recoveredByPlayerId && !participantForPlayer(intent, fumble.recoveredByPlayerId)) {
@@ -89,6 +92,7 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
   const result: DraftScoringEvent['result'] = {
     code: intent.result.code,
     yards: intent.result.yards,
+    ...(intent.result.teamCharged ? { teamCharged: true } : {}),
     ...(intent.result.endYardLine && intent.result.endYardLine !== 'goal' ? { endYardLine: intent.result.endYardLine } : {}),
     ...(typeof intent.result.firstDown === 'boolean' ? { firstDown: intent.result.firstDown } : {}),
   };
@@ -138,7 +142,7 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     possession,
     preState: { ...intent.prePlay },
     participants: {
-      primary: mapParticipant(rusher!),
+      primary: rusher ? mapParticipant(rusher) : null,
       secondary: null,
       defenders: canonicalRushParticipants(intent).map(mapParticipant),
     },

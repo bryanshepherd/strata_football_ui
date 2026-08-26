@@ -16,10 +16,12 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
   if (!intent.clientEventId) errors.push({ code: 'MISSING_CLIENT_EVENT_ID', message: 'clientEventId is required.', field: 'clientEventId' });
   const passer = intent.participants.primary;
   const target = intent.participants.secondary;
-  const outcome = intent.play.subtype;
+  const subtype = intent.play.subtype;
+  const isSpike = subtype === 'spike' && intent.result.teamCharged === true;
+  const outcome = isSpike ? 'incomplete' : subtype;
   requirePlayer(passer, 'passer', 'participants.primary', errors);
-  if (outcome !== 'interception') requirePlayer(target, 'target', 'participants.secondary', errors);
-  if (!['complete', 'incomplete', 'interception'].includes(String(outcome))) errors.push({ code: 'UNSUPPORTED_PASS_OUTCOME', message: 'Pass slice supports complete, incomplete, and interception only.', field: 'play.subtype' });
+  if (outcome !== 'interception' && !isSpike) requirePlayer(target, 'target', 'participants.secondary', errors);
+  if (!['complete', 'incomplete', 'interception', 'spike'].includes(String(subtype))) errors.push({ code: 'UNSUPPORTED_PASS_OUTCOME', message: 'Pass slice supports complete, incomplete, spike, and interception only.', field: 'play.subtype' });
   if (errors.length) return { ok: false, errors, warnings: warning };
 
   const base = { playerId: passer!.playerId, team: passer!.team, role: 'passer' };
@@ -27,7 +29,7 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     ? { playerId: target.playerId, team: target.team, role: 'intendedReceiver' }
     : null;
   const pass: Record<string, unknown> = { outcome, startYardLine: intent.prePlay.yardLine ?? undefined };
-  const result: Record<string, unknown> = { code: outcome, pass };
+  const result: Record<string, unknown> = { code: outcome, pass, ...(isSpike ? { teamCharged: true } : {}) };
   const participants: DraftScoringEvent['participants'] = { primary: base, secondary: targetParticipant, target: targetParticipant, receiver: null, interceptor: null, defenders: [] };
   if (outcome === 'complete') {
     const receiver = intent.participants.secondary;
@@ -78,7 +80,7 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
   if (errors.length) return { ok: false, errors, warnings: warning };
   const summary = generateFootballPlaySummary(intent);
   const event: DraftScoringEvent = {
-    clientEventId: intent.clientEventId, type: 'pass', subtype: outcome, createdAt: intent.confirmation!.confirmedAt,
+    clientEventId: intent.clientEventId, type: 'pass', subtype, createdAt: intent.confirmation!.confirmedAt,
     period: intent.play.period, clock: intent.play.clock!, possession: intent.play.possession!, preState: { ...intent.prePlay },
     participants, result: result as DraftScoringEvent['result'], penalties: intent.penalties.map(mapDraftPenaltyToCanonicalEvent), description: intent.confirmation!.summaryText || summary.summaryText,
   };
