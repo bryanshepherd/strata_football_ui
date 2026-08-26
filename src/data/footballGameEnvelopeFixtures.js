@@ -171,6 +171,21 @@ const makeEnvelope = ({
       city: 'Institute',
       state: 'WV',
     },
+    teamRecords: {
+      H: { overall: '4-1', conference: '2-0' },
+      V: { overall: '3-2', conference: '1-1' },
+    },
+    officials: [
+      { role: 'Referee', name: 'Alex Referee' },
+      { role: 'Umpire', name: 'Casey Umpire' },
+      { role: 'Head Linesman', name: 'Jordan Linesman' },
+      { role: 'Line Judge', name: 'Taylor Judge' },
+      { role: 'Field Judge', name: 'Morgan Field' },
+      { role: 'Side Judge', name: 'Riley Side' },
+      { role: 'Back Judge', name: 'Cameron Back' },
+      { role: 'Replay Official', name: '' },
+      { role: 'Scorer', name: 'Sam Scorer' },
+    ],
     teams: {
       H: { ...baseTeams.H, ...(teams?.H || {}) },
       V: { ...baseTeams.V, ...(teams?.V || {}) },
@@ -498,6 +513,7 @@ export const gameEnvelopeFixtures = {
         period: 4,
         clock: '02:12',
         possession: 'H',
+        acceptedAt: '2026-06-20T00:00:00Z',
         result: {
           code: 'made',
           points: 3,
@@ -515,6 +531,7 @@ export const gameEnvelopeFixtures = {
         period: 4,
         clock: '00:00',
         possession: 'H',
+        acceptedAt: '2026-06-20T01:20:00Z',
         result: {
           code: 'endGame',
           driveEnds: true,

@@ -15,6 +15,7 @@ import {
   migratePendingFootballSyncToEnvelopeMirror,
   normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
+  persistFootballWrapUpEnvelope,
   recordFootballPossessionClock,
   saveDashboardSeededFootballEnvelope,
   submitFootballEventLocally,
@@ -130,6 +131,28 @@ describe('local-first football persistence', () => {
     expect(persisted.gameId).toBe(envelope.gameId);
     expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.pregame).toEqual(envelope.pregame);
+  });
+
+  it('saves the final game wrap-up locally and queues the complete envelope mirror', async () => {
+    const envelope = clone(getGameEnvelopeFixture('final'));
+    envelope.gameId = 'FB-WRAP-UP-LOCAL-001';
+    envelope.game.wrapUp = {
+      startedAt: '2026-08-25T23:04:00.000Z',
+      endedAt: '2026-08-26T02:16:00.000Z',
+      durationMinutes: 192,
+      completedAt: '2026-08-26T02:20:00.000Z',
+    };
+
+    const persisted = await persistFootballWrapUpEnvelope(envelope.gameId, envelope, {
+      dashboardGameId: 'DASH-WRAP-UP-001',
+    });
+
+    expect(persisted.game.wrapUp).toMatchObject({ durationMinutes: 192 });
+    expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
+    expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.game.wrapUp).toMatchObject({
+      durationMinutes: 192,
+      completedAt: '2026-08-26T02:20:00.000Z',
+    });
   });
 
   it('treats a server response as acknowledgment only and keeps the local envelope authoritative', async () => {

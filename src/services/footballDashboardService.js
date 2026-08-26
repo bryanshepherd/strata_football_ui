@@ -542,6 +542,19 @@ export async function persistFootballPregameEnvelope(gameId, envelope, { dashboa
   return localEnvelope;
 }
 
+export async function persistFootballWrapUpEnvelope(gameId, envelope, { dashboardGameId = '' } = {}) {
+  const localEnvelope = saveDashboardSeededFootballEnvelope(gameId, envelope);
+  if (!localEnvelope) throw new Error('Game wrap-up could not be saved to this browser.');
+  if (dashboardGameId) {
+    enqueueFootballEnvelopeMirror({
+      gameId,
+      dashboardGameId,
+      envelope: localEnvelope,
+    });
+  }
+  return localEnvelope;
+}
+
 export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', signal, fetchImpl = globalThis.fetch } = {}) {
   if (!gameId) {
     throw new Error('A valid gameId is required to load a football envelope.');

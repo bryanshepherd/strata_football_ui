@@ -6,6 +6,7 @@ import FootballConfirmedQuickInput, {
 } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballScoreboard from '../components/scorer/FootballScoreboard';
 import FootballDriveSummaryModal from '../components/scorer/FootballDriveSummaryModal';
+import FootballGameWrapUpModal from '../components/scorer/FootballGameWrapUpModal';
 import FootballPossessionClockModal from '../components/scorer/FootballPossessionClockModal';
 import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
@@ -25,6 +26,7 @@ import {
   buildFootballDriveSummary,
   isFootballDriveSummaryTerminalEvent,
 } from '../scoring/footballDriveSummary';
+import { applyFootballGameWrapUp } from '../scoring/footballGameWrapUp';
 import {
   enqueueFootballEnvelopeMirror,
   fetchFootballEnvelope,
@@ -34,6 +36,7 @@ import {
   migratePendingFootballSyncToEnvelopeMirror,
   normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
+  persistFootballWrapUpEnvelope,
   saveDashboardSeededFootballEnvelope,
   submitFootballEventLocally,
   recordFootballPossessionClock,
@@ -150,6 +153,8 @@ export default function FootballScorerShell() {
   const [driveSummary, setDriveSummary] = useState(null);
   const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
   const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
+  const [wrapUpOpen, setWrapUpOpen] = useState(false);
+  const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
   const envelope = useMemo(
@@ -176,8 +181,15 @@ export default function FootballScorerShell() {
     setDriveSummary(null);
     setPenaltyCodeEditorOpen(false);
     setPendingSecondHalfStart(null);
+    setWrapUpOpen(false);
+    setWrapUpSaveState({ saving: false, error: '' });
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
   }, [requestedFixture, requestedGameId]);
+
+  useEffect(() => {
+    if (envelope?.game?.status !== 'final' || envelope.game.wrapUp?.completedAt) return;
+    setWrapUpOpen(true);
+  }, [envelope?.game?.status, envelope?.game?.wrapUp?.completedAt, envelope?.gameId]);
 
   useEffect(() => {
     if (!requestedGameId) {
@@ -269,6 +281,10 @@ export default function FootballScorerShell() {
       && isFootballDriveSummaryTerminalEvent(acceptedEvent)
       ? acceptedEvent
       : null;
+    if (acceptedEnvelope?.game?.status === 'final' && !acceptedEnvelope.game.wrapUp?.completedAt) {
+      setWrapUpSaveState({ saving: false, error: '' });
+      setWrapUpOpen(true);
+    }
     if (acceptedEnvelope && previousPossession !== nextPossession && (previousPossession || nextPossession)) {
       setPossessionClockChange({
         previousPossession,
@@ -390,6 +406,38 @@ export default function FootballScorerShell() {
   const closeDriveSummary = useCallback(() => setDriveSummary(null), []);
   const openPenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(true), []);
   const closePenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(false), []);
+  const openGameWrapUp = useCallback(() => {
+    setWrapUpSaveState({ saving: false, error: '' });
+    setWrapUpOpen(true);
+  }, []);
+  const closeGameWrapUp = useCallback(() => {
+    if (wrapUpSaveState.saving) return;
+    setWrapUpOpen(false);
+    setWrapUpSaveState((current) => ({ ...current, error: '' }));
+  }, [wrapUpSaveState.saving]);
+
+  const saveGameWrapUp = useCallback(async (input) => {
+    if (!envelope) return;
+    setWrapUpSaveState({ saving: true, error: '' });
+    try {
+      const completedEnvelope = applyFootballGameWrapUp(envelope, input);
+      const persistedEnvelope = requestedGameId
+        ? await persistFootballWrapUpEnvelope(requestedGameId, completedEnvelope, { dashboardGameId })
+        : completedEnvelope;
+      setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+      setWrapUpSaveState({ saving: false, error: '' });
+      setWrapUpOpen(false);
+      if (requestedGameId && dashboardGameId) {
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    } catch (error) {
+      setWrapUpSaveState({
+        saving: false,
+        error: error instanceof Error ? error.message : 'Game wrap-up could not be saved.',
+      });
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
   const handlePregameEnvelopeChange = useCallback(async (nextEnvelope) => {
     // Optimistically keep the current workspace responsive; the canonical
@@ -546,6 +594,7 @@ export default function FootballScorerShell() {
         onDebugToggle={onDebugToggle}
         onFixtureChange={onFixtureChange}
         onRosterOpen={openRosterEditor}
+        onWrapUpOpen={openGameWrapUp}
         syncState={syncState}
       />
 
@@ -616,6 +665,14 @@ export default function FootballScorerShell() {
         open={Boolean(pendingSecondHalfStart)}
         teams={envelope.game.teams}
       />
+      <FootballGameWrapUpModal
+        envelope={envelope}
+        onClose={closeGameWrapUp}
+        onSave={saveGameWrapUp}
+        open={wrapUpOpen}
+        saveError={wrapUpSaveState.error}
+        saving={wrapUpSaveState.saving}
+      />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
     </main>
@@ -652,6 +709,7 @@ const ScorerHeader = ({
   onDebugToggle,
   onFixtureChange,
   onRosterOpen,
+  onWrapUpOpen,
   syncState,
 }) => {
   const teams = envelope.game.teams;
@@ -682,6 +740,15 @@ const ScorerHeader = ({
           >
             Roster
           </button>
+          {envelope.game.status === 'final' && (
+            <button
+              className="rounded border border-emerald-700 bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+              onClick={onWrapUpOpen}
+              type="button"
+            >
+              {envelope.game.wrapUp?.completedAt ? 'Edit Game Wrap-Up' : 'Game Wrap-Up'}
+            </button>
+          )}
           <Link
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
             to={isGameRoute ? '/sports/football' : '/dashboard'}

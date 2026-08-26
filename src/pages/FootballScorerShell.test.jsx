@@ -627,6 +627,31 @@ describe('FootballScorerShell', () => {
     });
   });
 
+  it('opens the final game wrap-up with setup data and retains saved conditions and notes', async () => {
+    renderScorer('/scorer?fixture=final');
+
+    const dialog = screen.getByRole('dialog', { name: 'Game Wrap-Up' });
+    expect(within(dialog).getByLabelText('Home State previous overall record')).toHaveValue('4-1');
+    expect(within(dialog).getByLabelText('Home State previous conference record')).toHaveValue('2-0');
+    expect(within(dialog).getByLabelText('Visitor Tech previous overall record')).toHaveValue('3-2');
+    expect(within(dialog).getByLabelText('Visitor Tech previous conference record')).toHaveValue('1-1');
+    expect(within(dialog).getByLabelText('Referee')).toHaveValue('Alex Referee');
+    expect(within(dialog).getByLabelText('Scorer')).toHaveValue('Sam Scorer');
+    expect(within(dialog).getByText('1:20')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText('Attendance'), { target: { value: '875' } });
+    fireEvent.change(within(dialog).getByLabelText('Weather Conditions'), { target: { value: 'Clear' } });
+    fireEvent.change(within(dialog).getByLabelText('Game Notes'), { target: { value: 'First completed Strata Football game.' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save Game Wrap-Up' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Game Wrap-Up' })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Game Wrap-Up' }));
+    const savedDialog = screen.getByRole('dialog', { name: 'Game Wrap-Up' });
+    expect(within(savedDialog).getByLabelText('Attendance')).toHaveValue(875);
+    expect(within(savedDialog).getByLabelText('Weather Conditions')).toHaveValue('Clear');
+    expect(within(savedDialog).getByLabelText('Game Notes')).toHaveValue('First completed Strata Football game.');
+  });
+
   it('renders production FCQI controls on the scorer route', () => {
     renderScorer('/scorer');
 
