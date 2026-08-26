@@ -6052,6 +6052,8 @@ function nextStepAfterDuplicate(
   }
   if (role === 'downingPlayer') return state.flow === 'kick' && state.tokens.kickReturnStartSpot ? undefined : 'downedSpot';
   if (role === 'tackler') {
+    if (state.currentStep === 'returnTackleAJersey') return 'returnTackleBJersey';
+    if (state.currentStep === 'returnTackleBJersey') return 'returnEndSpot';
     return state.currentStep === 'tackleAJersey' || state.currentStep === 'tacklerJersey'
       ? 'tackleBJersey'
       : 'endSpot';

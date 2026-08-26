@@ -1403,6 +1403,43 @@ describe('footballConfirmedQuickInputMachine', () => {
     }
   });
 
+  it('keeps duplicate kickoff return tacklers on the return final-spot path', () => {
+    const terminal = completeKickoffReturnThroughTerminal({ terminalResult: 'T', startSpot: 'V20' });
+    const duplicatePrimary = commitToken(inputToken(terminal, '3'));
+    const withPrimary = transition(duplicatePrimary, {
+      type: 'SELECT_DUPLICATE_PLAYER',
+      playerId: 'H-3-LB',
+    });
+
+    expect(duplicatePrimary.status).toBe('jersey.disambiguating');
+    expect(withPrimary).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'returnTackleBJersey',
+      tokens: { tacklers: [expect.objectContaining({ playerId: 'H-3-LB' })] },
+    });
+
+    const awaitingEndSpot = commitToken(inputToken(withPrimary, ''));
+    expect(awaitingEndSpot.currentStep).toBe('returnEndSpot');
+
+    const ready = commitToken(inputToken(awaitingEndSpot, 'V26'));
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
+    expect(ready.tokens.endYardLine).toBeUndefined();
+    expect(ready.tokens.returnEndSpot).toBe('V26');
+    expect(ready.draft?.result).toMatchObject({
+      endYardLine: 'V26',
+      return: { returnEndYardLine: 'V26', returnYards: 6 },
+    });
+    expect(reviewing.summary?.summaryText).not.toContain('pending');
+
+    const withUniquePrimary = commitToken(inputToken(terminal, '44'));
+    const duplicateSecondary = commitToken(inputToken(withUniquePrimary, '3'));
+    const withSecondary = transition(duplicateSecondary, {
+      type: 'SELECT_DUPLICATE_PLAYER',
+      playerId: 'H-3-LB',
+    });
+    expect(withSecondary.currentStep).toBe('returnEndSpot');
+  });
+
   it('kickoff yard calculations use receiving-team orientation and signed return yards', () => {
     const reviewing = transition(
       completeKickoffReturnDraft({ terminalResult: '.', startSpot: 'V15', endSpot: 'V10' }),
