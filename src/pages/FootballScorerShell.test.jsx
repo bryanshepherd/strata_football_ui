@@ -1679,7 +1679,7 @@ describe('FootballScorerShell', () => {
 
     const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
     expect(summaryDialog).toHaveTextContent(/jordan smith rush for 7 yards/i);
-    expect(summaryDialog).toHaveTextContent(/penalty holding/i);
+    expect(summaryDialog).toHaveTextContent(/penalty hom holding/i);
     expect(summaryDialog).toHaveTextContent(/declined/i);
     const resolvedSubmitButton = within(summaryDialog).getByRole('button', { name: /^submit play$/i });
     expect(resolvedSubmitButton).toBeEnabled();
@@ -1719,9 +1719,9 @@ describe('FootballScorerShell', () => {
       fireEvent.submit(finalSpotInput.closest('form'));
 
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
-      expect(summaryDialog).toHaveTextContent(/penalty: offsides on vis/i);
+      expect(summaryDialog).toHaveTextContent(/penalty vis offsides/i);
       expect(summaryDialog).toHaveTextContent(/4 yards/i);
-      expect(summaryDialog).toHaveTextContent(/from the previous spot/i);
+      expect(summaryDialog).toHaveTextContent(/from the h44 to the h48/i);
 
       fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
@@ -2256,7 +2256,7 @@ describe('FootballScorerShell', () => {
 
       const updatedSummary = await screen.findByRole('dialog', { name: /play summary review/i });
       expect(updatedSummary).toHaveTextContent(/jordan smith rush for 7 yards/i);
-      expect(updatedSummary).toHaveTextContent(/penalty holding, enforced 10 yards from the v45 to the h45/i);
+      expect(updatedSummary).toHaveTextContent(/penalty hom holding, enforced 10 yards from the v45 to the h45/i);
 
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
       fireEvent.click(within(updatedSummary).getByRole('button', { name: /^submit play$/i }));

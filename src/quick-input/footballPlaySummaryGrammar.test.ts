@@ -225,6 +225,7 @@ describe('footballPlaySummaryGrammar', () => {
         subtype: 'accepted',
         actionTeam: 'V',
         primary: undefined,
+        penalizedPlayers: [participant('penalizedPlayer', 'V', 'V-44', '44', 'Caleb Moss')],
         result: { code: 'accepted', endYardLine: 'H49' },
         penalties: [
           {
@@ -234,12 +235,51 @@ describe('footballPlaySummaryGrammar', () => {
             name: 'Offside',
             yards: 5,
             enforcedFrom: 'PREVIOUS',
+            finalSpot: 'H49',
+            downConsequence: 'REPEAT',
             status: 'accepted',
             accepted: true,
+            playerId: 'V-44',
+            penalizedPlayerId: 'V-44',
           },
         ],
       }),
-      'Penalty: Offside on VIS, 5 yards, from the previous spot, accepted.',
+      'PENALTY VIS Offside (#44 Caleb Moss), 5 yards from the H44 to the H49, replay down.',
+    );
+  });
+
+  it('formats a post-touchdown setup penalty as one natural enforcement phrase', () => {
+    expectSummary(
+      baseIntent({
+        family: 'penalty',
+        subtype: 'accepted',
+        actionTeam: 'H',
+        primary: undefined,
+        penalizedPlayers: [participant('penalizedPlayer', 'H', 'H-44', '44', 'Home Moss')],
+        prePlay: {
+          ...possessionFreePrePlay('H35'),
+          setupContext: 'awaitingKickoff',
+        },
+        result: { code: 'accepted', endYardLine: 'H20' },
+        penalties: [
+          {
+            penaltyId: 'pen-post-touchdown',
+            team: 'H',
+            code: 'UC',
+            name: 'Unsportsmanlike Conduct',
+            yards: -15,
+            enforcedFrom: 'PREVIOUS',
+            finalSpot: 'H20',
+            downConsequence: 'REPEAT',
+            replayDown: true,
+            status: 'accepted',
+            accepted: true,
+            playerId: 'H-44',
+            penalizedPlayerId: 'H-44',
+          },
+        ],
+      }),
+      'PENALTY HOM Unsportsmanlike Conduct (#44 Home Moss), 15 yards from the H35 to the H20.',
     );
   });
 
@@ -249,6 +289,7 @@ describe('footballPlaySummaryGrammar', () => {
         family: 'rush',
         subtype: null,
         primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+        penalizedPlayers: [participant('penalizedPlayer', 'H', 'H-44', '44', 'Home Moss')],
         result: { code: 'tackle', yards: 19, endYardLine: 'V39' },
         penalties: [
           {
@@ -262,10 +303,12 @@ describe('footballPlaySummaryGrammar', () => {
             finalSpot: 'H44',
             status: 'accepted',
             accepted: true,
+            playerId: 'H-44',
+            penalizedPlayerId: 'H-44',
           },
         ],
       }),
-      'HOM #22 Jordan Smith rush for 19 yards to the V39, PENALTY holding, enforced 10 yards from the V46 to the H44.',
+      'HOM #22 Jordan Smith rush for 19 yards to the V39, PENALTY HOM holding (#44 Home Moss), enforced 10 yards from the V46 to the H44.',
     );
   });
 
@@ -290,7 +333,7 @@ describe('footballPlaySummaryGrammar', () => {
       ],
     }));
 
-    expect(result.summaryText).toContain('PENALTY false start, 5 yards to the H39');
+    expect(result.summaryText).toContain('PENALTY HOM false start, 5 yards to the H39');
     expect(result.summaryText).not.toMatch(/previous spot/i);
     expect(result.warnings).toEqual([]);
   });
@@ -316,7 +359,7 @@ describe('footballPlaySummaryGrammar', () => {
       ],
     }));
 
-    expect(result.summaryText).toContain('PENALTY unsportsmanlike conduct, 15 yards to the V34');
+    expect(result.summaryText).toContain('PENALTY VIS unsportsmanlike conduct, 15 yards to the V34');
     expect(result.summaryText).not.toMatch(/succeeding spot|end spot|end of the run/i);
     expect(result.warnings).toEqual([]);
   });
@@ -345,7 +388,7 @@ describe('footballPlaySummaryGrammar', () => {
 
     const result = generateFootballPlaySummary(intent);
 
-    expect(result.summaryText).toContain('PENALTY holding, enforced 10 yards from the V46 to the H44');
+    expect(result.summaryText).toContain('PENALTY HOM holding, enforced 10 yards from the V46 to the H44');
     expect(intent.penalties[0].yards).toBe(-10);
   });
 
@@ -384,6 +427,7 @@ function baseIntent(options: {
   fumbler?: DraftParticipant;
   forcedBy?: DraftParticipant;
   recoveredBy?: DraftParticipant;
+  penalizedPlayers?: DraftParticipant[];
   prePlay?: FootballDraftIntent['prePlay'];
   result: FootballDraftIntent['result'];
   penalties?: FootballDraftIntent['penalties'];
@@ -434,7 +478,7 @@ function baseIntent(options: {
       ...(options.forcedBy ? { forcedBy: options.forcedBy } : {}),
       ...(options.recoveredBy ? { recoveredBy: options.recoveredBy } : {}),
       defenders: options.defenders ?? [],
-      penalizedPlayers: [],
+      penalizedPlayers: options.penalizedPlayers ?? [],
       others: [],
     },
     result: options.result,

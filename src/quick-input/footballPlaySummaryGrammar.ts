@@ -482,9 +482,10 @@ function penaltiesSummary(
 
   if (penalties.every((penalty) => penalty.status === 'offsetting')) {
     const previousPlayCounts = penalties[0]?.offsetting?.previousPlayCounts;
-    if (previousPlayCounts === true) return sentence('Offsetting penalties after the play. Previous play counts');
-    if (previousPlayCounts === false) return sentence('Offsetting penalties. Previous play does not count');
-    return sentence(`Penalties offset: ${penalties.map((penalty) => penaltyBasicText(context, penalty)).join('; ')}`);
+    const penaltyList = penalties.map((penalty) => penaltyBasicText(context, penalty)).join('; ');
+    if (previousPlayCounts === true) return sentence(`Offsetting penalties after the play: ${penaltyList}. Previous play counts`);
+    if (previousPlayCounts === false) return sentence(`Offsetting penalties: ${penaltyList}. Previous play does not count`);
+    return sentence(`Penalties offset: ${penaltyList}`);
   }
 
   if (options.attached) {
@@ -492,14 +493,14 @@ function penaltiesSummary(
   }
 
   if (penalties.length === 1) {
-    return sentence(`Penalty: ${penaltyText(context, penalties[0])}`);
+    return sentence(penaltyText(context, penalties[0]));
   }
 
-  return sentence(`Penalties: ${penalties.map((penalty) => penaltyText(context, penalty)).join('; ')}`);
+  return sentence(penalties.map((penalty) => penaltyText(context, penalty)).join('; '));
 }
 
 function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
-  const parts = [penaltyBasicText(context, penalty)];
+  const parts = [`PENALTY ${penaltyBasicText(context, penalty)}`];
 
   if (penalty.status === 'declined') {
     parts.push('declined');
@@ -513,30 +514,19 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
     return parts.join(', ');
   }
 
-  if (typeof penalty.yards === 'number') {
-    parts.push(`${penalty.yards} ${pluralize('yard', penalty.yards)}`);
-  } else if (penalty.status === 'accepted') {
-    addWarning(context, 'PENALTY_MISSING_YARDS', 'Accepted penalty is missing yards', `penalties.${penalty.penaltyId}.yards`);
-    parts.push('yards pending');
-  }
-
-  if (penalty.status === 'accepted') parts.push(`from ${formatEnforcementSpot(penalty.enforcedFrom)}`);
-  if (penalty.enforcedFrom === 'SPOT' && penalty.spotOfFoul) parts.push(`spot of foul ${formatSpot(penalty.spotOfFoul)}`);
-  if (penalty.finalSpot) parts.push(`to ${formatSpot(penalty.finalSpot)}`);
+  if (penalty.status === 'accepted') parts.push(penaltyEnforcementText(context, penalty));
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
-  if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
+  if ((penalty.downConsequence === 'REPEAT' || penalty.replayDown) && !context.intent.prePlay.setupContext) parts.push('replay down');
   if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
-  parts.push(penalty.status);
   appendPenaltyEjection(context, penalty, parts);
 
   return parts.join(', ');
 }
 
 function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): string {
-  const name = penalty.name || penalty.code || 'Penalty';
-  const parts = [`PENALTY ${name}`];
+  const parts = [`PENALTY ${penaltyBasicText(context, penalty)}`];
 
   if (penalty.status === 'declined') {
     parts.push('declined');
@@ -591,9 +581,29 @@ function penaltyDisplayYards(context: SummaryContext, penalty: DraftPenalty): st
   return 'yards pending';
 }
 
+function penaltyEnforcementText(context: SummaryContext, penalty: DraftPenalty): string {
+  const yardsText = penaltyDisplayYards(context, penalty);
+  const originSpot = penalty.enforcedFrom === 'SPOT'
+    ? penalty.spotOfFoul
+    : penalty.enforcedFrom === 'PREVIOUS'
+      ? context.intent.prePlay.yardLine ?? undefined
+      : undefined;
+
+  if (originSpot && penalty.finalSpot) {
+    return `${yardsText} from ${formatSpot(originSpot)} to ${formatSpot(penalty.finalSpot)}`;
+  }
+  if (penalty.finalSpot) {
+    return `${yardsText} from ${formatEnforcementSpot(penalty.enforcedFrom)} to ${formatSpot(penalty.finalSpot)}`;
+  }
+  return `${yardsText} from ${formatEnforcementSpot(penalty.enforcedFrom)}`;
+}
+
 function penaltyBasicText(context: SummaryContext, penalty: DraftPenalty): string {
   const name = penalty.name || penalty.code || 'Penalty';
-  return `${name} on ${teamAbbr(context.intent, penalty.team)}`;
+  const playerId = penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
+  const participant = participantByPlayerId(context.intent, playerId);
+  const playerText = participant ? ` (${formatPlayer(participant)})` : '';
+  return `${teamAbbr(context.intent, penalty.team)} ${name}${playerText}`;
 }
 
 function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | undefined {

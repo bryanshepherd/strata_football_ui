@@ -4941,7 +4941,12 @@ function finalizePenaltyEntry(
     if (!state.draft) {
       return { state: tokenError(state, 'MISSING_BASE_PLAY_DRAFT', 'Queued penalty resolution requires a play draft', 'draft') };
     }
-    const draft = attachPenaltiesToDraft(state.draft, penalties, context);
+    const draft = attachPenaltiesToDraft(
+      state.draft,
+      penalties,
+      context,
+      state.tokens.penaltyPlayer ? [state.tokens.penaltyPlayer] : [],
+    );
     const summary = generateFootballPlaySummary(draft);
     return {
       state: {
@@ -5118,6 +5123,7 @@ function attachPenaltiesToDraft(
   draft: FootballDraftIntent,
   penalties: DraftPenalty[],
   context: FootballQuickInputContext,
+  penalizedPlayers: DraftParticipant[] = [],
 ): FootballDraftIntent {
   const nextDraft = cloneDraft(draft);
   nextDraft.status = 'readyForSummary';
@@ -5125,13 +5131,23 @@ function attachPenaltiesToDraft(
   nextDraft.revision += 1;
   nextDraft.penalties = [...nextDraft.penalties.map(clonePenalty), ...penalties.map(clonePenalty)];
   nextDraft.confirmation = undefined;
-  nextDraft.participants.penalizedPlayers = [
-    ...nextDraft.participants.penalizedPlayers.map(cloneParticipant),
+  const resolvedPenalizedPlayers = [
+    ...penalizedPlayers,
     ...penalties
       .map((penalty) => penalty.playerId)
       .filter((playerId): playerId is string => Boolean(playerId))
       .map((playerId) => stateParticipantByPlayerId(draft, playerId))
-      .filter((participant): participant is DraftParticipant => Boolean(participant))
+      .filter((participant): participant is DraftParticipant => Boolean(participant)),
+  ];
+  const existingPlayerIds = new Set(nextDraft.participants.penalizedPlayers.map((participant) => participant.playerId));
+  nextDraft.participants.penalizedPlayers = [
+    ...nextDraft.participants.penalizedPlayers.map(cloneParticipant),
+    ...resolvedPenalizedPlayers
+      .filter((participant) => {
+        if (existingPlayerIds.has(participant.playerId)) return false;
+        existingPlayerIds.add(participant.playerId);
+        return true;
+      })
       .map(cloneParticipant),
   ];
   return nextDraft;
@@ -5225,9 +5241,13 @@ function buildSingleDraftPenalty(
     lossOfDown: input.definition?.lossOfDown,
   };
 
+  if (tokens.penaltyPlayer) {
+    penalty.playerId = tokens.penaltyPlayer.playerId;
+    penalty.penalizedPlayerId = tokens.penaltyPlayer.playerId;
+  }
+
   if (input.resolution === 'accepted') {
-    penalty.playerId = tokens.penaltyPlayer?.playerId ?? null;
-    penalty.penalizedPlayerId = tokens.penaltyPlayer?.playerId;
+    penalty.playerId ??= null;
     const requestedEnforcedFrom = tokens.penaltyEnforcedFrom ?? (input.source === 'immediate' ? 'PREVIOUS' : undefined);
     const dpiAward = ncaaDefensivePassInterferenceAward(context, tokens, baseDraft, requestedEnforcedFrom);
     penalty.enforcedFrom = dpiAward?.enforcedFrom ?? requestedEnforcedFrom;

@@ -561,7 +561,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.status).toBe('summary.reviewing');
-    expect(reviewing.summary?.summaryText).toContain('Penalty: Offsides on VIS');
+    expect(reviewing.summary?.summaryText).toContain('PENALTY VIS Offsides');
   });
 
   it('builds an immediate penalty from a pending try setup', () => {
@@ -600,7 +600,21 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
 
     const reviewing = transitionWithContext(ready, { type: 'GENERATE_SUMMARY' }, context);
-    expect(reviewing.summary?.summaryText).toContain('2 yards, from the previous spot, to the V1, replay down, accepted');
+    expect(reviewing.summary?.summaryText).toBe('PENALTY VIS Offsides, 2 yards from the V3 to the V1.');
+  });
+
+  it('retains a queued penalized player who was not otherwise in the play', () => {
+    const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
+    const accepted = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Holding', 'H', 'A', '44', 'F', 'V45', 'H45', 'R'],
+    );
+
+    expect(accepted.status).toBe('summary.reviewing');
+    expect(accepted.draft?.participants.penalizedPlayers).toEqual([
+      expect.objectContaining({ playerId: 'H-44', role: 'penalizedPlayer' }),
+    ]);
+    expect(accepted.summary?.summaryText).toContain('PENALTY HOM Holding (#44 Home Moss)');
   });
 
   it('accepted immediate penalty does not ask for yards', () => {
@@ -708,7 +722,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       finalSpot: 'H45',
       downConsequence: 'REPEAT',
     });
-    expect(state.summary?.summaryText).toContain('PENALTY Holding, enforced 10 yards from the V45 to the H45');
+    expect(state.summary?.summaryText).toContain('PENALTY HOM Holding, enforced 10 yards from the V45 to the H45');
   });
 
   it('accepted queued previous-spot penalty derives yards from previous spot', () => {
@@ -1694,7 +1708,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     ]);
 
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
-    expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark kickoff out-of-bounds at the V08, PENALTY Free Kick Infraction, 5 yards to the H30, replay down.');
+    expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark kickoff out-of-bounds at the V08, PENALTY HOM Free Kick Infraction (#9 Owen Clark), 5 yards to the H30, replay down.');
     const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
     expect(confirmed.buildResult?.ok).toBe(true);
     if (confirmed.buildResult?.ok) {
