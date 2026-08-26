@@ -249,6 +249,22 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByLabelText(/football debug trace/i)).not.toBeInTheDocument();
   });
 
+  it('opens the play-only editor from a recorded game-log event and saves the edit locally', () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+
+    fireEvent.click(screen.getByRole('button', { name: /edit play 12/i }));
+    const editor = screen.getByRole('dialog', { name: /edit play 12/i });
+    expect(within(editor).getByLabelText(/locked play context/i)).toBeInTheDocument();
+    expect(within(editor).queryByLabelText(/^yards$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(within(editor).getByLabelText(/first down credited/i));
+    fireEvent.click(within(editor).getByRole('button', { name: /save changes/i }));
+
+    expect(screen.queryByRole('dialog', { name: /edit play 12/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Play #12 was updated in the local envelope.');
+    expect(screen.getByRole('button', { name: /undo last test event/i })).toBeEnabled();
+  });
+
   it('continues submission IDs above an imported envelope instead of reusing an old play ID', async () => {
     const importedEnvelope = gameEnvelopeFixtures.secondQuarterRecovery;
     expect(getHighestFootballFcqiSeedCounter(importedEnvelope)).toBe(52);

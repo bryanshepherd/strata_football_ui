@@ -107,6 +107,7 @@ export default function FootballPlayEditorModal({
   onSave,
   play,
   roster = [],
+  saveError = '',
   teamNames = { H: 'Home', V: 'Visitor' },
 }) {
   const [draft, setDraft] = useState(() => prepareDraft(play));
@@ -259,6 +260,12 @@ export default function FootballPlayEditorModal({
             )}
           </div>
         </main>
+
+        {saveError && (
+          <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-900" role="alert">
+            {saveError}
+          </div>
+        )}
 
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-300 bg-white px-4 py-3 sm:px-6">
           <div className="min-w-0 text-xs text-zinc-600">

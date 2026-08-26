@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
+import FootballPlayEditorModal from '../components/editor/FootballPlayEditorModal';
 import FootballConfirmedQuickInput, {
   getFootballFcqiAssistantMessage,
 } from '../components/fcqi/FootballConfirmedQuickInput';
@@ -21,6 +22,7 @@ import {
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
+import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { gamePhaseForEnvelope, pregameForEnvelope } from '../pregame/footballPregame';
 import {
   buildFootballDriveSummary,
@@ -155,6 +157,8 @@ export default function FootballScorerShell() {
   const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
   const [wrapUpOpen, setWrapUpOpen] = useState(false);
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
+  const [editingPlay, setEditingPlay] = useState(null);
+  const [playEditFeedback, setPlayEditFeedback] = useState(null);
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
   const envelope = useMemo(
@@ -183,6 +187,8 @@ export default function FootballScorerShell() {
     setPendingSecondHalfStart(null);
     setWrapUpOpen(false);
     setWrapUpSaveState({ saving: false, error: '' });
+    setEditingPlay(null);
+    setPlayEditFeedback(null);
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
   }, [requestedFixture, requestedGameId]);
 
@@ -375,6 +381,52 @@ export default function FootballScorerShell() {
       void flushServerSync();
     }
   }, [dashboardGameId, flushServerSync, localUndoStack, requestedGameId]);
+
+  const openPlayEditor = useCallback((event) => {
+    setPlayEditFeedback(null);
+    setEditingPlay(event);
+  }, []);
+
+  const closePlayEditor = useCallback(() => setEditingPlay(null), []);
+
+  const savePlayEditor = useCallback((editedPlay) => {
+    try {
+      const amendedEnvelope = applyFootballPlayEditToEnvelope(envelope, editedPlay);
+      const normalizedEnvelope = normalizeFootballScoringSetupEnvelope(amendedEnvelope);
+      const persistedEnvelope = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, normalizedEnvelope) || normalizedEnvelope
+        : normalizedEnvelope;
+      setLocalUndoStack((current) => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setPlayEditFeedback({
+        tone: 'success',
+        message: `Play #${editedPlay.sequence} was updated in the local envelope.`,
+      });
+      if (requestedGameId && dashboardGameId) {
+        enqueueFootballEnvelopeMirror({
+          gameId: requestedGameId,
+          dashboardGameId,
+          envelope: persistedEnvelope,
+        });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    } catch (error) {
+      setPlayEditFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'The play edit could not be saved.',
+      });
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
+  const requestPlayReplacement = useCallback((play) => {
+    setEditingPlay(null);
+    setPlayEditFeedback({
+      tone: 'warning',
+      message: `Play #${play.sequence} was not changed. That structural change requires replacing the play.`,
+    });
+  }, []);
 
   const recordPossessionClock = useCallback((clock) => {
     if (!possessionClockChange) return;
@@ -618,7 +670,9 @@ export default function FootballScorerShell() {
         eventLog={(
           <FootballEventLogSlot
             canUndo={localUndoStack.length > 0}
+            editFeedback={playEditFeedback}
             envelope={envelope}
+            onEditEvent={openPlayEditor}
             onUndoLastEvent={useLocalTestGame ? undoLastLocalEvent : undefined}
           />
         )}
@@ -672,6 +726,19 @@ export default function FootballScorerShell() {
         open={wrapUpOpen}
         saveError={wrapUpSaveState.error}
         saving={wrapUpSaveState.saving}
+      />
+      <FootballPlayEditorModal
+        isOpen={Boolean(editingPlay)}
+        onClose={closePlayEditor}
+        onReplace={requestPlayReplacement}
+        onSave={savePlayEditor}
+        play={editingPlay}
+        roster={editorRoster}
+        saveError={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''}
+        teamNames={{
+          H: envelope.game.teams.H.name || envelope.game.teams.H.abbr || 'Home',
+          V: envelope.game.teams.V.name || envelope.game.teams.V.abbr || 'Visitor',
+        }}
       />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
@@ -862,9 +929,15 @@ export const FootballInputSlot = ({
   );
 };
 
-export const FootballEventLogSlot = ({ canUndo = false, envelope, onUndoLastEvent }) => (
+export const FootballEventLogSlot = ({ canUndo = false, editFeedback, envelope, onEditEvent, onUndoLastEvent }) => (
   <div className="h-full p-4">
-    <GameLogColumn canUndo={canUndo} envelope={envelope} onUndoLastEvent={onUndoLastEvent} />
+    <GameLogColumn
+      canUndo={canUndo}
+      editFeedback={editFeedback}
+      envelope={envelope}
+      onEditEvent={onEditEvent}
+      onUndoLastEvent={onUndoLastEvent}
+    />
   </div>
 );
 
@@ -967,22 +1040,40 @@ const EnvelopeRow = ({ label, value }) => (
   </div>
 );
 
-const GameLogColumn = ({ canUndo, envelope, onUndoLastEvent }) => {
+const EDITABLE_EVENT_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
+
+const GameLogColumn = ({ canUndo, editFeedback, envelope, onEditEvent, onUndoLastEvent }) => {
   const logItems = buildGameLogItems(envelope);
   return (
     <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
-    <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
-      <h2 className="text-base font-semibold">Game Log</h2>
-      {onUndoLastEvent && (
-        <button
-          className="rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
-          disabled={!canUndo}
-          onClick={onUndoLastEvent}
-          title="Restore the local test game to its state before the most recent submitted event"
-          type="button"
+    <div className="border-b border-zinc-200 px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Game Log</h2>
+        {onUndoLastEvent && (
+          <button
+            className="rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+            disabled={!canUndo}
+            onClick={onUndoLastEvent}
+            title="Restore the local test game to its state before the most recent submitted event"
+            type="button"
+          >
+            Undo Last Test Event
+          </button>
+        )}
+      </div>
+      {editFeedback?.message && (
+        <div
+          className={`mt-2 rounded border px-3 py-2 text-xs font-semibold ${
+            editFeedback.tone === 'error'
+              ? 'border-red-300 bg-red-50 text-red-900'
+              : editFeedback.tone === 'warning'
+                ? 'border-amber-300 bg-amber-50 text-amber-950'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-900'
+          }`}
+          role="status"
         >
-          Undo Last Test Event
-        </button>
+          {editFeedback.message}
+        </div>
       )}
     </div>
     <div className="min-h-0 flex-1 overflow-auto">
@@ -1015,9 +1106,21 @@ const GameLogColumn = ({ canUndo, envelope, onUndoLastEvent }) => {
                       {item.event.description || item.event.result?.code || 'Accepted event'}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
-                    #{item.event.sequence ?? '-'}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {onEditEvent && EDITABLE_EVENT_TYPES.has(item.event.type) && (
+                      <button
+                        aria-label={`Edit play ${item.event.sequence ?? ''}`}
+                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800"
+                        onClick={() => onEditEvent(item.event)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
+                      #{item.event.sequence ?? '-'}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
                   Q{item.event.period || '-'} {formatFootballClockDisplay(item.event.clock, '--:--')} · {item.event.possession || '-'}
