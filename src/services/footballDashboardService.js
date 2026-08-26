@@ -1316,18 +1316,84 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
     && normalizeClockText(event.clock)
   ));
   const usedKickoffEvents = new Set();
+  const timedDrives = [
+    ...(envelope?.drives?.completed || []),
+    envelope?.drives?.current,
+  ].filter(Boolean);
+
+  kickoffEvents.forEach((event, kickoffIndex) => {
+    const receivingTeam = kickoffReceivingTeam(event);
+    const kickingTeam = event?.participants?.kicker?.team
+      || event?.participants?.primary?.team
+      || event?.possession;
+    const recoveryTeam = event?.result?.turnover?.recoveredBy
+      || event?.result?.turnover?.team
+      || event?.result?.fumble?.recoveredByTeam
+      || event?.result?.nextPossession;
+    const isKickoffReturnFumble = Boolean(
+      event?.result?.fumble?.turnover
+      || event?.result?.turnover?.type === 'fumble'
+    );
+    if (
+      !isKickoffReturnFumble
+      || !validTeamCode(receivingTeam)
+      || !validTeamCode(kickingTeam)
+      || recoveryTeam !== kickingTeam
+      || recoveryTeam === receivingTeam
+    ) return;
+
+    // A return fumble recovered by the kicking team never creates a drive for
+    // the receiving team. Consume it here so it cannot be attached to that
+    // team's next kickoff drive, and retain the return time as its own segment.
+    usedKickoffEvents.add(kickoffIndex);
+    const eventPeriod = finiteNumber(event.period, 1);
+    const kickoffSeconds = clockSeconds(event.clock);
+    const recoveryDrive = timedDrives.reduce((closest, drive) => {
+      if (
+        finiteNumber(drive?.startPeriod, eventPeriod) !== eventPeriod
+      ) return closest;
+      const driveStartSeconds = clockSeconds(drive?.startClock);
+      if (kickoffSeconds === null || driveStartSeconds === null || driveStartSeconds > kickoffSeconds) {
+        return closest;
+      }
+      const elapsed = kickoffSeconds - driveStartSeconds;
+      return !closest || elapsed < closest.elapsed ? { drive, elapsed } : closest;
+    }, null)?.drive;
+    if (
+      recoveryDrive?.team !== recoveryTeam
+      || String(recoveryDrive?.startReason || '').toLowerCase() !== 'fumblerecovery'
+    ) return;
+    const recoveryClock = normalizeClockText(recoveryDrive?.startClock);
+    if (!recoveryClock) return;
+    segments[receivingTeam].push({
+      startPeriod: eventPeriod,
+      startClock: normalizeClockText(event.clock),
+      endPeriod: finiteNumber(recoveryDrive.startPeriod, eventPeriod),
+      endClock: recoveryClock,
+    });
+  });
+
   const possessionStartClock = (drive) => {
     if (!String(drive?.startReason || '').toLowerCase().startsWith('kickoff')) return drive.startClock;
     const drivePeriod = finiteNumber(drive.startPeriod, 1);
     const driveStartSeconds = clockSeconds(drive.startClock);
-    const kickoffIndex = kickoffEvents.findIndex((event, index) => {
-      if (usedKickoffEvents.has(index)) return false;
+    let kickoffIndex = -1;
+    let closestElapsed = Number.POSITIVE_INFINITY;
+    kickoffEvents.forEach((event, index) => {
+      if (usedKickoffEvents.has(index)) return;
       const receivingTeam = kickoffReceivingTeam(event);
       const kickoffSeconds = clockSeconds(event.clock);
-      return receivingTeam === drive.team
-        && finiteNumber(event.period, drivePeriod) === drivePeriod
-        && kickoffSeconds !== null
-        && (driveStartSeconds === null || kickoffSeconds >= driveStartSeconds);
+      if (
+        receivingTeam !== drive.team
+        || finiteNumber(event.period, drivePeriod) !== drivePeriod
+        || kickoffSeconds === null
+        || (driveStartSeconds !== null && kickoffSeconds < driveStartSeconds)
+      ) return;
+      const elapsed = driveStartSeconds === null ? 0 : kickoffSeconds - driveStartSeconds;
+      if (kickoffIndex < 0 || elapsed < closestElapsed) {
+        kickoffIndex = index;
+        closestElapsed = elapsed;
+      }
     });
     if (kickoffIndex < 0) return drive.startClock;
     usedKickoffEvents.add(kickoffIndex);
@@ -1355,6 +1421,10 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
   const teams = { ...(stats?.teams || {}) };
   for (const team of ['H', 'V']) {
     if (segments[team].length === 0) continue;
+    segments[team].sort((left, right) => (
+      finiteNumber(left.startPeriod, 1) - finiteNumber(right.startPeriod, 1)
+      || finiteNumber(clockSeconds(right.startClock), -1) - finiteNumber(clockSeconds(left.startClock), -1)
+    ));
     const timeOfPossession = segments[team].reduce((total, segment) => {
       const timedSegment = segment.endClock
         ? segment

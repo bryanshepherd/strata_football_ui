@@ -478,6 +478,96 @@ describe('local football test-game projection', () => {
     expect(envelope.drives.completed[0].startReason).toBe('kickoff');
   });
 
+  it('does not double-count an opponent drive between two kickoffs to the same receiving team', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '02:24' };
+    envelope.events = [
+      {
+        eventId: 'KO-FUMBLE-1',
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        period: 2,
+        clock: '06:46',
+        participants: {
+          kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-85', team: 'V', role: 'returner' },
+        },
+        result: {
+          code: 'returned',
+          nextPossession: 'H',
+          fumble: { turnover: true, recoveredByTeam: 'H' },
+          turnover: { type: 'fumble', recoveredBy: 'H' },
+        },
+      },
+      {
+        eventId: 'KO-NEXT-1',
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        period: 2,
+        clock: '05:41',
+        participants: {
+          kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-85', team: 'V', role: 'returner' },
+        },
+        result: { code: 'returned', nextPossession: 'V' },
+      },
+    ];
+    envelope.drives = {
+      current: null,
+      completed: [
+        {
+          driveId: 'DRV-H-FUMBLE-RECOVERY',
+          team: 'H',
+          startReason: 'fumbleRecovery',
+          startPeriod: 2,
+          startClock: '06:38',
+          endPeriod: 2,
+          endClock: '05:41',
+        },
+        {
+          driveId: 'DRV-V-NEXT-KICKOFF',
+          team: 'V',
+          startReason: 'kickoff',
+          startPeriod: 2,
+          startClock: '05:39',
+          endPeriod: 2,
+          endClock: '02:24',
+        },
+      ],
+    };
+    envelope.stats.teams = {};
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.stats.teams.H.timeOfPossession).toBe(57);
+    expect(normalized.stats.teams.H.possessionSegments).toEqual([{
+      startPeriod: 2,
+      startClock: '06:38',
+      endPeriod: 2,
+      endClock: '05:41',
+    }]);
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(205);
+    expect(normalized.stats.teams.V.possessionSegments).toEqual([
+      {
+        startPeriod: 2,
+        startClock: '06:46',
+        endPeriod: 2,
+        endClock: '06:38',
+      },
+      {
+        startPeriod: 2,
+        startClock: '05:41',
+        endPeriod: 2,
+        endClock: '02:24',
+      },
+    ]);
+    expect(
+      normalized.stats.teams.H.timeOfPossession + normalized.stats.teams.V.timeOfPossession,
+    ).toBe(262);
+  });
+
   it('accepts an exact retry but rejects a reused client event ID for a different play', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const firstRequest = playRequest(envelope, 'fcqi-rush-10-client', {
