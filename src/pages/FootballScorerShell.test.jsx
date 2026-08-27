@@ -9,11 +9,12 @@ import {
   FOOTBALL_DASHBOARD_STORAGE_KEY,
   FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
+  saveDashboardSeededFootballEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { getHighestFootballFcqiSeedCounter } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballDashboard from './FootballDashboard';
-import FootballReportPlaceholder from './FootballReportPlaceholder';
+import FootballScoringSummaryReport from './FootballScoringSummaryReport';
 import FootballScorerShell, {
   FootballEventLogSlot,
   shouldUseLocalFootballEnvelope,
@@ -26,7 +27,7 @@ const renderScorer = (initialEntry = '/scorer') =>
         <Route path="/" element={<FootballDashboard />} />
         <Route path="/dashboard" element={<FootballDashboard />} />
         <Route path="/scorer" element={<FootballScorerShell />} />
-        <Route path="/reports" element={<FootballReportPlaceholder />} />
+        <Route path="/reports" element={<FootballScoringSummaryReport />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -478,6 +479,65 @@ describe('FootballScorerShell', () => {
       expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('requires confirmation before explicitly replacing a post-pregame local envelope from the server', async () => {
+    const localEnvelope = cloneNormalEnvelope();
+    localEnvelope.gameId = 'FB-SERVER-RECOVERY-UI';
+    localEnvelope.rosters.gameId = localEnvelope.gameId;
+    localEnvelope.game.teams.H.name = 'Local Home';
+    localEnvelope.game.teams.V.name = 'Local Visitor';
+    saveDashboardSeededFootballEnvelope(localEnvelope.gameId, localEnvelope);
+
+    const serverEnvelope = cloneNormalEnvelope();
+    serverEnvelope.gameId = localEnvelope.gameId;
+    serverEnvelope.rosters.gameId = serverEnvelope.gameId;
+    serverEnvelope.game.status = 'final';
+    serverEnvelope.game.teams.H = { ...serverEnvelope.game.teams.H, name: 'Server Home', score: 60 };
+    serverEnvelope.game.teams.V = { ...serverEnvelope.game.teams.V, name: 'Server Visitor', score: 39 };
+    serverEnvelope.game.wrapUp = { completedAt: '2026-08-26T07:48:21.545Z' };
+    serverEnvelope.events = Array.from({ length: 214 }, (_, index) => ({
+      clientEventId: `server-event-${index + 1}`,
+      eventId: `SERVER-${index + 1}`,
+      sequence: index + 1,
+      type: 'gameControl',
+    }));
+    serverEnvelope.stats.sourceEventSequence = 214;
+
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => serverEnvelope,
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    globalThis.fetch = fetchSpy;
+
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-SERVER-RECOVERY-UI&envelopeGameId=FB-SERVER-RECOVERY-UI');
+      expect(screen.getByRole('heading', { name: /local visitor at local home/i })).toBeInTheDocument();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+        'href',
+        '/index.html?report=scoring-summary&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Fetch from server' }));
+
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('replace this browser\'s local envelope'));
+      expect(await screen.findByRole('heading', { name: /server visitor at server home/i })).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/football/games/DASH-SERVER-RECOVERY-UI/envelope',
+        expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+      );
+      const stored = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY));
+      expect(stored.games['FB-SERVER-RECOVERY-UI'].envelope.game.status).toBe('final');
+      expect(stored.games['FB-SERVER-RECOVERY-UI'].envelope.events).toHaveLength(214);
+    } finally {
+      confirmSpy.mockRestore();
       globalThis.fetch = originalFetch;
     }
   });
@@ -2321,9 +2381,9 @@ describe('FootballScorerShell', () => {
   it('renders the report route without football providers', () => {
     renderScorer('/reports?fixture=final');
 
-    expect(screen.getByRole('heading', { name: /reports/i })).toBeInTheDocument();
-    expect(screen.getByText(/FB-FINAL/)).toBeInTheDocument();
-    expect(screen.getByText('Report Workspace')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Scoring Summary' })).toBeInTheDocument();
+    expect(screen.getByText('Fairmont St. vs. West Virginia St. (September 27, 2025)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'SCORE BY QUARTERS' })).toBeInTheDocument();
   });
 
   it('shows a route error for an unknown fixture key', () => {

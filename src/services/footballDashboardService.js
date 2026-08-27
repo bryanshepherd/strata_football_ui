@@ -343,6 +343,15 @@ export function getPendingFootballSyncCount(gameId = '') {
   return readSyncQueue().filter((item) => !gameId || item.gameId === String(gameId)).length;
 }
 
+export function discardPendingFootballSyncForGame(gameId) {
+  if (!gameId) return 0;
+  const current = readSyncQueue();
+  const next = current.filter((item) => item.gameId !== String(gameId));
+  const discarded = current.length - next.length;
+  if (discarded > 0) writeSyncQueue(next);
+  return discarded;
+}
+
 export function enqueueFootballServerSync({ gameId, dashboardGameId = '', kind, payload }) {
   if (!gameId || !payload || !['event', 'pregame', 'envelope'].includes(kind)) return null;
   const items = readSyncQueue();
@@ -581,6 +590,9 @@ export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', sign
   if (!payload || payload.schemaVersion !== 'football.gameEnvelope.v1') {
     throw new Error('Football envelope API returned an unexpected payload.');
   }
+  if (payload.gameId !== String(gameId)) {
+    throw new Error('Football envelope API returned a different game.');
+  }
   if (dashboardGameId) {
     const mirrorSourceId = response.headers?.get?.('X-Strata-Football-Mirror-Source');
     const mirrorRevision = Number(response.headers?.get?.('X-Strata-Football-Mirror-Revision') || 0);
@@ -588,6 +600,16 @@ export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', sign
   }
 
   return payload;
+}
+
+export async function recoverFootballEnvelopeFromServer(gameId, options = {}) {
+  const recoveredEnvelope = await fetchFootballEnvelope(gameId, options);
+  discardPendingFootballSyncForGame(gameId);
+  const savedEnvelope = saveDashboardSeededFootballEnvelope(gameId, recoveredEnvelope);
+  if (!savedEnvelope) {
+    throw new Error('The recovered football envelope could not be saved to this browser.');
+  }
+  return savedEnvelope;
 }
 
 const nextAcceptedEventSequence = (envelope, event) => {

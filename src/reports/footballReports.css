@@ -1,0 +1,253 @@
+@page {
+  size: letter portrait;
+  margin: 0;
+}
+
+.football-report-screen {
+  min-height: 100vh;
+  padding: 20px;
+  background: #d9dedb;
+  color: #101513;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.football-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 8.5in;
+  margin: 0 auto 10px;
+}
+
+.football-report-actions a,
+.football-report-actions button {
+  border: 1px solid #9da8a1;
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #1f2924;
+  font: 700 12px/1 Arial, Helvetica, sans-serif;
+  text-decoration: none;
+}
+
+.football-report-page {
+  position: relative;
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: .32in .34in .62in;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+  font-family: Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.football-report-standard-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: .72in;
+  padding-bottom: 7px;
+  border-bottom: 2px solid #121816;
+}
+
+.football-report-suite-logo {
+  width: .92in;
+  height: .64in;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.football-report-standard-header-copy {
+  min-width: 0;
+}
+
+.football-report-standard-header-copy h1 {
+  margin: 0;
+  font: 700 12pt/1.1 Arial, Helvetica, sans-serif;
+}
+
+.football-report-standard-header-copy p {
+  margin: 3px 0 0;
+  font: 400 10pt/1.15 Arial, Helvetica, sans-serif;
+}
+
+.football-report-matchup-heading {
+  margin: 8px 0 4px;
+  text-align: center;
+  font: 700 8.5pt/1.15 Arial, Helvetica, sans-serif;
+}
+
+.football-report-section {
+  margin-top: 8px;
+  break-inside: avoid;
+}
+
+.football-report-section h2 {
+  margin: 0 0 2px;
+  padding: 0 0 2px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 8.5pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-report-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font: 400 7pt/1.08 Arial, Helvetica, sans-serif;
+}
+
+.football-report-table thead {
+  display: table-header-group;
+}
+
+.football-report-table th,
+.football-report-table td {
+  height: 15px;
+  padding: 2px 4px;
+  border-bottom: 1px solid #c7cfca;
+  text-align: center;
+  vertical-align: top;
+}
+
+.football-report-table thead th {
+  border-top: 1px solid #19201c;
+  border-bottom: 1px solid #19201c;
+  background: #dde5e0;
+  font-size: 6.8pt;
+  font-weight: 700;
+}
+
+.football-report-table tbody tr {
+  break-inside: avoid;
+}
+
+.football-score-by-quarter th:first-child,
+.football-score-by-quarter td:first-child {
+  width: 42%;
+  text-align: left;
+}
+
+.football-score-by-quarter tbody th {
+  font-weight: 700;
+}
+
+.football-report-total {
+  font-weight: 700;
+}
+
+.football-scoring-quarter-column {
+  width: .38in;
+}
+
+.football-scoring-time-column {
+  width: .58in;
+}
+
+.football-scoring-team-column {
+  width: .58in;
+}
+
+.football-scoring-score-column {
+  width: .78in;
+}
+
+.football-scoring-description {
+  text-align: left !important;
+}
+
+.football-game-details {
+  border-top: 1px solid #c7cfca;
+}
+
+.football-game-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr .8fr;
+  margin: 0;
+  border-bottom: 1px solid #c7cfca;
+}
+
+.football-game-detail-row > div {
+  min-width: 0;
+  padding: 3px 4px;
+  text-align: center;
+}
+
+.football-game-detail-row > div + div {
+  border-left: 1px solid #c7cfca;
+}
+
+.football-game-detail-row dt,
+.football-officials-grid dt {
+  font: 700 6.2pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-game-detail-row dd,
+.football-officials-grid dd {
+  margin: 2px 0 0;
+  font: 400 7pt/1.12 Arial, Helvetica, sans-serif;
+}
+
+.football-officials-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid #c7cfca;
+  border-left: 1px solid #c7cfca;
+}
+
+.football-officials-grid > div {
+  min-height: 35px;
+  padding: 4px;
+  border-right: 1px solid #c7cfca;
+  border-bottom: 1px solid #c7cfca;
+}
+
+.football-report-brand-footer {
+  position: absolute;
+  left: .34in;
+  bottom: .16in;
+  height: .34in;
+  margin: 0;
+}
+
+.football-report-brand-footer img {
+  display: block;
+  width: .58in;
+  height: .34in;
+  object-fit: contain;
+  object-position: left bottom;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .football-report-screen {
+    min-height: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .football-report-actions {
+    display: none !important;
+  }
+
+  .football-report-page {
+    width: 8.5in;
+    min-height: 11in;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .football-report-brand-footer {
+    position: fixed;
+  }
+}

@@ -3,6 +3,7 @@ import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
 import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
   checksumFootballEnvelope,
+  discardPendingFootballSyncForGame,
   enqueueFootballEnvelopeMirror,
   enqueueFootballServerSync,
   fetchFootballEnvelope,
@@ -17,6 +18,7 @@ import {
   persistFootballPregameEnvelope,
   persistFootballWrapUpEnvelope,
   recordFootballPossessionClock,
+  recoverFootballEnvelopeFromServer,
   saveDashboardSeededFootballEnvelope,
   submitFootballEventLocally,
 } from './footballDashboardService';
@@ -118,6 +120,93 @@ describe('local-first football persistence', () => {
       expect.objectContaining({ method: 'GET', credentials: 'same-origin' }),
     );
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.gameId).toBe(envelope.gameId);
+  });
+
+  it('rejects a fetched envelope whose identity does not match the requested game', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.gameId = 'FB-DIFFERENT-GAME';
+
+    await expect(fetchFootballEnvelope('FB-REQUESTED-GAME', {
+      dashboardGameId: 'DASH-REQUESTED-GAME',
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => envelope,
+      }),
+    })).rejects.toThrow('different game');
+  });
+
+  it('recovers explicitly from the server and discards only that game pending sync', async () => {
+    const localEnvelope = clone(getGameEnvelopeFixture('normal'));
+    localEnvelope.gameId = 'FB-EXPLICIT-RECOVERY';
+    localEnvelope.rosters.gameId = localEnvelope.gameId;
+    localEnvelope.game.teams.H.score = 26;
+    saveDashboardSeededFootballEnvelope(localEnvelope.gameId, localEnvelope);
+    enqueueFootballEnvelopeMirror({
+      gameId: localEnvelope.gameId,
+      dashboardGameId: 'DASH-EXPLICIT-RECOVERY',
+      envelope: localEnvelope,
+    });
+    enqueueFootballServerSync({
+      gameId: 'FB-OTHER-GAME',
+      dashboardGameId: 'DASH-OTHER-GAME',
+      kind: 'event',
+      payload: { gameId: 'FB-OTHER-GAME', event: { clientEventId: 'other-event' } },
+    });
+
+    const serverEnvelope = clone(localEnvelope);
+    serverEnvelope.game.status = 'final';
+    serverEnvelope.game.teams.H.score = 60;
+    serverEnvelope.game.teams.V.score = 39;
+    serverEnvelope.events = Array.from({ length: 214 }, (_, index) => ({
+      clientEventId: `server-event-${index + 1}`,
+      eventId: `SERVER-${index + 1}`,
+      sequence: index + 1,
+      type: 'gameControl',
+    }));
+    serverEnvelope.stats.sourceEventSequence = 214;
+
+    const recovered = await recoverFootballEnvelopeFromServer(localEnvelope.gameId, {
+      dashboardGameId: 'DASH-EXPLICIT-RECOVERY',
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => serverEnvelope,
+      }),
+    });
+
+    expect(recovered.game.status).toBe('final');
+    expect(recovered.game.teams.H.score).toBe(60);
+    expect(getDashboardSeededFootballEnvelopeRecord(localEnvelope.gameId).envelope.events).toHaveLength(214);
+    expect(getPendingFootballSyncCount(localEnvelope.gameId)).toBe(0);
+    expect(getPendingFootballSyncCount('FB-OTHER-GAME')).toBe(1);
+  });
+
+  it('leaves the local envelope and pending sync intact when explicit recovery fails', async () => {
+    const localEnvelope = clone(getGameEnvelopeFixture('normal'));
+    localEnvelope.gameId = 'FB-FAILED-RECOVERY';
+    localEnvelope.rosters.gameId = localEnvelope.gameId;
+    localEnvelope.game.teams.H.score = 26;
+    saveDashboardSeededFootballEnvelope(localEnvelope.gameId, localEnvelope);
+    enqueueFootballEnvelopeMirror({
+      gameId: localEnvelope.gameId,
+      dashboardGameId: 'DASH-FAILED-RECOVERY',
+      envelope: localEnvelope,
+    });
+
+    await expect(recoverFootballEnvelopeFromServer(localEnvelope.gameId, {
+      dashboardGameId: 'DASH-FAILED-RECOVERY',
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: 'Server unavailable.' }),
+      }),
+    })).rejects.toThrow('Server unavailable');
+
+    expect(getDashboardSeededFootballEnvelopeRecord(localEnvelope.gameId).envelope.game.teams.H.score).toBe(26);
+    expect(getPendingFootballSyncCount(localEnvelope.gameId)).toBe(1);
+    expect(discardPendingFootballSyncForGame('')).toBe(0);
   });
 
   it('saves pregame locally and queues the mirror without waiting for a server response', async () => {

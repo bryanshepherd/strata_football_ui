@@ -39,6 +39,7 @@ import {
   normalizeFootballScoringSetupEnvelope,
   persistFootballPregameEnvelope,
   persistFootballWrapUpEnvelope,
+  recoverFootballEnvelopeFromServer,
   saveDashboardSeededFootballEnvelope,
   submitFootballEventLocally,
   recordFootballPossessionClock,
@@ -160,6 +161,7 @@ export default function FootballScorerShell() {
   const [editingPlay, setEditingPlay] = useState(null);
   const [playEditFeedback, setPlayEditFeedback] = useState(null);
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
+  const [recoveryState, setRecoveryState] = useState(() => ({ recovering: false, error: '' }));
   const baseEnvelope = requestedGameId ? loadedGameState.envelope : fixtureEnvelope;
   const envelope = useMemo(
     () => buildActiveScorerEnvelope(baseEnvelope, acceptedScorerState),
@@ -190,6 +192,7 @@ export default function FootballScorerShell() {
     setEditingPlay(null);
     setPlayEditFeedback(null);
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+    setRecoveryState({ recovering: false, error: '' });
   }, [requestedFixture, requestedGameId]);
 
   useEffect(() => {
@@ -248,6 +251,43 @@ export default function FootballScorerShell() {
       error: result.error || '',
     });
   }, [dashboardGameId, requestedGameId]);
+
+  const handleFetchFromServer = useCallback(async () => {
+    if (!requestedGameId || recoveryState.recovering) return;
+    const confirmed = window.confirm(
+      'Fetch the server envelope and replace this browser\'s local envelope? Any local changes or pending sync items for this game that are not on the server will be discarded.',
+    );
+    if (!confirmed) return;
+
+    setRecoveryState({ recovering: true, error: '' });
+    try {
+      const recoveredEnvelope = await recoverFootballEnvelopeFromServer(requestedGameId, {
+        dashboardGameId,
+      });
+      setAcceptedScorerState(createEmptyAcceptedScorerState());
+      setLocalUndoStack([]);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey((current) => current + 1);
+      setEditingPlay(null);
+      setPlayEditFeedback(null);
+      setWrapUpOpen(false);
+      setLoadedGameState({
+        status: 'ready',
+        envelope: recoveredEnvelope,
+        source: 'server-recovery',
+        error: '',
+      });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      setRecoveryState({ recovering: false, error: '' });
+    } catch (error) {
+      setRecoveryState({
+        recovering: false,
+        error: error instanceof Error
+          ? `Server recovery failed: ${error.message}`
+          : 'Server recovery failed.',
+      });
+    }
+  }, [dashboardGameId, recoveryState.recovering, requestedGameId]);
 
   useEffect(() => {
     if (!requestedGameId || !dashboardGameId || !baseEnvelope) return undefined;
@@ -639,14 +679,17 @@ export default function FootballScorerShell() {
     <main className={`flex min-h-screen flex-col bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
       <ScorerHeader
         debugMode={debugMode}
+        dashboardGameId={dashboardGameId}
         envelope={envelope}
         fixtureKey={requestedFixture}
         gameId={requestedGameId}
         loadSource={loadedGameState.source}
         onDebugToggle={onDebugToggle}
+        onFetchFromServer={handleFetchFromServer}
         onFixtureChange={onFixtureChange}
         onRosterOpen={openRosterEditor}
         onWrapUpOpen={openGameWrapUp}
+        recoveryState={recoveryState}
         syncState={syncState}
       />
 
@@ -768,19 +811,28 @@ const ShellRouteState = ({ title, message }) => (
 );
 
 const ScorerHeader = ({
+  dashboardGameId,
   debugMode,
   envelope,
   fixtureKey,
   gameId,
   loadSource,
   onDebugToggle,
+  onFetchFromServer,
   onFixtureChange,
   onRosterOpen,
   onWrapUpOpen,
+  recoveryState,
   syncState,
 }) => {
   const teams = envelope.game.teams;
   const isGameRoute = Boolean(gameId);
+  const reportSearch = new URLSearchParams({
+    report: 'scoring-summary',
+    gameId: isGameRoute ? gameId : envelope.gameId,
+  });
+  if (dashboardGameId) reportSearch.set('dashboardGameId', dashboardGameId);
+  const reportHref = `${import.meta.env.BASE_URL}index.html?${reportSearch.toString()}`;
 
   return (
     <header className="border-b border-zinc-300 bg-white">
@@ -824,6 +876,14 @@ const ScorerHeader = ({
           </Link>
           {isGameRoute ? (
             <>
+              <button
+                className="rounded border border-amber-500 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+                disabled={recoveryState?.recovering}
+                onClick={onFetchFromServer}
+                type="button"
+              >
+                {recoveryState?.recovering ? 'Fetching from server…' : 'Fetch from server'}
+              </button>
               <span className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
                 Game {gameId} · Local envelope
               </span>
@@ -834,6 +894,11 @@ const ScorerHeader = ({
               }`} title={syncState?.error || loadSource || 'loaded'}>
                 {syncState?.pending ? `Server sync pending: ${syncState.pending}` : 'Server mirror current'}
               </span>
+              {recoveryState?.error && (
+                <span className="max-w-md rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800" role="alert">
+                  {recoveryState.error}
+                </span>
+              )}
             </>
           ) : (
             <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
@@ -851,12 +916,14 @@ const ScorerHeader = ({
               </select>
             </label>
           )}
-          <Link
+          <a
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            to={isGameRoute ? `/reports?gameId=${encodeURIComponent(gameId)}` : `/reports?fixture=${fixtureKey}`}
+            href={reportHref}
+            rel="noreferrer"
+            target="_blank"
           >
             Reports
-          </Link>
+          </a>
           <button
             className={`rounded border px-3 py-2 text-sm font-semibold ${
               debugMode
