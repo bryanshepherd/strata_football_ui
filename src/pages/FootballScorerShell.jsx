@@ -30,6 +30,10 @@ import {
 } from '../scoring/footballDriveSummary';
 import { applyFootballGameWrapUp } from '../scoring/footballGameWrapUp';
 import {
+  buildFootballReportHref,
+  FOOTBALL_REPORT_OPTIONS,
+} from '../reports/footballReportCatalog';
+import {
   enqueueFootballEnvelopeMirror,
   fetchFootballEnvelope,
   flushFootballServerSync,
@@ -827,12 +831,15 @@ const ScorerHeader = ({
 }) => {
   const teams = envelope.game.teams;
   const isGameRoute = Boolean(gameId);
-  const reportSearch = new URLSearchParams({
-    report: 'scoring-summary',
-    gameId: isGameRoute ? gameId : envelope.gameId,
-  });
-  if (dashboardGameId) reportSearch.set('dashboardGameId', dashboardGameId);
-  const reportHref = `${import.meta.env.BASE_URL}index.html?${reportSearch.toString()}`;
+  const reportLinks = FOOTBALL_REPORT_OPTIONS.map((report) => ({
+    ...report,
+    href: buildFootballReportHref({
+      baseUrl: import.meta.env.BASE_URL,
+      dashboardGameId,
+      gameId: isGameRoute ? gameId : envelope.gameId,
+      reportId: report.id,
+    }),
+  }));
 
   return (
     <header className="border-b border-zinc-300 bg-white">
@@ -916,14 +923,24 @@ const ScorerHeader = ({
               </select>
             </label>
           )}
-          <a
-            className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
-            href={reportHref}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Reports
-          </a>
+          <details className="group relative">
+            <summary className="cursor-pointer list-none rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">
+              Reports
+            </summary>
+            <div className="absolute right-0 z-50 mt-1 min-w-52 overflow-hidden rounded border border-zinc-200 bg-white py-1 shadow-lg">
+              {reportLinks.map((report) => (
+                <a
+                  className="block px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+                  href={report.href}
+                  key={report.id}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {report.label}
+                </a>
+              ))}
+            </div>
+          </details>
           <button
             className={`rounded border px-3 py-2 text-sm font-semibold ${
               debugMode

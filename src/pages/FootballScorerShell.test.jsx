@@ -520,9 +520,26 @@ describe('FootballScorerShell', () => {
       renderScorer('/scorer?dashboardGameId=DASH-SERVER-RECOVERY-UI&envelopeGameId=FB-SERVER-RECOVERY-UI');
       expect(screen.getByRole('heading', { name: /local visitor at local home/i })).toBeInTheDocument();
       expect(fetchSpy).not.toHaveBeenCalled();
-      expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+      expect(screen.getByText('Reports')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Scoring Summary' })).toHaveAttribute(
         'href',
         '/index.html?report=scoring-summary&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
+      expect(screen.getByRole('link', { name: 'Team Stats' })).toHaveAttribute(
+        'href',
+        '/index.html?report=team-stats&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
+      expect(screen.getByRole('link', { name: 'Penalty Chart' })).toHaveAttribute(
+        'href',
+        '/index.html?report=penalty-chart&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
+      expect(screen.getByRole('link', { name: 'Drive Chart' })).toHaveAttribute(
+        'href',
+        '/index.html?report=drive-chart&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
+      expect(screen.getByRole('link', { name: 'Quickie Stats' })).toHaveAttribute(
+        'href',
+        '/index.html?report=quickie-stats&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Fetch from server' }));
