@@ -162,6 +162,63 @@
   text-align: left !important;
 }
 
+.football-team-stats-page {
+  padding-bottom: .58in;
+}
+
+.football-team-stats-page .football-report-section {
+  margin-top: 8px;
+}
+
+.football-team-stats-table {
+  font-size: 6.4pt;
+  line-height: 1;
+}
+
+.football-team-stats-label-column {
+  width: 54%;
+}
+
+.football-team-stats-table th,
+.football-team-stats-table td {
+  height: 12px;
+  padding: 1.5px 5px;
+  vertical-align: middle;
+}
+
+.football-team-stats-table thead th:first-child,
+.football-team-stats-table tbody th {
+  text-align: left;
+}
+
+.football-team-stat-heading th,
+.football-team-stat-heading td {
+  border-top: 1px solid #909b95;
+  background: #eef2ef;
+  font-weight: 700;
+}
+
+.football-team-stat-alternate th,
+.football-team-stat-alternate td {
+  background: #dde5e0;
+}
+
+.football-team-stat-detail th {
+  padding-left: 18px;
+  font-weight: 400;
+}
+
+.football-team-stat-standard th {
+  font-weight: 400;
+}
+
+.football-team-stats-separator td {
+  height: 6px;
+  padding: 0;
+  border-bottom: 1.5px solid #19201c;
+  background: #fff;
+}
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }

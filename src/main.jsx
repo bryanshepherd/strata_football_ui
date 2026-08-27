@@ -6,6 +6,7 @@ import FootballLayoutPreview from './pages/FootballLayoutPreview.jsx'
 import FootballPlayEditorSandbox from './pages/FootballPlayEditorSandbox.jsx'
 import FootballScoringSummaryReport from './pages/FootballScoringSummaryReport.jsx'
 import FootballScorerShell from './pages/FootballScorerShell.jsx'
+import FootballTeamStatsReport from './pages/FootballTeamStatsReport.jsx'
 import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx'
 import './index.css'
 
@@ -23,12 +24,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/football-play-editor-sandbox" element={<FootballPlayEditorSandbox />} />
           <Route path="/reports" element={<FootballScoringSummaryReport />} />
           <Route path="/reports/scoring-summary" element={<FootballScoringSummaryReport />} />
+          <Route path="/reports/team-stats" element={<FootballTeamStatsReport />} />
           <Route path="/quickie" element={<FootballScoringSummaryReport />} />
           <Route
             path="*"
             element={requestedReport === 'scoring-summary'
               ? <FootballScoringSummaryReport />
-              : <FootballScorerShell />}
+              : requestedReport === 'team-stats'
+                ? <FootballTeamStatsReport />
+                : <FootballScorerShell />}
           />
         </Routes>
       </BrowserRouter>
