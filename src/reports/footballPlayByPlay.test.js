@@ -76,6 +76,25 @@ describe('football Play-by-Play projection', () => {
     expect(rows.find((row) => row.id === 'play-20')?.text).toBe('(8:09) Media timeout.');
   });
 
+  it('derives the final active drive possession time from the final game clock', () => {
+    const report = buildFootballPlayByPlayReport(baselineRecord.envelope);
+    const rows = report.quarters.at(-1).rows;
+
+    expect(rows.find((row) => row.id === 'drive-end-DRV-0028')?.text).toBe(
+      'WVSU drive: 1 play, -1 yard, 0:37; End of Game.',
+    );
+  });
+
+  it('does not derive a possession time for an unfinished active drive', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.game.status = 'inProgress';
+    const rows = buildFootballPlayByPlayReport(envelope).quarters.at(-1).rows;
+
+    expect(rows.find((row) => row.id === 'drive-end-DRV-0028')?.text).toBe(
+      'WVSU drive: 1 play, -1 yard, —; In Progress.',
+    );
+  });
+
   it('emits the deferred touchdown score after an unsuccessful try', () => {
     const envelope = structuredClone(baselineRecord.envelope);
     const tryEvent = envelope.events.find((event) => event.sequence === 15);

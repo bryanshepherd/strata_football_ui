@@ -82,10 +82,17 @@ const clockSeconds = (clock) => {
 
 const elapsedSeconds = (envelope, drive) => {
   const start = clockSeconds(drive?.startClock);
-  const end = clockSeconds(drive?.endClock);
+  const isFinalActiveDrive = envelope?.game?.status === 'final' && !drive?.endClock;
+  const endClock = isFinalActiveDrive
+    ? (envelope?.clock?.clock || '00:00')
+    : drive?.endClock;
+  const end = clockSeconds(endClock);
   if (start === null || end === null) return null;
   const startPeriod = Math.max(1, finiteNumber(drive?.startPeriod, 1));
-  const endPeriod = Math.max(startPeriod, finiteNumber(drive?.endPeriod, startPeriod));
+  const endPeriodValue = isFinalActiveDrive
+    ? (envelope?.clock?.period ?? envelope?.game?.period ?? drive?.startPeriod)
+    : drive?.endPeriod;
+  const endPeriod = Math.max(startPeriod, finiteNumber(endPeriodValue, startPeriod));
   const periodSeconds = Math.max(60, finiteNumber(envelope?.game?.rules?.minutesPerPeriod, 15) * 60);
   if (startPeriod === endPeriod) return Math.max(0, start - end);
   return Math.max(0, start)
