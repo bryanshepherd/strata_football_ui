@@ -105,6 +105,33 @@ const humanize = (value) => String(value || '')
   .trim()
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const formatFootballPlayText = (event, teams) => {
+  let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
+  const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
+  if (!timeout) {
+    const prefixes = Object.values(teams || {})
+      .flatMap((team) => [team?.abbr, team?.name])
+      .filter(Boolean)
+      .sort((left, right) => String(right).length - String(left).length);
+    const prefix = prefixes.find((candidate) => new RegExp(`^${escapeRegExp(candidate)}(?:\\s+|:\\s*)`, 'i').test(text));
+    if (prefix) text = text.replace(new RegExp(`^${escapeRegExp(prefix)}(?:\\s+|:\\s*)`, 'i'), '');
+  }
+  text = text
+    .replace(/\b([HV])\s+(goal line|end zone)\b/gi, (_match, team, location) => (
+      `${teams?.[team.toUpperCase()]?.abbr || team.toUpperCase()} ${location.toLowerCase()}`
+    ))
+    .replace(/\b([HV])(\d{1,2})\b/gi, (_match, team, yard) => (
+      `${teams?.[team.toUpperCase()]?.abbr || team.toUpperCase()} ${finiteNumber(yard, 0)}`
+    ));
+  if (timeout) {
+    const clock = formatFootballClockDisplay(event?.clock, '');
+    if (clock && !new RegExp(`^\\(${escapeRegExp(clock)}\\)`).test(text)) text = `(${clock}) ${text}`;
+  }
+  return text;
+};
+
 const driveResult = (envelope, drive) => {
   if (drive?.result) return humanize(drive.result);
   return envelope?.game?.status === 'final' ? 'End of Game' : 'In Progress';
@@ -119,29 +146,60 @@ const driveSummary = (envelope, drive, teams) => {
   return `${team} drive: ${plays} ${playLabel}, ${yards} ${yardLabel}, ${formatElapsed(elapsedSeconds(envelope, drive))}; ${driveResult(envelope, drive)}.`;
 };
 
+const followingTry = (events, terminalEvent) => {
+  const terminalIndex = events.indexOf(terminalEvent);
+  for (let index = terminalIndex + 1; index < events.length; index += 1) {
+    const event = events[index];
+    if (event.type === 'try') return event;
+    if (event.type === 'kickoff') return null;
+    if (event?.preState?.driveId && event.preState.driveId !== terminalEvent?.preState?.driveId) return null;
+  }
+  return null;
+};
+
 const driveRows = (envelope, events) => {
   const drives = [
     ...(Array.isArray(envelope?.drives?.completed) ? envelope.drives.completed : []),
     ...(envelope?.drives?.current ? [envelope.drives.current] : []),
   ];
-  return drives.reduce((map, drive) => {
+  const byDriveId = new Map();
+  const byEndSequence = new Map();
+  drives.forEach((drive) => {
     const matching = events.filter((event) => event?.preState?.driveId === drive.driveId);
-    if (matching.length === 0) return map;
-    map.set(drive.driveId, {
+    if (matching.length === 0) return;
+    const terminalEvent = matching.at(-1);
+    const tryEvent = String(drive.result || '').toLowerCase() === 'touchdown'
+      ? followingTry(events, terminalEvent)
+      : null;
+    const boundary = {
       drive,
       firstSequence: finiteNumber(matching[0].sequence, 0),
-      lastSequence: finiteNumber(matching.at(-1).sequence, 0),
-    });
-    return map;
-  }, new Map());
+      lastSequence: finiteNumber(tryEvent?.sequence ?? terminalEvent.sequence, 0),
+    };
+    byDriveId.set(drive.driveId, boundary);
+    byEndSequence.set(boundary.lastSequence, boundary);
+  });
+  return { byDriveId, byEndSequence };
 };
 
 const scoreBySequence = (events) => {
   const score = { V: 0, H: 0 };
+  let pendingTouchdown = false;
   return events.reduce((map, event) => {
     const scoring = event?.result?.scoring;
     if (TEAM_CODES.includes(scoring?.team) && finiteNumber(scoring?.points, 0) > 0) {
       score[scoring.team] += finiteNumber(scoring.points, 0);
+    }
+    if (String(scoring?.type || '').toLowerCase() === 'touchdown') {
+      pendingTouchdown = true;
+      return map;
+    }
+    if (event.type === 'try') {
+      if (pendingTouchdown) map.set(finiteNumber(event.sequence, 0), { ...score });
+      pendingTouchdown = false;
+      return map;
+    }
+    if (TEAM_CODES.includes(scoring?.team) && finiteNumber(scoring?.points, 0) > 0) {
       map.set(finiteNumber(event.sequence, 0), { ...score });
     }
     return map;
@@ -154,7 +212,8 @@ const eventRows = (envelope, events, period, drives, scores) => {
     .filter((event) => finiteNumber(event.period) === period && isDisplayEvent(event))
     .flatMap((event) => {
       const sequence = finiteNumber(event.sequence, 0);
-      const drive = drives.get(event?.preState?.driveId);
+      const drive = drives.byDriveId.get(event?.preState?.driveId);
+      const endingDrive = drives.byEndSequence.get(sequence);
       const rows = [];
       if (drive?.firstSequence === sequence) {
         const team = teams?.[drive.drive.team]?.abbr || drive.drive.team;
@@ -170,7 +229,7 @@ const eventRows = (envelope, events, period, drives, scores) => {
         sequence,
         downAndDistance: formatDownAndDistance(event),
         spot: formatFootballPlaySpot(event?.preState?.yardLine, teams),
-        text: String(event.description || humanize(event.subtype || event.type) || 'Play'),
+        text: formatFootballPlayText(event, teams),
       });
       const score = scores.get(sequence);
       if (score) {
@@ -181,11 +240,11 @@ const eventRows = (envelope, events, period, drives, scores) => {
           text: `${teams.V.abbr || 'VIS'} ${score.V} – ${teams.H.abbr || 'HOME'} ${score.H}`,
         });
       }
-      if (drive?.lastSequence === sequence) {
+      if (endingDrive) {
         rows.push({
-          id: `drive-end-${drive.drive.driveId}`,
+          id: `drive-end-${endingDrive.drive.driveId}`,
           kind: 'drive-end',
-          text: driveSummary(envelope, drive.drive, teams),
+          text: driveSummary(envelope, endingDrive.drive, teams),
         });
       }
       return rows;

@@ -38,7 +38,7 @@ describe('FootballPlayByPlayReport', () => {
     const firstQuarter = container.querySelector('[data-football-report="play-by-play-quarter"][data-quarter="1"]');
     const table = within(firstQuarter).getByRole('table', { name: 'First Quarter play-by-play' });
     const driveStart = within(table).getByText('WVSU drive start at 14:54.').closest('tr');
-    const score = within(table).getByText('FAIR 6 – WVSU 0').closest('tr');
+    const score = within(table).getByText('FAIR 7 – WVSU 0').closest('tr');
     const driveEnd = within(table).getByText('WVSU drive: 4 plays, -12 yards, 1:22; Punt.').closest('tr');
 
     expect(within(table).queryAllByRole('columnheader')).toHaveLength(0);
