@@ -55,6 +55,11 @@ const participantLastName = (envelope, event, roles, fallbackPlayerId = null) =>
   return footballPlayerLastName(playerForId(envelope, playerId)?.displayName);
 };
 
+const participantFullName = (envelope, event, roles, fallbackPlayerId = null) => {
+  const playerId = participantPlayerId(event, ...roles) || fallbackPlayerId;
+  return String(playerForId(envelope, playerId)?.displayName || '').trim() || 'Unknown';
+};
+
 const scoringType = (event) => event?.result?.scoring?.type || null;
 
 const isTouchdown = (event) => (
@@ -173,16 +178,16 @@ const scoringPlayText = (envelope, scoringEvent) => {
     return 'Safety';
   }
   if (scoringEvent?.type === 'rush') {
-    return `${participantLastName(envelope, scoringEvent, ['primary'])} ${yards} yard rush`;
+    return `${participantFullName(envelope, scoringEvent, ['primary'])} ${yards} yard rush`;
   }
   if (scoringEvent?.type === 'pass') {
-    const passer = participantLastName(envelope, scoringEvent, ['primary']);
+    const passer = participantFullName(envelope, scoringEvent, ['primary']);
     const receiverId = scoringEvent?.result?.pass?.targetPlayerId;
-    const receiver = participantLastName(envelope, scoringEvent, ['receiver', 'secondary', 'target'], receiverId);
+    const receiver = participantFullName(envelope, scoringEvent, ['receiver', 'secondary', 'target'], receiverId);
     return `${passer} ${yards} yd. pass to ${receiver}`;
   }
   if (scoringEvent?.type === 'fieldGoal') {
-    const kicker = participantLastName(envelope, scoringEvent, ['kicker', 'primary']);
+    const kicker = participantFullName(envelope, scoringEvent, ['kicker', 'primary']);
     const attemptYards = finiteNumber(scoringEvent?.result?.kick?.attemptYards, 0);
     return `${kicker} ${attemptYards} yd. field goal`;
   }

@@ -98,7 +98,7 @@ describe('football drive summary', () => {
       plays: 8,
       yards: 53,
       timeOfPossession: '1:31',
-      scoringPlay: 'Hatcher 5 yard rush (Richardson Kick)',
+      scoringPlay: 'LeJay Hatcher 5 yard rush (Richardson Kick)',
       startInfo: 'Start: 13:32 at V47 by Punt',
     });
   });
@@ -110,7 +110,7 @@ describe('football drive summary', () => {
   ])('uses the requested failure wording for a failed %s try', (subtype, code, expected) => {
     const pat = tryEvent(subtype, { code });
     const summary = buildFootballDriveSummary(envelopeFor([punt, rushTouchdown, pat]), pat);
-    expect(summary.scoringPlay).toBe(`Hatcher 5 yard rush (${expected})`);
+    expect(summary.scoringPlay).toBe(`LeJay Hatcher 5 yard rush (${expected})`);
   });
 
   it('describes a defensive conversion with the failed try and returner', () => {
@@ -125,7 +125,7 @@ describe('football drive summary', () => {
     });
 
     const summary = buildFootballDriveSummary(envelopeFor([punt, rushTouchdown, pat]), pat);
-    expect(summary.scoringPlay).toBe('Hatcher 5 yard rush (Rush fumbled - Gregory Def. Conversion)');
+    expect(summary.scoringPlay).toBe('LeJay Hatcher 5 yard rush (Rush fumbled - Gregory Def. Conversion)');
   });
 
   it('summarizes made field goals without waiting for a try', () => {
@@ -148,7 +148,7 @@ describe('football drive summary', () => {
       envelopeFor([punt, fieldGoal], { result: 'fieldGoal' }),
       fieldGoal,
     );
-    expect(summary.scoringPlay).toBe('Hatcher 30 yd. field goal');
+    expect(summary.scoringPlay).toBe('LeJay Hatcher 30 yd. field goal');
   });
 
   it('treats a safety as a completed scoring sequence', () => {
@@ -190,7 +190,7 @@ describe('football drive summary', () => {
     };
     const pat = tryEvent('rush', { code: 'failed' });
     const summary = buildFootballDriveSummary(envelopeFor([punt, passTouchdown, pat]), pat);
-    expect(summary.scoringPlay).toBe('Jackson 20 yd. pass to Ary (Rush Failed)');
+    expect(summary.scoringPlay).toBe('Kaleb Jackson 20 yd. pass to Amare Ary (Rush Failed)');
   });
 
   it('labels a kickoff-return fumble recovery as the scoring drive acquisition', () => {

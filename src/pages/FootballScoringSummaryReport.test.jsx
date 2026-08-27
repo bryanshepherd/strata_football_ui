@@ -38,8 +38,8 @@ describe('FootballScoringSummaryReport', () => {
     expect(within(quarterTable).getByRole('row', { name: 'West Virginia St. 3 23 21 13 60' })).toBeInTheDocument();
     const scoringTable = screen.getByRole('table', { name: 'Scoring summary' });
     expect(within(scoringTable).getAllByRole('row')).toHaveLength(17);
-    expect(within(scoringTable).getByText('Hatcher 5 yard rush (Richardson Kick)')).toBeInTheDocument();
-    expect(within(scoringTable).getByText('Jackson 74 yd. pass to Ary (Kick Failed)')).toBeInTheDocument();
+    expect(within(scoringTable).getByText('LeJay Hatcher 5 yard rush (Richardson Kick)')).toBeInTheDocument();
+    expect(within(scoringTable).getByText('Kaleb Jackson 74 yd. pass to Amare Ary (Kick Failed)')).toBeInTheDocument();
     expect(within(scoringTable).getByText('39-60')).toBeInTheDocument();
   });
 

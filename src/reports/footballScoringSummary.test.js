@@ -27,25 +27,25 @@ describe('football scoring summary projection', () => {
       quarter: '1',
       time: '13:32',
       team: 'FAIR',
-      description: 'Hatcher 5 yard rush (Richardson Kick)',
+      description: 'LeJay Hatcher 5 yard rush (Richardson Kick)',
       score: '7-0',
     });
     expect(report.scoring[2]).toMatchObject({
       quarter: '2',
       time: '15:00',
       team: 'WVSU',
-      description: 'Jackson 74 yd. pass to Ary (Kick Failed)',
+      description: 'Kaleb Jackson 74 yd. pass to Amare Ary (Kick Failed)',
       score: '7-9',
     });
     expect(report.scoring).toContainEqual(expect.objectContaining({
-      description: 'Hatcher 2 yard rush (Marzullo Pass to Highsmith)',
+      description: 'LeJay Hatcher 2 yard rush (Marzullo Pass to Highsmith)',
       score: '22-40',
     }));
     expect(report.scoring.at(-1)).toMatchObject({
       quarter: '4',
       time: '01:57',
       team: 'FAIR',
-      description: 'Marzullo 18 yd. pass to Highsmith (Richardson Kick)',
+      description: 'Nino Marzullo 18 yd. pass to Fred Highsmith (Richardson Kick)',
       score: '39-60',
     });
   });
