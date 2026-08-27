@@ -59,6 +59,7 @@ const ScoringLedger = ({ report }) => (
         <col className="football-scoring-time-column" />
         <col className="football-scoring-team-column" />
         <col />
+        <col className="football-scoring-drive-column" />
         <col className="football-scoring-score-column" />
       </colgroup>
       <thead>
@@ -67,6 +68,7 @@ const ScoringLedger = ({ report }) => (
           <th>TIME</th>
           <th>TEAM</th>
           <th>SCORING PLAY</th>
+          <th>DRIVE</th>
           <th>SCORE (V-H)</th>
         </tr>
       </thead>
@@ -77,6 +79,7 @@ const ScoringLedger = ({ report }) => (
             <td>{play.time}</td>
             <td>{play.team}</td>
             <td className="football-scoring-description">{play.description}</td>
+            <td>{play.drive}</td>
             <td className="football-report-total">{play.score}</td>
           </tr>
         ))}

@@ -1,4 +1,5 @@
 import {
+  buildFootballDriveSummary,
   buildFootballScoringPlaySummary,
   isFootballDriveSummaryTerminalEvent,
 } from '../scoring/footballDriveSummary';
@@ -127,6 +128,12 @@ const weatherText = (weather) => {
   return parts.filter(Boolean).join(', ') || '—';
 };
 
+const scoringDriveText = (envelope, terminalEvent) => {
+  const drive = buildFootballDriveSummary(envelope, terminalEvent);
+  if (!drive) return '—';
+  return `${drive.plays} Plays, ${drive.yards} Yards, ${drive.timeOfPossession} TOP`;
+};
+
 export const buildFootballScoringSummary = (envelope) => {
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the scoring summary.');
@@ -186,6 +193,7 @@ export const buildFootballScoringSummary = (envelope) => {
       time: String(scoringEvent.clock || '—'),
       team: teams[scoringTeam].abbr || scoringTeam,
       description: summary.scoringPlay,
+      drive: scoringDriveText(envelope, terminalEvent),
       score: `${score.V}-${score.H}`,
     }];
   });
@@ -202,6 +210,7 @@ export const buildFootballScoringSummary = (envelope) => {
       time: String(event.clock || '—'),
       team: teams[team].abbr || team,
       description: String(event.description || 'Scoring play'),
+      drive: scoringDriveText(envelope, event),
       score: `${score.V}-${score.H}`,
     }];
   });
