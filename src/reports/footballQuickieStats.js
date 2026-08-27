@@ -76,7 +76,7 @@ export const resolveFootballQuickieScope = (input = {}) => {
   };
 };
 
-const acceptedEvents = (envelope) => [...(envelope?.events || [])]
+export const acceptedFootballEvents = (envelope) => [...(envelope?.events || [])]
   .filter((event) => !event?.status || event.status === 'accepted')
   .sort((left, right) => finiteNumber(left.sequence) - finiteNumber(right.sequence));
 
@@ -298,13 +298,27 @@ const blankPlayerStat = (playerId, team) => ({
   puntInside20: 0,
   puntFiftyPlus: 0,
   puntTouchbacks: 0,
+  kickReturns: 0,
+  kickReturnYards: 0,
+  kickReturnLong: 0,
+  puntReturns: 0,
+  puntReturnYards: 0,
+  puntReturnLong: 0,
+  interceptionReturns: 0,
+  interceptionReturnYards: 0,
+  interceptionReturnLong: 0,
+  fumbleReturns: 0,
+  fumbleReturnYards: 0,
+  fumbleReturnLong: 0,
+  fumbles: 0,
+  fumblesLost: 0,
   soloTackles: 0,
   assistedTackles: 0,
   sacks: 0,
   tacklesForLoss: 0,
 });
 
-const buildPlayerStats = (envelope, events, projected) => {
+export const buildFootballPlayerStats = (envelope, events, projected) => {
   const lookup = playerLookup(envelope);
   const stats = new Map();
   const get = (playerId, team) => {
@@ -327,6 +341,12 @@ const buildPlayerStats = (envelope, events, projected) => {
       receivingYards: finiteNumber(source.receivingYards),
       punts: finiteNumber(source.punts),
       puntYards: finiteNumber(source.puntYards),
+      kickReturns: finiteNumber(source.kickReturns),
+      kickReturnYards: finiteNumber(source.kickReturnYards),
+      puntReturns: finiteNumber(source.puntReturns),
+      puntReturnYards: finiteNumber(source.puntReturnYards),
+      fumbles: finiteNumber(source.fumbles),
+      fumblesLost: finiteNumber(source.fumblesLost),
     });
   });
 
@@ -391,6 +411,75 @@ const buildPlayerStats = (envelope, events, projected) => {
       }
     }
 
+    if (!suppressed && event.type === 'kickoff') {
+      const returnerParticipant = event?.participants?.returner;
+      const returner = get(returnerParticipant?.playerId, returnerParticipant?.team);
+      if (returner) {
+        const length = fieldLength(envelope);
+        const start = relativeSpot(event?.result?.kick?.catchYardLine, returner.team, length);
+        const spotOfFoul = [...(event?.penalties || [])].reverse().find((penalty) => (
+          penalty.status === 'accepted'
+          && penalty.team === returner.team
+          && penalty.spotOfFoul
+          && ['spot', 'spotoffoul'].includes(String(penalty.enforcedFrom || '').toLowerCase())
+        ))?.spotOfFoul;
+        const creditedEnd = spotOfFoul || event?.result?.return?.returnEndYardLine;
+        const explicitEnd = relativeSpot(creditedEnd, returner.team, length);
+        const explicitReturn = String(event?.result?.return?.type || '').toLowerCase() === 'kickoff'
+          ? Number.isFinite(start) && Number.isFinite(explicitEnd)
+            ? explicitEnd - start
+            : finiteNumber(event?.result?.return?.returnYards)
+          : null;
+        const end = relativeSpot(
+          event?.result?.fumble?.recoverySpot || event?.result?.endYardLine,
+          returner.team,
+          length,
+        );
+        const derivedReturn = Number.isFinite(start) && Number.isFinite(end) ? end - start : null;
+        const yards = explicitReturn ?? derivedReturn;
+        if (Number.isFinite(yards)) returner.kickReturnLong = Math.max(returner.kickReturnLong, yards);
+      }
+    }
+
+    if (!suppressed && event.type === 'punt') {
+      const explicitReturn = String(event?.result?.return?.type || '').toLowerCase() === 'punt';
+      const returnerParticipant = event?.participants?.returner;
+      const returner = get(returnerParticipant?.playerId, returnerParticipant?.team);
+      if (explicitReturn && returner) {
+        returner.puntReturnLong = Math.max(
+          returner.puntReturnLong,
+          finiteNumber(event?.result?.return?.returnYards),
+        );
+      }
+      const blockedYards = Math.max(0, -finiteNumber(event?.result?.kick?.kickYards ?? event?.result?.kickYards));
+      if (blockedYards > 0) {
+        const blockerId = event?.result?.kick?.blockedByPlayerId;
+        const blockerParticipant = (event?.participants?.defenders || []).find((participant) => (
+          participant?.playerId === blockerId || participant?.role === 'blocker'
+        ));
+        const blocker = get(blockerId || blockerParticipant?.playerId, blockerParticipant?.team);
+        if (blocker) blocker.puntReturnLong = Math.max(blocker.puntReturnLong, blockedYards);
+      }
+    }
+
+    const returnType = String(event?.result?.return?.type || '').toLowerCase();
+    if (!suppressed && ['interception', 'fumble'].includes(returnType)) {
+      const returnerParticipant = event?.participants?.returner || event?.participants?.interceptor;
+      const returner = get(
+        event?.result?.return?.returnerPlayerId || returnerParticipant?.playerId,
+        returnerParticipant?.team || event?.result?.nextPossession || event?.result?.turnover?.team,
+      );
+      if (returner) {
+        const yards = finiteNumber(event?.result?.return?.returnYards);
+        const countKey = `${returnType}Returns`;
+        const yardsKey = `${returnType}ReturnYards`;
+        const longKey = `${returnType}ReturnLong`;
+        returner[countKey] += 1;
+        returner[yardsKey] += yards;
+        returner[longKey] = Math.max(returner[longKey], yards);
+      }
+    }
+
     const defenders = suppressed ? [] : (event?.participants?.defenders || []).filter((defender) => (
       ['tackler', 'sack'].includes(defender?.role)
     ));
@@ -443,7 +532,7 @@ const individualProjection = (players, team) => ({
 
 const scopedScoring = (envelope, periods) => {
   const selected = new Set(periods);
-  const eventsBySequence = new Map(acceptedEvents(envelope).map((event) => [finiteNumber(event.sequence), event]));
+  const eventsBySequence = new Map(acceptedFootballEvents(envelope).map((event) => [finiteNumber(event.sequence), event]));
   const full = buildFootballScoringSummary(envelope).scoring;
   let previous = { V: 0, H: 0 };
   let scoped = { V: 0, H: 0 };
@@ -466,19 +555,19 @@ export const buildFootballQuickieStatsReport = (envelope, scopeInput = {}) => {
   const maximumPeriod = Math.max(
     4,
     finiteNumber(envelope?.game?.period),
-    ...acceptedEvents(envelope).map((event) => finiteNumber(event.period)),
+    ...acceptedFootballEvents(envelope).map((event) => finiteNumber(event.period)),
   );
   const scope = resolvedScope.fullGame
     ? { ...resolvedScope, periods: Array.from({ length: maximumPeriod }, (_, index) => index + 1) }
     : resolvedScope;
   const periods = new Set(scope.periods);
-  const events = acceptedEvents(envelope).filter((event) => periods.has(finiteNumber(event.period)));
+  const events = acceptedFootballEvents(envelope).filter((event) => periods.has(finiteNumber(event.period)));
   const projected = projectFootballStatsForEvents(envelope, events);
   const teamStats = Object.fromEntries(TEAM_CODES.map((team) => [
     team,
     teamProjection(envelope, events, projected, team, scope.periods),
   ]));
-  const playerStats = buildPlayerStats(envelope, events, projected);
+  const playerStats = buildFootballPlayerStats(envelope, events, projected);
   const teams = envelope.game.teams;
   return {
     gameId: envelope.gameId,

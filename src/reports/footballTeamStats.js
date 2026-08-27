@@ -195,6 +195,21 @@ const kickoffLandingSpot = (envelope, event) => {
   return event?.result?.kick?.outOfBoundsYardLine || event?.result?.kick?.catchYardLine;
 };
 
+export const footballKickoffGrossYards = (envelope, event) => {
+  const team = kickoffTeam(event);
+  const length = fieldLength(envelope);
+  const touchback = event?.subtype === 'touchback' || event?.result?.code === 'touchback';
+  const start = relativeSpot(event?.preState?.yardLine, team, length);
+  const actualLanding = relativeSpot(kickoffLandingSpot(envelope, event), team, length);
+  const derived = Number.isFinite(start) && Number.isFinite(actualLanding)
+    ? actualLanding - start
+    : null;
+  const recorded = Number(event?.result?.kick?.kickYards);
+  if (Number.isFinite(derived)) return derived;
+  if (Number.isFinite(recorded)) return recorded;
+  return touchback && Number.isFinite(start) ? length - start : 0;
+};
+
 const kickoffStats = (envelope, events, team, opponentSource) => {
   const kicks = events.filter((event) => event.type === 'kickoff' && kickoffTeam(event) === team);
   const length = fieldLength(envelope);
@@ -205,19 +220,7 @@ const kickoffStats = (envelope, events, team, opponentSource) => {
     const touchback = event.subtype === 'touchback' || event?.result?.code === 'touchback';
     if (touchback) touchbacks += 1;
     const start = relativeSpot(event?.preState?.yardLine, team, length);
-    const actualLandingSpot = kickoffLandingSpot(envelope, event);
-    const actualLanding = relativeSpot(actualLandingSpot, team, length);
-    const derived = Number.isFinite(start) && Number.isFinite(actualLanding)
-      ? actualLanding - start
-      : null;
-    const recorded = Number(event?.result?.kick?.kickYards);
-    const gross = Number.isFinite(derived)
-      ? derived
-      : Number.isFinite(recorded)
-        ? recorded
-        : touchback && Number.isFinite(start)
-          ? length - start
-          : 0;
+    const gross = footballKickoffGrossYards(envelope, event);
     yards += gross;
 
     if (!touchback && ['outOfBounds', 'downed', 'fairCatch'].includes(event.subtype)) {

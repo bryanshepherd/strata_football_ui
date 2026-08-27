@@ -632,6 +632,86 @@
   font-style: italic;
 }
 
+.football-individual-offense-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 5px;
+}
+
+.football-individual-offense-team {
+  min-width: 0;
+}
+
+.football-individual-offense-team > h2 {
+  margin: 0;
+  padding: 2px 3px;
+  background: #dde5e0;
+  font: 700 7.2pt/1 Arial, Helvetica, sans-serif;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.football-individual-offense-category {
+  margin-top: 3px;
+  break-inside: avoid;
+}
+
+.football-individual-offense-category h4 {
+  margin: 0;
+  padding: 1px 2px;
+  border-bottom: 1px solid #19201c;
+  font: 700 6.1pt/1 Arial, Helvetica, sans-serif;
+}
+
+.football-individual-offense-page .football-quickie-individual-table,
+.football-individual-offense-table {
+  table-layout: fixed;
+  font-size: 5.15pt;
+  line-height: 1;
+}
+
+.football-individual-offense-page .football-quickie-individual-table th,
+.football-individual-offense-page .football-quickie-individual-table td,
+.football-individual-offense-table th,
+.football-individual-offense-table td {
+  height: 9px;
+  padding: 1px 1.5px;
+  overflow: hidden;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.football-individual-offense-page .football-quickie-individual-table thead th,
+.football-individual-offense-table thead th {
+  border-top: 0;
+  font-size: 4.7pt;
+}
+
+.football-individual-offense-page .football-quickie-individual-table th:first-child,
+.football-individual-offense-page .football-quickie-individual-table td:first-child,
+.football-individual-offense-table th:first-child,
+.football-individual-offense-table td:first-child {
+  width: 34%;
+  text-align: left;
+}
+
+.football-individual-offense-returns .football-individual-offense-table th:first-child,
+.football-individual-offense-returns .football-individual-offense-table td:first-child {
+  width: 28%;
+}
+
+.football-individual-offense-returns .football-individual-offense-table thead tr:first-child th:not(:first-child) {
+  border-bottom-color: #909b95;
+}
+
+.football-individual-offense-total th,
+.football-individual-offense-total td {
+  border-top: 1px solid #909b95;
+  background: #eef2ef;
+  font-weight: 700 !important;
+}
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }

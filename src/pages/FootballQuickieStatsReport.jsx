@@ -91,15 +91,24 @@ const finiteNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
-const PlayerName = ({ player }) => <>{`#${player.jersey} ${player.name}`}</>;
+export const FootballPlayerName = ({ player }) => (
+  <>{player.teamEntry ? player.name : `#${player.jersey} ${player.name}`}</>
+);
 
-const IndividualTable = ({ category, players, showYac }) => {
+export const FootballIndividualStatTable = ({
+  ariaLabel,
+  category,
+  className = '',
+  players,
+  showYac,
+  totals,
+}) => {
   const definitions = {
     rushing: {
       title: 'RUSHING',
       headers: ['PLAYER', 'NUM', 'GAIN', 'LOSS', 'NET', 'TD', 'LG'],
       values: (player) => [
-        <PlayerName key="player" player={player} />,
+        <FootballPlayerName key="player" player={player} />,
         player.rushAttempts,
         player.rushGain,
         player.rushLoss,
@@ -112,7 +121,7 @@ const IndividualTable = ({ category, players, showYac }) => {
       title: 'PASSING',
       headers: ['PLAYER', 'COMP-ATT-INT', 'YDS', 'TD', 'LONG', 'SACK'],
       values: (player) => [
-        <PlayerName key="player" player={player} />,
+        <FootballPlayerName key="player" player={player} />,
         `${player.passCompletions}-${player.passAttempts}-${player.passInterceptions}`,
         player.passYards,
         player.passTouchdowns,
@@ -124,7 +133,7 @@ const IndividualTable = ({ category, players, showYac }) => {
       title: 'RECEIVING',
       headers: ['PLAYER', 'NUM', 'TRGT', 'YARDS', ...(showYac ? ['YAC'] : []), 'TD', 'LONG'],
       values: (player) => [
-        <PlayerName key="player" player={player} />,
+        <FootballPlayerName key="player" player={player} />,
         player.receptions,
         player.targets,
         player.receivingYards,
@@ -137,7 +146,7 @@ const IndividualTable = ({ category, players, showYac }) => {
       title: 'PUNTING',
       headers: ['PLAYER', 'NUM', 'YDS', 'AVG', 'LONG', 'IN 20', '50+', 'TB'],
       values: (player) => [
-        <PlayerName key="player" player={player} />,
+        <FootballPlayerName key="player" player={player} />,
         player.punts,
         player.puntYards,
         player.punts > 0 ? (player.puntYards / player.punts).toFixed(1) : '0.0',
@@ -151,7 +160,7 @@ const IndividualTable = ({ category, players, showYac }) => {
       title: 'TACKLES',
       headers: ['PLAYER', 'UA-A', 'TOTAL', 'SACKS', 'TFL'],
       values: (player) => [
-        <PlayerName key="player" player={player} />,
+        <FootballPlayerName key="player" player={player} />,
         `${player.soloTackles}-${player.assistedTackles}`,
         player.soloTackles + player.assistedTackles,
         formatHalfStat(player.sacks),
@@ -161,9 +170,9 @@ const IndividualTable = ({ category, players, showYac }) => {
   };
   const definition = definitions[category];
   return (
-    <section className="football-quickie-individual-category">
+    <section className={`football-quickie-individual-category ${className}`.trim()}>
       <h4>{definition.title}</h4>
-      <table aria-label={`${definition.title.toLowerCase()} leaders`} className="football-report-table football-quickie-individual-table">
+      <table aria-label={ariaLabel || `${definition.title.toLowerCase()} leaders`} className="football-report-table football-quickie-individual-table">
         <thead>
           <tr>{definition.headers.map((header) => <th key={header}>{header}</th>)}</tr>
         </thead>
@@ -177,6 +186,12 @@ const IndividualTable = ({ category, players, showYac }) => {
           )) : (
             <tr><td className="football-quickie-empty" colSpan={definition.headers.length}>No statistics</td></tr>
           )}
+          {totals ? (
+            <tr className="football-quickie-l3-row football-individual-offense-total">
+              <th scope="row">Totals</th>
+              {definition.values(totals).slice(1).map((value, index) => <td key={index}>{value}</td>)}
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </section>
@@ -187,7 +202,7 @@ const IndividualTeam = ({ report, team }) => (
   <section className="football-quickie-individual-team">
     <h3>{report.teams[team].name}</h3>
     {['rushing', 'passing', 'receiving', 'punting', 'tackles'].map((category) => (
-      <IndividualTable
+      <FootballIndividualStatTable
         category={category}
         key={category}
         players={report.individual[team][category]}
