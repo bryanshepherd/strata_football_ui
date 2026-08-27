@@ -1341,6 +1341,33 @@ const replaceProjectedKeys = (current = {}, projected = {}, keys = []) => {
   return { ...preserved, ...projected };
 };
 
+export function projectFootballStatsForEvents(envelope, selectedEvents = envelope?.events || []) {
+  const acceptedEvents = [...(envelope?.events || [])]
+    .filter((event) => (!event.status || event.status === 'accepted') && Number.isFinite(Number(event.sequence)))
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  const selectedSequences = new Set(
+    [...selectedEvents]
+      .filter((event) => !event?.status || event.status === 'accepted')
+      .map((event) => Number(event.sequence))
+      .filter(Number.isFinite),
+  );
+  let projectedStats = {
+    sourceEventSequence: 0,
+    teams: {},
+    players: {},
+  };
+  acceptedEvents.forEach((event) => {
+    if (!selectedSequences.has(Number(event.sequence))) return;
+    const replayEnvelope = {
+      ...envelope,
+      liveState: { ...(envelope?.liveState || {}), ...(event.preState || {}) },
+    };
+    const projection = applyFootballEventToEnvelope(replayEnvelope, event);
+    projectedStats = projectFootballStats(projectedStats, event, projection, acceptedEvents);
+  });
+  return projectedStats;
+}
+
 function repairFootballStatsFromCompleteEventLog(envelope) {
   const acceptedEvents = [...(envelope?.events || [])]
     .filter((event) => (!event.status || event.status === 'accepted') && Number.isFinite(Number(event.sequence)))

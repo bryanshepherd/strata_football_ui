@@ -20,7 +20,8 @@
 }
 
 .football-report-actions a,
-.football-report-actions button {
+.football-report-actions button,
+.football-report-actions select {
   border: 1px solid #9da8a1;
   border-radius: 4px;
   padding: 6px 10px;
@@ -28,6 +29,18 @@
   color: #1f2924;
   font: 700 12px/1 Arial, Helvetica, sans-serif;
   text-decoration: none;
+}
+
+.football-report-actions label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #1f2924;
+  font: 700 12px/1 Arial, Helvetica, sans-serif;
+}
+
+.football-report-actions select {
+  padding-right: 26px;
 }
 
 .football-report-page {
@@ -387,6 +400,164 @@
 
 .football-drive-breakdown-table tbody th {
   font-weight: 700;
+}
+
+.football-quickie-page {
+  padding: .24in .28in .55in;
+}
+
+.football-quickie-page .football-report-standard-header {
+  min-height: .62in;
+  padding-bottom: 5px;
+}
+
+.football-quickie-page .football-report-suite-logo {
+  width: .82in;
+  height: .56in;
+}
+
+.football-quickie-page .football-report-standard-header-copy h1 {
+  font-size: 10.5pt;
+}
+
+.football-quickie-page .football-report-standard-header-copy p {
+  font-size: 8.5pt;
+}
+
+.football-quickie-scope-label {
+  margin: 3px 0 0;
+  text-align: right;
+  color: #4c5651;
+  font: 700 6.2pt/1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-quickie-page .football-report-section {
+  margin-top: 4px;
+}
+
+.football-quickie-page .football-report-section h2 {
+  margin-bottom: 1px;
+  padding-bottom: 1px;
+  font-size: 7.2pt;
+}
+
+.football-quickie-team-table {
+  font-size: 6.2pt;
+  line-height: 1;
+}
+
+.football-quickie-team-table th,
+.football-quickie-team-table td {
+  height: 11px;
+  padding: 1.25px 4px;
+  vertical-align: middle;
+}
+
+.football-quickie-stat-column {
+  width: 54%;
+}
+
+.football-quickie-team-table thead th:first-child,
+.football-quickie-team-table tbody th {
+  text-align: left;
+}
+
+.football-quickie-team-table tbody th {
+  font-weight: 400;
+}
+
+.football-quickie-l3-row th,
+.football-quickie-l3-row td {
+  border-top: 1px solid #909b95;
+  background: #eef2ef;
+  font-weight: 700 !important;
+}
+
+.football-quickie-individual-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.football-quickie-individual-team {
+  min-width: 0;
+}
+
+.football-quickie-individual-team > h3 {
+  margin: 0;
+  padding: 2px 3px;
+  background: #dde5e0;
+  font: 700 7pt/1 Arial, Helvetica, sans-serif;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.football-quickie-individual-category {
+  margin-top: 2px;
+}
+
+.football-quickie-individual-category h4 {
+  margin: 0;
+  padding: 1px 2px;
+  border-bottom: 1px solid #19201c;
+  font: 700 6pt/1 Arial, Helvetica, sans-serif;
+}
+
+.football-quickie-individual-table {
+  font-size: 5.5pt;
+  line-height: 1;
+}
+
+.football-quickie-individual-table th,
+.football-quickie-individual-table td {
+  height: 10px;
+  padding: 1.25px 2px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.football-quickie-individual-table thead th {
+  border-top: 0;
+  font-size: 5pt;
+}
+
+.football-quickie-individual-table th:first-child,
+.football-quickie-individual-table td:first-child {
+  width: 38%;
+  text-align: left;
+}
+
+.football-quickie-player-name {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.football-quickie-scoring-table {
+  font-size: 5.8pt;
+  line-height: 1;
+}
+
+.football-quickie-scoring-table th,
+.football-quickie-scoring-table td {
+  height: 11px;
+  padding: 1.25px 3px;
+  vertical-align: middle;
+}
+
+.football-quickie-scoring-table thead th {
+  font-size: 5.3pt;
+}
+
+.football-quickie-scoring-table .football-scoring-drive-column {
+  width: 1.28in;
+}
+
+.football-quickie-empty {
+  color: #59635e;
+  text-align: left !important;
+  font-style: italic;
 }
 
 .football-game-details {

@@ -6,6 +6,7 @@ import FootballLayoutPreview from './pages/FootballLayoutPreview.jsx'
 import FootballPlayEditorSandbox from './pages/FootballPlayEditorSandbox.jsx'
 import FootballDriveChartReport from './pages/FootballDriveChartReport.jsx'
 import FootballPenaltyChartReport from './pages/FootballPenaltyChartReport.jsx'
+import FootballQuickieStatsReport from './pages/FootballQuickieStatsReport.jsx'
 import FootballScoringSummaryReport from './pages/FootballScoringSummaryReport.jsx'
 import FootballScorerShell from './pages/FootballScorerShell.jsx'
 import FootballTeamStatsReport from './pages/FootballTeamStatsReport.jsx'
@@ -29,7 +30,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/reports/drive-chart" element={<FootballDriveChartReport />} />
           <Route path="/reports/team-stats" element={<FootballTeamStatsReport />} />
           <Route path="/reports/penalty-chart" element={<FootballPenaltyChartReport />} />
-          <Route path="/quickie" element={<FootballScoringSummaryReport />} />
+          <Route path="/reports/quickie-stats" element={<FootballQuickieStatsReport />} />
+          <Route path="/quickie" element={<FootballQuickieStatsReport />} />
           <Route
             path="*"
             element={requestedReport === 'scoring-summary'
@@ -40,6 +42,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 ? <FootballTeamStatsReport />
                 : requestedReport === 'penalty-chart'
                   ? <FootballPenaltyChartReport />
+                : ['quickie', 'quickie-stats'].includes(requestedReport)
+                  ? <FootballQuickieStatsReport />
                 : <FootballScorerShell />}
           />
         </Routes>
