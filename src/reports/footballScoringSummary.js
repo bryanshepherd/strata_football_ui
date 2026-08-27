@@ -1,3 +1,8 @@
+import {
+  buildFootballScoringPlaySummary,
+  isFootballDriveSummaryTerminalEvent,
+} from '../scoring/footballDriveSummary';
+
 export const FOOTBALL_REPORT_TIME_ZONE = 'America/New_York';
 
 const OFFICIAL_PRECEDENCE = [
@@ -74,12 +79,14 @@ const officialRows = (envelope) => {
   ));
 };
 
-const scoringEvents = (envelope) => (Array.isArray(envelope?.events) ? envelope.events : [])
-  .filter((event) => {
-    const scoring = event?.result?.scoring;
-    return scoring && ['V', 'H'].includes(scoring.team) && Number(scoring.points) > 0;
-  })
+const orderedEvents = (envelope) => (Array.isArray(envelope?.events) ? envelope.events : [])
+  .slice()
   .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
+
+const isScoringEvent = (event) => {
+  const scoring = event?.result?.scoring;
+  return scoring && ['V', 'H'].includes(scoring.team) && Number(scoring.points) > 0;
+};
 
 const periodLabel = (period) => {
   if (period === 1) return '1ST';
@@ -125,12 +132,12 @@ export const buildFootballScoringSummary = (envelope) => {
     throw new Error('A football game envelope is required for the scoring summary.');
   }
   const teams = envelope.game.teams;
-  const scores = { V: 0, H: 0 };
-  const events = scoringEvents(envelope);
+  const events = orderedEvents(envelope);
+  const scoringEvents = events.filter(isScoringEvent);
   const maximumPeriod = Math.max(
     4,
     Number(envelope.game.period || 0),
-    ...events.map((event) => Number(event.period || 0)),
+    ...scoringEvents.map((event) => Number(event.period || 0)),
   );
   const periods = Array.from({ length: maximumPeriod }, (_, index) => ({
     period: index + 1,
@@ -140,21 +147,66 @@ export const buildFootballScoringSummary = (envelope) => {
     V: Object.fromEntries(periods.map(({ period }) => [period, 0])),
     H: Object.fromEntries(periods.map(({ period }) => [period, 0])),
   };
-  const scoring = events.map((event) => {
+  const scores = { V: 0, H: 0 };
+  const scoringScoresBySequence = new Map();
+  scoringEvents.forEach((event) => {
     const team = event.result.scoring.team;
     const points = Number(event.result.scoring.points);
     const period = Number(event.period || 0);
     scores[team] += points;
     if (periodScores[team][period] !== undefined) periodScores[team][period] += points;
-    return {
-      sequence: Number(event.sequence || 0),
+    scoringScoresBySequence.set(Number(event.sequence || 0), { ...scores });
+  });
+
+  let runningScore = { V: 0, H: 0 };
+  const scoresBySequence = new Map();
+  events.forEach((event) => {
+    const scoringScore = scoringScoresBySequence.get(Number(event.sequence || 0));
+    if (scoringScore) runningScore = scoringScore;
+    scoresBySequence.set(Number(event.sequence || 0), { ...runningScore });
+  });
+
+  const claimedScoringSequences = new Set();
+  const summarizedScoring = events.flatMap((terminalEvent) => {
+    if (!isFootballDriveSummaryTerminalEvent(terminalEvent)) return [];
+    const summary = buildFootballScoringPlaySummary(envelope, terminalEvent);
+    if (!summary) return [];
+    const scoringEvent = summary.scoringEvent;
+    const scoringTeam = scoringEvent.result.scoring.team;
+    const period = Number(scoringEvent.period || 0);
+    const terminalSequence = Number(terminalEvent.sequence || scoringEvent.sequence || 0);
+    const score = scoresBySequence.get(terminalSequence) || runningScore;
+    claimedScoringSequences.add(Number(scoringEvent.sequence || 0));
+    if (isScoringEvent(terminalEvent)) {
+      claimedScoringSequences.add(Number(terminalEvent.sequence || 0));
+    }
+    return [{
+      sequence: terminalSequence,
+      quarter: period > 4 ? periodLabel(period) : String(period),
+      time: String(scoringEvent.clock || '—'),
+      team: teams[scoringTeam].abbr || scoringTeam,
+      description: summary.scoringPlay,
+      score: `${score.V}-${score.H}`,
+    }];
+  });
+
+  const fallbackScoring = scoringEvents.flatMap((event) => {
+    const sequence = Number(event.sequence || 0);
+    if (claimedScoringSequences.has(sequence)) return [];
+    const team = event.result.scoring.team;
+    const period = Number(event.period || 0);
+    const score = scoresBySequence.get(sequence) || runningScore;
+    return [{
+      sequence,
       quarter: period > 4 ? periodLabel(period) : String(period),
       time: String(event.clock || '—'),
       team: teams[team].abbr || team,
       description: String(event.description || 'Scoring play'),
-      score: `${scores.V}-${scores.H}`,
-    };
+      score: `${score.V}-${score.H}`,
+    }];
   });
+  const scoring = [...summarizedScoring, ...fallbackScoring]
+    .sort((left, right) => left.sequence - right.sequence);
   const visitorRecord = teamRecord(envelope, 'V');
   const homeRecord = teamRecord(envelope, 'H');
   const venue = envelope.game.venue || {};

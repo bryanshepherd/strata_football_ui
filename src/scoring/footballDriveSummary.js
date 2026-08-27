@@ -220,17 +220,28 @@ const trySummaryText = (envelope, event) => {
   return `${player} ${type}`;
 };
 
+export const buildFootballScoringPlaySummary = (envelope, terminalEvent) => {
+  if (!envelope || !isFootballDriveSummaryTerminalEvent(terminalEvent)) return null;
+  const scoringEvent = scoringEventForTerminal(envelope.events || [], terminalEvent);
+  if (!scoringEvent) return null;
+  const scoringPlay = scoringPlayText(envelope, scoringEvent);
+  return {
+    scoringEvent,
+    terminalEvent,
+    scoringPlay: terminalEvent.type === 'try'
+      ? `${scoringPlay} (${trySummaryText(envelope, terminalEvent)})`
+      : scoringPlay,
+  };
+};
+
 export function buildFootballDriveSummary(envelope, terminalEvent) {
   if (!envelope || !isFootballDriveSummaryTerminalEvent(terminalEvent)) return null;
   const events = envelope.events || [];
-  const scoringEvent = scoringEventForTerminal(events, terminalEvent);
+  const scoringPlaySummary = buildFootballScoringPlaySummary(envelope, terminalEvent);
+  const scoringEvent = scoringPlaySummary?.scoringEvent;
   const drive = completedDriveForScore(envelope, scoringEvent);
   if (!scoringEvent || !drive) return null;
 
-  const scoringPlay = scoringPlayText(envelope, scoringEvent);
-  const summarizedScoringPlay = terminalEvent.type === 'try'
-    ? `${scoringPlay} (${trySummaryText(envelope, terminalEvent)})`
-    : scoringPlay;
   const reason = humanizeDriveReason(inferredDriveReason(events, drive, scoringEvent));
   const teamCode = scoringType(scoringEvent) === 'safety'
     ? scoringEvent.result?.scoring?.team
@@ -243,7 +254,7 @@ export function buildFootballDriveSummary(envelope, terminalEvent) {
     plays: finiteNumber(drive.plays),
     yards: finiteNumber(drive.yards),
     timeOfPossession: footballDriveTimeOfPossession(envelope, drive, scoringEvent),
-    scoringPlay: summarizedScoringPlay,
+    scoringPlay: scoringPlaySummary.scoringPlay,
     startInfo: `Start: ${formatFootballClockDisplay(drive.startClock, '--:--')} at ${drive.startYardLine || 'Unknown Spot'} by ${reason}`,
   };
 }

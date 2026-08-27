@@ -21,11 +21,33 @@ describe('football scoring summary projection', () => {
     expect(report.scoreByQuarter.H).toEqual({ periods: { 1: 3, 2: 23, 3: 21, 4: 13 }, total: 60 });
   });
 
-  it('builds the chronological V-H scoring ledger', () => {
-    expect(report.scoring).toHaveLength(27);
-    expect(report.scoring[0]).toMatchObject({ quarter: '1', time: '13:32', team: 'FAIR', score: '6-0' });
-    expect(report.scoring[1]).toMatchObject({ team: 'FAIR', score: '7-0' });
-    expect(report.scoring.at(-1)).toMatchObject({ quarter: '4', time: '00:37', team: 'FAIR', score: '39-60' });
+  it('uses the scorer drive-summary wording and groups touchdowns with their tries', () => {
+    expect(report.scoring).toHaveLength(16);
+    expect(report.scoring[0]).toMatchObject({
+      quarter: '1',
+      time: '13:32',
+      team: 'FAIR',
+      description: 'Hatcher 5 yard rush (Richardson Kick)',
+      score: '7-0',
+    });
+    expect(report.scoring[2]).toMatchObject({
+      quarter: '2',
+      time: '15:00',
+      team: 'WVSU',
+      description: 'Jackson 74 yd. pass to Ary (Kick Failed)',
+      score: '7-9',
+    });
+    expect(report.scoring).toContainEqual(expect.objectContaining({
+      description: 'Hatcher 2 yard rush (Marzullo Pass to Highsmith)',
+      score: '22-40',
+    }));
+    expect(report.scoring.at(-1)).toMatchObject({
+      quarter: '4',
+      time: '01:57',
+      team: 'FAIR',
+      description: 'Marzullo 18 yd. pass to Highsmith (Richardson Kick)',
+      score: '39-60',
+    });
   });
 
   it('formats game details in the report timezone', () => {
