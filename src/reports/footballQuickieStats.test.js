@@ -43,7 +43,31 @@ describe('football Quickie Stats projection', () => {
       passAttempts: 50,
       passYards: 313,
     });
-    expect(report.individual.showYac).toBe(false);
+    expect(report.individual.showYac).toBe(true);
+    expect(report.individual.V.receiving).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Winston Page', yac: 30, yacStated: true }),
+      expect.objectContaining({ name: 'Fred Highsmith', yac: 22, yacStated: true }),
+    ]));
+    expect(report.individual.H.receiving[0]).toMatchObject({
+      name: 'Amare Ary',
+      yac: 112,
+      yacStated: true,
+    });
+  });
+
+  it('derives negative YAC from the entered catch and terminal spots', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const completion = envelope.events.find((event) => event.type === 'pass' && event.result?.pass?.outcome === 'complete');
+    completion.result.pass.catchYardLine = 'V40';
+    completion.result.pass.terminalYardLine = 'V37';
+    envelope.events = [completion];
+    envelope.stats = { teams: {}, players: {} };
+
+    const report = buildFootballQuickieStatsReport(envelope, { mode: 'quarter', quarter: completion.period });
+    const receiver = [...report.individual.V.receiving, ...report.individual.H.receiving][0];
+
+    expect(report.individual.showYac).toBe(true);
+    expect(receiver).toMatchObject({ yac: -3, yacStated: true });
   });
 
   it('builds an isolated half with only its points, possession, stats, and scoring rows', () => {

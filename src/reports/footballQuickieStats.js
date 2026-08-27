@@ -101,6 +101,27 @@ const passYards = (envelope, event) => {
   return Number.isFinite(start) && Number.isFinite(terminal) ? terminal - start : recorded;
 };
 
+const passYardsAfterCatch = (envelope, event) => {
+  const explicit = event?.result?.pass?.yardsAfterCatch ?? event?.result?.pass?.yac;
+  if (explicit !== undefined && explicit !== null) return finiteNumber(explicit);
+
+  const team = event?.possession;
+  const length = fieldLength(envelope);
+  const catchSpot = relativeSpot(
+    event?.result?.pass?.catchYardLine ?? event?.result?.pass?.caughtAtYardLine,
+    team,
+    length,
+  );
+  const terminalSpot = relativeSpot(
+    event?.result?.pass?.terminalYardLine ?? event?.result?.endYardLine,
+    team,
+    length,
+  );
+  return Number.isFinite(catchSpot) && Number.isFinite(terminalSpot)
+    ? terminalSpot - catchSpot
+    : null;
+};
+
 const clockSeconds = (clock) => {
   const match = String(clock || '').match(/^(\d{1,2}):([0-5]\d)$/);
   return match ? (finiteNumber(match[1]) * 60) + finiteNumber(match[2]) : 0;
@@ -336,9 +357,9 @@ const buildPlayerStats = (envelope, events, projected) => {
           receiver.receivingYards += correction;
           receiver.receivingLong = Math.max(receiver.receivingLong, yards);
           if (event?.result?.scoring?.type === 'touchdown') receiver.receivingTouchdowns += 1;
-          const explicitYac = event?.result?.pass?.yardsAfterCatch ?? event?.result?.pass?.yac;
-          if (explicitYac !== undefined && explicitYac !== null) {
-            receiver.yac += finiteNumber(explicitYac);
+          const yac = passYardsAfterCatch(envelope, event);
+          if (yac !== null) {
+            receiver.yac += yac;
             receiver.yacStated = true;
           }
         }

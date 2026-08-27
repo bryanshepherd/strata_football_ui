@@ -33,6 +33,7 @@ describe('FootballQuickieStatsReport', () => {
     expect(within(table).getByRole('row', { name: 'Kickoff Returns 6-12.7 4-24.0' })).toBeInTheDocument();
     expect(container.querySelectorAll('.football-quickie-individual-team')).toHaveLength(2);
     expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(10);
+    expect(screen.getAllByRole('columnheader', { name: 'YAC' })).toHaveLength(2);
   });
 
   it('prints only the scoring-play table from the scoring summary report', () => {
