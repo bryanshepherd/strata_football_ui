@@ -28,9 +28,12 @@ const scorerHref = (gameId) => {
 };
 
 const PlayRow = ({ row }) => {
-  if (row.kind === 'play') {
+  if (row.kind === 'play' || row.kind === 'comment') {
     return (
-      <tr data-play-sequence={row.sequence}>
+      <tr
+        className={row.kind === 'comment' ? 'football-play-by-play-comment' : undefined}
+        data-play-sequence={row.kind === 'play' ? row.sequence : undefined}
+      >
         <td className="football-play-by-play-down">{row.downAndDistance}</td>
         <td className="football-play-by-play-spot">{row.spot}</td>
         <td className="football-play-by-play-text">{row.text}</td>

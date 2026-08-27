@@ -40,9 +40,14 @@ describe('FootballPlayByPlayReport', () => {
     const driveStart = within(table).getByText('WVSU drive start at 14:54.').closest('tr');
     const score = within(table).getByText('FAIR 7 – WVSU 0').closest('tr');
     const driveEnd = within(table).getByText('WVSU drive: 4 plays, -12 yards, 1:22; Punt.').closest('tr');
+    const comment = within(table).getByText(/West Virginia St\. won the toss/).closest('tr');
 
     expect(within(table).queryAllByRole('columnheader')).toHaveLength(0);
     expect(within(table).getAllByText('WVSU 26').length).toBeGreaterThan(0);
+    expect(comment).toHaveClass('football-play-by-play-comment');
+    expect(comment.children).toHaveLength(3);
+    expect(comment.children[0]).toBeEmptyDOMElement();
+    expect(comment.children[1]).toBeEmptyDOMElement();
     expect(driveStart).toHaveClass('football-play-by-play-drive-start');
     expect(driveStart.firstElementChild).toHaveAttribute('colspan', '3');
     expect(score).toHaveClass('football-play-by-play-score');

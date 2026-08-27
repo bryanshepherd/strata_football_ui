@@ -49,6 +49,39 @@ describe('football Play-by-Play projection', () => {
     expect(firstQuarter.rows.filter((row) => row.kind === 'play').every((row) => !/\b[HV]\d{1,2}\b/.test(row.text))).toBe(true);
   });
 
+  it('opens each half with the recorded coin-toss choices', () => {
+    const report = buildFootballPlayByPlayReport(baselineRecord.envelope);
+
+    expect(report.quarters[0].rows[0]).toEqual({
+      id: 'half-start-comment-1',
+      kind: 'comment',
+      downAndDistance: '',
+      spot: '',
+      text: 'West Virginia St. won the toss and elected to receive. Fairmont St. will kick to West Virginia St.; Fairmont St. will defend the west goal.',
+    });
+    expect(report.quarters[2].rows[0]).toEqual({
+      id: 'half-start-comment-3',
+      kind: 'comment',
+      downAndDistance: '',
+      spot: '',
+      text: 'Fairmont St. elected to receive to begin the second half. West Virginia St. will kick to Fairmont St.; West Virginia St. will defend the east goal.',
+    });
+    expect(report.quarters[1].rows.some((row) => row.kind === 'comment')).toBe(false);
+    expect(report.quarters[3].rows.some((row) => row.kind === 'comment')).toBe(false);
+  });
+
+  it('does not invent half-opening comments when the corresponding choices were not recorded', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.pregame.coinToss.status = 'notStarted';
+    const thirdQuarterStart = envelope.events.find((event) => event?.result?.gameControl?.secondHalf);
+    delete thirdQuarterStart.result.gameControl.secondHalf;
+
+    const report = buildFootballPlayByPlayReport(envelope);
+
+    expect(report.quarters[0].rows.some((row) => row.kind === 'comment')).toBe(false);
+    expect(report.quarters[2].rows.some((row) => row.kind === 'comment')).toBe(false);
+  });
+
   it('defers a touchdown score and drive end until after the try', () => {
     const report = buildFootballPlayByPlayReport(baselineRecord.envelope);
     const rows = report.quarters[0].rows;

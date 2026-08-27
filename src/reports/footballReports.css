@@ -449,6 +449,10 @@
   text-align: left !important;
 }
 
+.football-play-by-play-comment .football-play-by-play-text {
+  font-style: italic;
+}
+
 .football-play-by-play-drive-start td {
   padding: 4px 5px 2px;
   border-top: 1px solid #909b95;

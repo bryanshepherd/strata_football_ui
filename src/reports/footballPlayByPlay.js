@@ -112,6 +112,91 @@ const humanize = (value) => String(value || '')
   .trim()
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const teamName = (teams, team) => teams?.[team]?.name || teams?.[team]?.abbr || team;
+
+const electionText = (choice, direction) => {
+  if (choice === 'kick') return 'kick';
+  if (choice === 'receive') return 'receive';
+  if (choice === 'defer') return 'defer';
+  if (choice === 'side') return direction ? `defend the ${direction} goal` : 'choose direction';
+  return '';
+};
+
+const resolvedHalfComment = ({
+  choice,
+  choiceTeam,
+  direction,
+  directionChoiceTeam,
+  kickingTeam,
+  receivingTeam,
+  teams,
+  winner = false,
+}) => {
+  const election = electionText(choice, direction);
+  if (!choiceTeam || !election || !kickingTeam || !receivingTeam) return null;
+  const opening = winner
+    ? `${teamName(teams, choiceTeam)} won the toss and elected to ${election}.`
+    : `${teamName(teams, choiceTeam)} elected to ${election} to begin the second half.`;
+  const directionAlreadyStated = choice === 'side' && choiceTeam === directionChoiceTeam;
+  const directionClause = direction && directionChoiceTeam && !directionAlreadyStated
+    ? `; ${teamName(teams, directionChoiceTeam)} will defend the ${direction} goal`
+    : '';
+  return `${opening} ${teamName(teams, kickingTeam)} will kick to ${teamName(teams, receivingTeam)}${directionClause}.`;
+};
+
+const halfStartCommentRows = (envelope, events, period) => {
+  const teams = envelope.game.teams;
+  if (period === 1) {
+    const toss = envelope?.pregame?.coinToss;
+    if (toss?.status !== 'complete') return [];
+    const text = resolvedHalfComment({
+      choice: toss.winnerInitialChoice,
+      choiceTeam: toss.winnerTeam,
+      direction: toss.direction,
+      directionChoiceTeam: toss.directionChoiceTeam,
+      kickingTeam: toss.firstHalfKickingTeam,
+      receivingTeam: toss.firstHalfReceivingTeam,
+      teams,
+      winner: true,
+    });
+    return text ? [{
+      id: 'half-start-comment-1',
+      kind: 'comment',
+      downAndDistance: '',
+      spot: '',
+      text,
+    }] : [];
+  }
+
+  const regulationPeriods = Math.max(2, finiteNumber(envelope?.game?.rules?.periods, 4));
+  const secondHalfPeriod = Math.floor(regulationPeriods / 2) + 1;
+  if (period !== secondHalfPeriod) return [];
+  const halfStart = events
+    .map((event) => event?.result?.gameControl)
+    .find((control) => (
+      String(control?.action || '').toLowerCase() === 'startquarter'
+      && finiteNumber(control?.period) === period
+      && control?.secondHalf
+    ));
+  const secondHalf = halfStart?.secondHalf;
+  const text = resolvedHalfComment({
+    choice: secondHalf?.choice,
+    choiceTeam: secondHalf?.choiceTeam,
+    direction: secondHalf?.direction,
+    directionChoiceTeam: secondHalf?.directionChoiceTeam,
+    kickingTeam: secondHalf?.kickingTeam,
+    receivingTeam: secondHalf?.receivingTeam,
+    teams,
+  });
+  return text ? [{
+    id: `half-start-comment-${period}`,
+    kind: 'comment',
+    downAndDistance: '',
+    spot: '',
+    text,
+  }] : [];
+};
+
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const formatFootballPlayText = (event, teams) => {
@@ -276,7 +361,10 @@ export const buildFootballPlayByPlayReport = (envelope, scopeInput = {}) => {
     quarters: periods.map((period) => ({
       period,
       label: footballPeriodName(period),
-      rows: eventRows(envelope, events, period, drives, scores),
+      rows: [
+        ...halfStartCommentRows(envelope, events, period),
+        ...eventRows(envelope, events, period, drives, scores),
+      ],
       quickie: buildFootballQuickieStatsReport(envelope, { mode: 'quarter', quarter: period }),
     })),
   };
