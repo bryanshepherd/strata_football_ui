@@ -1684,7 +1684,6 @@ function commitKickToken(
         currentToken: '',
         tokens: {
           ...cloneTokens(state.tokens),
-          downedSpot: advance && targetSpot ? targetSpot : state.tokens.downedSpot,
           kickAdvanceDownedToTouchback: advance,
         },
       },
@@ -5604,7 +5603,7 @@ function buildReturnFumble(tokens: FootballFlowTokens): FootballDraftIntent['res
 function kickoffCatchSpot(tokens: FootballFlowTokens): Spot | undefined {
   if (tokens.kickReceiveResult === 'return') return tokens.kickReturnStartSpot;
   if (tokens.kickReceiveResult === 'fairCatch') return tokens.kickFairCatchSpot;
-  if (tokens.kickReceiveResult === 'outOfBounds' && tokens.kickOutOfBoundsDecision !== 'rekick') return tokens.kickOutOfBoundsAwardedSpot;
+  if (tokens.kickReceiveResult === 'outOfBounds' && tokens.kickOutOfBoundsDecision !== 'rekick') return tokens.kickOutOfBoundsSpot;
   if (tokens.kickReceiveResult === 'muffed') return tokens.kickReturnStartSpot;
   if (tokens.kickReceiveResult === 'downed') return tokens.downedSpot;
   return undefined;
@@ -5625,7 +5624,9 @@ function kickoffEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputC
     ? tokens.kickRekickSpot
     : tokens.kickOutOfBoundsAwardedSpot;
   if (tokens.kickReceiveResult === 'muffed') return tokens.fumbleReturned ? tokens.returnEndSpot : tokens.recoverSpot;
-  if (tokens.kickReceiveResult === 'downed') return tokens.downedSpot;
+  if (tokens.kickReceiveResult === 'downed') return tokens.kickAdvanceDownedToTouchback
+    ? tokens.kickDownedTouchbackTargetSpot ?? tokens.downedSpot
+    : tokens.downedSpot;
   return undefined;
 }
 
@@ -5666,7 +5667,8 @@ function derivePuntYards(context: FootballQuickInputContext, catchYardLine: Spot
 
 function deriveKickoffYards(context: FootballQuickInputContext, catchYardLine: Spot): number | undefined {
   const receivingTeam = opposingTeam(context.play.possession ?? context.play.actionTeam);
-  const startYardLine = ruleSpotForTeam(context.game.rules?.kickoffSpot, context.play.actionTeam, 'own') ?? context.prePlay.yardLine;
+  const startYardLine = (context.prePlay.possession == null ? context.prePlay.yardLine : undefined)
+    ?? ruleSpotForTeam(context.game.rules?.kickoffSpot, context.play.actionTeam, 'own');
   const kickoffSpot = spotToTeamEngineYard(startYardLine, receivingTeam);
   const receiveSpot = spotToTeamEngineYard(catchYardLine, receivingTeam);
   if (typeof kickoffSpot !== 'number' || typeof receiveSpot !== 'number') return undefined;

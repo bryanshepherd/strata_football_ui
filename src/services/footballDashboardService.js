@@ -947,6 +947,17 @@ const playEarnedFirstDown = (event, projection, eventHistory) => {
     && projection.yardsGained >= yardsToGain;
 };
 
+const offenseLostPossession = (event, offense) => {
+  const recoveredByTeam = event?.result?.fumble?.recoveredByTeam;
+  const turnoverTeam = event?.result?.turnover?.team;
+  const nextPossession = event?.result?.nextPossession;
+  return Boolean(
+    (event?.result?.fumble?.turnover && recoveredByTeam && recoveredByTeam !== offense)
+    || (turnoverTeam && turnoverTeam !== offense)
+    || (nextPossession && nextPossession !== offense),
+  );
+};
+
 const acceptedReturnTeamSpotOfFoul = (event, returnTeam) => [...(event?.penalties || [])]
   .reverse()
   .find((penalty) => (
@@ -1231,9 +1242,12 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     && !hasReplayDownPenalty(event)
   ) {
     const converted = Boolean(
-      projection?.firstDown
-      || result.firstDown
-      || result.scoring?.type === 'touchdown',
+      !offenseLostPossession(event, offense)
+      && (
+        projection?.firstDown
+        || result.firstDown
+        || result.scoring?.type === 'touchdown'
+      ),
     );
     const statKey = prePlayDown === 3 ? 'thirdDown' : 'fourthDown';
     teams = updateTeamStat(teams, offense, (current) => ({
@@ -1248,9 +1262,11 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
 
   const touchdown = result.scoring?.type === 'touchdown'
     || projection?.scoringUpdate?.type === 'touchdown';
-  const baseFirstDownCredit = touchdown
-    ? touchdownEarnsFirstDown(event, projection, eventHistory)
-    : Boolean(projection?.firstDown || result.firstDown);
+  const baseFirstDownCredit = !offenseLostPossession(event, offense) && (
+    touchdown
+      ? touchdownEarnsFirstDown(event, projection, eventHistory)
+      : Boolean(projection?.firstDown || result.firstDown)
+  );
   const additionalAutomaticFirstDownCredit = (
     playEarnedFirstDown(event, projection, eventHistory)
     && hasAcceptedAutomaticFirstDownPenalty(event)

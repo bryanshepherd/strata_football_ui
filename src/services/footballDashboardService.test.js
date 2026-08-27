@@ -1871,6 +1871,68 @@ describe('local football test-game projection', () => {
     expect(fourthDown.gameEnvelope.stats.teams.H.fourthDown).toEqual({ att: 1, made: 1 });
   });
 
+  it('credits completion yardage through the fumble spot without a first down after an opponent recovery', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'V',
+      down: 3,
+      distance: 10,
+      yardLine: 'H19',
+      lineToGain: 'H09',
+      driveId: 'DRV-TUCKER',
+      driveNumber: 23,
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PASS-FUMBLE-TURNOVER-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'V-11', team: 'V', role: 'passer' },
+        receiver: { playerId: 'V-85', team: 'V', role: 'receiver' },
+        fumbler: { playerId: 'V-85', team: 'V', role: 'fumbler' },
+        recoveredBy: { playerId: 'H-43', team: 'H', role: 'recoverer' },
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 13,
+        endYardLine: 'H06',
+        nextPossession: 'H',
+        pass: {
+          outcome: 'complete',
+          terminalYardLine: 'H06',
+          passingYards: 13,
+          receivingYards: 13,
+        },
+        fumble: {
+          fumblerPlayerId: 'V-85',
+          spot: 'H06',
+          recoveredByPlayerId: 'H-43',
+          recoveredByTeam: 'H',
+          recoverySpot: 'H06',
+          turnover: true,
+        },
+        turnover: { type: 'fumble', team: 'H', playerId: 'H-43', spot: 'H06' },
+      },
+    }));
+
+    expect(response.projection).toMatchObject({ firstDown: false, yardsGained: 13 });
+    expect(response.gameEnvelope.liveState).toMatchObject({ possession: 'H', down: 1, yardLine: 'H06' });
+    expect(response.gameEnvelope.stats.teams.V).toMatchObject({
+      pass: { att: 1, cmp: 1, int: 0, yds: 13 },
+      plays: 1,
+      yards: 13,
+      thirdDown: { att: 1, made: 0 },
+      fumbles: { num: 1, lost: 1 },
+    });
+    expect(response.gameEnvelope.stats.teams.V.firstDowns).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['V-11']).toMatchObject({ passAttempts: 1, passCompletions: 1, passYards: 13 });
+    expect(response.gameEnvelope.stats.players['V-85']).toMatchObject({ receptions: 1, receivingYards: 13, fumblesLost: 1 });
+  });
+
   it('repairs stale team totals by replaying a complete accepted event log', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.stats = { ...envelope.stats, sourceEventSequence: 2, teams: {}, players: {} };

@@ -15,11 +15,14 @@ describe('football team stats report projection', () => {
 
   it('projects the requested offense and possession totals', () => {
     expect(valuesFor(report, 'first-downs')).toEqual({ V: '26', H: '24' });
+    expect(valuesFor(report, 'first-downs-passing')).toEqual({ V: '17', H: '6' });
+    expect(valuesFor(report, 'first-downs-penalty')).toEqual({ V: '4', H: '3' });
     expect(valuesFor(report, 'rushing-yards')).toEqual({ V: '204', H: '328' });
     expect(valuesFor(report, 'rushing-gained')).toEqual({ V: '215', H: '342' });
     expect(valuesFor(report, 'rushing-lost')).toEqual({ V: '11', H: '14' });
     expect(valuesFor(report, 'passing-cai')).toEqual({ V: '30-50-0', H: '7-17-0' });
-    expect(valuesFor(report, 'total-offense')).toEqual({ V: '510', H: '564' });
+    expect(valuesFor(report, 'passing-yards')).toEqual({ V: '313', H: '236' });
+    expect(valuesFor(report, 'total-offense')).toEqual({ V: '517', H: '564' });
     expect(valuesFor(report, 'possession')).toEqual({ V: '28:42', H: '31:18' });
     expect(valuesFor(report, 'possession-1')).toEqual({ V: '6:36', H: '8:24' });
     expect(valuesFor(report, 'possession-4')).toEqual({ V: '6:42', H: '8:18' });
@@ -28,8 +31,8 @@ describe('football team stats report projection', () => {
   it('projects punts, kickoffs, returns, efficiencies, and turnover points', () => {
     expect(valuesFor(report, 'punts')).toEqual({ V: '4-107', H: '4-185' });
     expect(valuesFor(report, 'punt-net')).toEqual({ V: '22.3', H: '46.3' });
-    expect(valuesFor(report, 'kickoffs')).toEqual({ V: '7-422', H: '10-497' });
-    expect(valuesFor(report, 'kickoff-net')).toEqual({ V: '39.4', H: '34.6' });
+    expect(valuesFor(report, 'kickoffs')).toEqual({ V: '7-444', H: '10-539' });
+    expect(valuesFor(report, 'kickoff-net')).toEqual({ V: '39.4', H: '36.1' });
     expect(valuesFor(report, 'kickoff-returns')).toEqual({ V: '6-76-0', H: '4-96-0' });
     expect(valuesFor(report, 'third-down')).toEqual({ V: '4-14', H: '5-10' });
     expect(valuesFor(report, 'fourth-down')).toEqual({ V: '2-4', H: '0-0' });

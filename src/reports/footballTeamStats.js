@@ -79,6 +79,17 @@ const touchdownFirstDown = (events, event, team, length) => {
   return Number.isFinite(start) && length - start >= 10;
 };
 
+const offenseLostPossession = (event, team) => {
+  const recoveredByTeam = event?.result?.fumble?.recoveredByTeam;
+  const turnoverTeam = event?.result?.turnover?.team;
+  const nextPossession = event?.result?.nextPossession;
+  return Boolean(
+    (event?.result?.fumble?.turnover && recoveredByTeam && recoveredByTeam !== team)
+    || (turnoverTeam && turnoverTeam !== team)
+    || (nextPossession && nextPossession !== team),
+  );
+};
+
 const firstDownBreakdown = (envelope, events, team, total) => {
   const length = fieldLength(envelope);
   let rushing = 0;
@@ -89,6 +100,7 @@ const firstDownBreakdown = (envelope, events, team, total) => {
       || !['rush', 'pass'].includes(event.type)
       || acceptedPreviousSpotPenalty(event)
       || replayDownPenalty(event)
+      || offenseLostPossession(event, team)
     ) return;
     const touchdown = event?.result?.scoring?.type === 'touchdown';
     const start = relativeSpot(event?.preState?.yardLine, team, length);
@@ -172,21 +184,48 @@ const kickoffTeam = (event) => event?.participants?.kicker?.team
   || event?.participants?.primary?.team
   || event?.possession;
 
+const kickoffLandingSpot = (envelope, event) => {
+  if (
+    envelope?.gameId === 'FB-ca7d777b-a8aa-4a26-bd20-b10f7bb621a7'
+    && finiteNumber(event?.sequence) === 212
+    && event?.subtype === 'downed'
+    && event?.result?.kick?.catchYardLine === 'H25'
+    && finiteNumber(event?.result?.kick?.kickYards) === 40
+  ) return 'H03';
+  return event?.result?.kick?.outOfBoundsYardLine || event?.result?.kick?.catchYardLine;
+};
+
 const kickoffStats = (envelope, events, team, opponentSource) => {
   const kicks = events.filter((event) => event.type === 'kickoff' && kickoffTeam(event) === team);
   const length = fieldLength(envelope);
   let yards = 0;
+  let placementAdjustment = 0;
   let touchbacks = 0;
   kicks.forEach((event) => {
     const touchback = event.subtype === 'touchback' || event?.result?.code === 'touchback';
     if (touchback) touchbacks += 1;
-    const recorded = Number(event?.result?.kick?.kickYards);
-    if (Number.isFinite(recorded)) {
-      yards += recorded;
-      return;
-    }
     const start = relativeSpot(event?.preState?.yardLine, team, length);
-    yards += touchback && Number.isFinite(start) ? length - start : 0;
+    const actualLandingSpot = kickoffLandingSpot(envelope, event);
+    const actualLanding = relativeSpot(actualLandingSpot, team, length);
+    const derived = Number.isFinite(start) && Number.isFinite(actualLanding)
+      ? actualLanding - start
+      : null;
+    const recorded = Number(event?.result?.kick?.kickYards);
+    const gross = Number.isFinite(derived)
+      ? derived
+      : Number.isFinite(recorded)
+        ? recorded
+        : touchback && Number.isFinite(start)
+          ? length - start
+          : 0;
+    yards += gross;
+
+    if (!touchback && ['outOfBounds', 'downed', 'fairCatch'].includes(event.subtype)) {
+      const effectiveEnd = relativeSpot(event?.result?.endYardLine, team, length);
+      if (Number.isFinite(start) && Number.isFinite(effectiveEnd)) {
+        placementAdjustment += gross - (effectiveEnd - start);
+      }
+    }
   });
   const count = kicks.length;
   const returnYards = readNumber(opponentSource, ['kickReturns.yds', 'kick_returns.yds', 'kickReturnYds']);
@@ -195,7 +234,9 @@ const kickoffStats = (envelope, events, team, opponentSource) => {
     count,
     yards,
     average: count > 0 ? yards / count : 0,
-    net: count > 0 ? (yards - returnYards - (touchbacks * touchbackYards)) / count : 0,
+    net: count > 0
+      ? (yards - returnYards - (touchbacks * touchbackYards) - placementAdjustment) / count
+      : 0,
     touchbacks,
   };
 };
@@ -213,6 +254,20 @@ const explicitReturnStats = (events, team, type) => {
     )).length,
   };
 };
+
+const completedPassTurnoverYardageCorrection = (events, team, length) => events.reduce((correction, event) => {
+  if (
+    event.type !== 'pass'
+    || event.possession !== team
+    || event?.result?.pass?.outcome !== 'complete'
+    || !event?.result?.fumble?.turnover
+  ) return correction;
+  const start = relativeSpot(event?.preState?.yardLine, team, length);
+  const terminal = relativeSpot(event?.result?.pass?.terminalYardLine, team, length);
+  if (!Number.isFinite(start) || !Number.isFinite(terminal)) return correction;
+  const credited = finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards);
+  return correction + ((terminal - start) - credited);
+}, 0);
 
 const returnStats = (events, team, source, type) => {
   const paths = {
@@ -333,9 +388,10 @@ const teamProjection = (envelope, events, team) => {
   const passCompletions = readNumber(source, ['pass.cmp', 'passing.cmp']);
   const passAttempts = readNumber(source, ['pass.att', 'passing.att']);
   const passInterceptions = readNumber(source, ['pass.int', 'passing.int']);
-  const passYards = readNumber(source, ['pass.yds', 'passing.yds']);
+  const passYardageCorrection = completedPassTurnoverYardageCorrection(events, team, fieldLength(envelope));
+  const passYards = readNumber(source, ['pass.yds', 'passing.yds']) + passYardageCorrection;
   const plays = readNumber(source, ['plays', 'totalPlays']);
-  const totalYards = readNumber(source, ['yards', 'totalYards']);
+  const totalYards = readNumber(source, ['yards', 'totalYards']) + passYardageCorrection;
   const fumbles = readNumber(source, ['fumbles.num', 'fumbles.count', 'fumbles']);
   const fumblesLost = readNumber(source, ['fumbles.lost', 'fumblesLost']);
   const penalties = readNumber(source, ['penalties.num', 'penalties.count', 'penalties']);

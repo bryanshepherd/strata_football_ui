@@ -1709,8 +1709,8 @@ describe('footballConfirmedQuickInputMachine', () => {
       endYardLine: 'V35',
       kick: {
         outOfBoundsYardLine: 'V08',
-        catchYardLine: 'V35',
-        kickYards: 30,
+        catchYardLine: 'V08',
+        kickYards: 57,
       },
     });
     expect(reviewing.draft?.participants.returner).toBeUndefined();
@@ -1740,7 +1740,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       result: {
         code: 'outOfBounds',
         endYardLine: 'V35',
-        kick: { outOfBoundsYardLine: 'V08', catchYardLine: 'V35', kickYards: 30 },
+        kick: { outOfBoundsYardLine: 'V08', catchYardLine: 'V08', kickYards: 57 },
       },
       penalties: [],
     });
@@ -1848,10 +1848,35 @@ describe('footballConfirmedQuickInputMachine', () => {
     const downingPlayer = commitTokenWithContext(inputTokenWithContext(decision, 'Y', context), context);
     expect(downingPlayer).toMatchObject({
       currentStep: 'downingPlayerJersey',
-      tokens: { downedSpot: 'V20', kickAdvanceDownedToTouchback: true },
+      tokens: { downedSpot: 'V10', kickAdvanceDownedToTouchback: true },
     });
     const ready = commitTokenWithContext(inputTokenWithContext(downingPlayer, '', context), context);
-    expect(ready.draft?.result).toMatchObject({ code: 'downed', endYardLine: 'V20', nextPossession: 'V' });
+    expect(ready.draft?.result).toMatchObject({
+      code: 'downed',
+      endYardLine: 'V20',
+      nextPossession: 'V',
+      kick: { catchYardLine: 'V10', kickYards: 55 },
+    });
+  });
+
+  it('measures a penalized kickoff from the actual pre-play spot', () => {
+    const context = makeContext({ prePlay: { possession: null, yardLine: 'H20' } });
+    const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'O', context), context);
+    const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
+    const withDestination = commitTokenWithContext(inputTokenWithContext(withKicker, 'V27', context), context);
+    const withReturn = commitTokenWithContext(inputTokenWithContext(withDestination, 'R', context), context);
+
+    expect(withReturn.tokens.kickReturnStartSpot).toBe('V27');
+    expect(withReturn.currentStep).toBe('returnerJersey');
+
+    const withReturner = selectDuplicateIfNeeded(
+      commitTokenWithContext(inputTokenWithContext(withReturn, '3', context), context),
+      'V-3-PR',
+    );
+    const terminal = commitTokenWithContext(inputTokenWithContext(withReturner, '.', context), context);
+    const ready = commitTokenWithContext(inputTokenWithContext(terminal, 'V30', context), context);
+
+    expect(ready.draft?.result.kick).toMatchObject({ catchYardLine: 'V27', kickYards: 53 });
   });
 
   it('preserves the actual kickoff downed spot when the operator declines advancement', () => {
