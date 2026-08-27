@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import FootballDashboard from './pages/FootballDashboard.jsx'
 import FootballLayoutPreview from './pages/FootballLayoutPreview.jsx'
 import FootballPlayEditorSandbox from './pages/FootballPlayEditorSandbox.jsx'
+import FootballDriveChartReport from './pages/FootballDriveChartReport.jsx'
 import FootballPenaltyChartReport from './pages/FootballPenaltyChartReport.jsx'
 import FootballScoringSummaryReport from './pages/FootballScoringSummaryReport.jsx'
 import FootballScorerShell from './pages/FootballScorerShell.jsx'
@@ -25,6 +26,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/football-play-editor-sandbox" element={<FootballPlayEditorSandbox />} />
           <Route path="/reports" element={<FootballScoringSummaryReport />} />
           <Route path="/reports/scoring-summary" element={<FootballScoringSummaryReport />} />
+          <Route path="/reports/drive-chart" element={<FootballDriveChartReport />} />
           <Route path="/reports/team-stats" element={<FootballTeamStatsReport />} />
           <Route path="/reports/penalty-chart" element={<FootballPenaltyChartReport />} />
           <Route path="/quickie" element={<FootballScoringSummaryReport />} />
@@ -32,6 +34,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             path="*"
             element={requestedReport === 'scoring-summary'
               ? <FootballScoringSummaryReport />
+              : requestedReport === 'drive-chart'
+                ? <FootballDriveChartReport />
               : requestedReport === 'team-stats'
                 ? <FootballTeamStatsReport />
                 : requestedReport === 'penalty-chart'

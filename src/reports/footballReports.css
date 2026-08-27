@@ -305,6 +305,90 @@
   font-style: italic;
 }
 
+.football-drive-chart-page + .football-drive-chart-page {
+  margin-top: 20px;
+}
+
+.football-drive-team-section,
+.football-drive-chronological-section {
+  margin-top: 9px;
+}
+
+.football-drive-team-section h2,
+.football-drive-chronological-section h2,
+.football-drive-team-section h3 {
+  margin: 0 0 2px;
+  padding: 0 0 2px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 8pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-drive-team-section h3 {
+  margin-top: 5px;
+  border-bottom-width: 1px;
+  font-size: 7.2pt;
+}
+
+.football-drive-chart-table,
+.football-drive-breakdown-table {
+  font-size: 6.1pt;
+  line-height: 1;
+}
+
+.football-drive-chart-table th,
+.football-drive-chart-table td,
+.football-drive-breakdown-table th,
+.football-drive-breakdown-table td {
+  height: 13px;
+  padding: 1.5px 3px;
+  vertical-align: middle;
+}
+
+.football-drive-chart-table tbody tr:nth-child(even) td,
+.football-drive-breakdown-table tbody tr:nth-child(even) th,
+.football-drive-breakdown-table tbody tr:nth-child(even) td {
+  background: #f3f5f4;
+}
+
+.football-drive-team-column {
+  width: .52in;
+}
+
+.football-drive-quarter-column {
+  width: .34in;
+}
+
+.football-drive-spot-column {
+  width: .64in;
+}
+
+.football-drive-time-column {
+  width: .58in;
+}
+
+.football-drive-reason-column {
+  width: 1.02in;
+}
+
+.football-drive-number-column {
+  width: .43in;
+}
+
+.football-drive-team {
+  font-weight: 700;
+}
+
+.football-drive-breakdown-table thead th:first-child,
+.football-drive-breakdown-table tbody th {
+  width: 38%;
+  text-align: left;
+}
+
+.football-drive-breakdown-table tbody th {
+  font-weight: 700;
+}
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }
@@ -402,12 +486,25 @@
     margin-top: 0;
   }
 
+  .football-drive-chart-page + .football-drive-chart-page {
+    margin-top: 0;
+  }
+
   .football-penalty-chart-page-break {
     break-before: page;
     page-break-before: always;
   }
 
+  .football-drive-chart-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
   .football-penalty-chart-page .football-report-brand-footer {
+    position: absolute;
+  }
+
+  .football-drive-chart-page .football-report-brand-footer {
     position: absolute;
   }
 }
