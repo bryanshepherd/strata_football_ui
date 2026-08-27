@@ -219,6 +219,92 @@
   background: #fff;
 }
 
+.football-penalty-chart-page + .football-penalty-chart-page {
+  margin-top: 20px;
+}
+
+.football-penalty-team-heading {
+  margin: 8px 0 5px;
+  text-align: center;
+  font: 700 9pt/1.15 Arial, Helvetica, sans-serif;
+}
+
+.football-penalty-section {
+  margin-top: 8px;
+}
+
+.football-penalty-section h3 {
+  margin: 0 0 2px;
+  padding: 0 0 2px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 8.5pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-penalty-table {
+  font-size: 6.4pt;
+  line-height: 1.05;
+}
+
+.football-penalty-down-column {
+  width: .82in;
+}
+
+.football-penalty-spot-column {
+  width: .7in;
+}
+
+.football-penalty-disposition-column {
+  width: .72in;
+}
+
+.football-penalty-player-column {
+  width: 1.45in;
+}
+
+.football-penalty-yards-column {
+  width: .45in;
+}
+
+.football-penalty-entry {
+  break-inside: avoid;
+}
+
+.football-penalty-table th,
+.football-penalty-table td {
+  height: 14px;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
+.football-penalty-info-accepted td {
+  border-top: 1px solid #909b95;
+  background: #eef2ef;
+  font-weight: 700;
+}
+
+.football-penalty-info-standard td {
+  background: #fff;
+  font-weight: 400;
+}
+
+.football-penalty-play-row td {
+  height: 20px;
+  padding: 3px 6px 5px;
+  background: #fff;
+  text-align: left;
+  font-size: 6.3pt;
+  font-style: italic;
+  line-height: 1.15;
+}
+
+.football-penalty-empty-row td {
+  padding: 5px;
+  color: #59635e;
+  text-align: left;
+  font-style: italic;
+}
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }
@@ -310,5 +396,18 @@
 
   .football-report-brand-footer {
     position: fixed;
+  }
+
+  .football-penalty-chart-page + .football-penalty-chart-page {
+    margin-top: 0;
+  }
+
+  .football-penalty-chart-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .football-penalty-chart-page .football-report-brand-footer {
+    position: absolute;
   }
 }
