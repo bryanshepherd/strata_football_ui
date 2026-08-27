@@ -12,7 +12,13 @@ const finiteNumber = (value, fallback = 0) => {
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 
-const clampQuarter = (value, fallback = 4) => Math.min(4, Math.max(1, Math.trunc(finiteNumber(value, fallback))));
+const normalizePeriod = (value, fallback = 4) => Math.max(1, Math.trunc(finiteNumber(value, fallback)));
+
+const periodLabel = (period) => {
+  if (period <= QUARTER_NAMES.length) return `${QUARTER_NAMES[period - 1]} Quarter`;
+  const overtime = period - QUARTER_NAMES.length;
+  return overtime === 1 ? 'First Overtime' : `Overtime ${overtime}`;
+};
 
 export const FOOTBALL_QUICKIE_SCOPE_OPTIONS = [
   { value: 'cumulative-game', label: 'Full Game' },
@@ -41,12 +47,12 @@ export const resolveFootballQuickieScope = (input = {}) => {
     };
   }
   if (mode === 'quarter') {
-    const quarter = clampQuarter(params?.get('quarter') || input.quarter, 1);
+    const quarter = normalizePeriod(params?.get('quarter') || input.quarter, 1);
     return {
       mode,
       quarter,
       periods: [quarter],
-      label: `${QUARTER_NAMES[quarter - 1]} Quarter`,
+      label: periodLabel(quarter),
       value: `quarter-${quarter}`,
     };
   }
@@ -60,12 +66,12 @@ export const resolveFootballQuickieScope = (input = {}) => {
       value: 'cumulative-game',
     };
   }
-  const quarter = clampQuarter(requestedQuarter, 4);
+  const quarter = normalizePeriod(requestedQuarter, 4);
   return {
     mode: 'cumulative',
     quarter,
     periods: Array.from({ length: quarter }, (_, index) => index + 1),
-    label: quarter === 4 ? 'Full Game' : `Cumulative Through ${QUARTER_NAMES[quarter - 1]} Quarter`,
+    label: quarter === 4 ? 'Full Game' : `Cumulative Through ${periodLabel(quarter)}`,
     value: `cumulative-${quarter}`,
   };
 };

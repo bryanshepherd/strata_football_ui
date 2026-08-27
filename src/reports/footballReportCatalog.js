@@ -4,6 +4,7 @@ export const FOOTBALL_REPORT_OPTIONS = Object.freeze([
   { id: 'penalty-chart', label: 'Penalty Chart' },
   { id: 'drive-chart', label: 'Drive Chart' },
   { id: 'quickie-stats', label: 'Quickie Stats' },
+  { id: 'play-by-play', label: 'Play-by-Play' },
 ]);
 
 export const buildFootballReportHref = ({

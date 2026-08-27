@@ -245,6 +245,24 @@ const ScoringSummary = ({ report }) => (
   </ReportSection>
 );
 
+export const FootballQuickieReportPage = ({
+  className = '',
+  dataFootballReport = 'quickie-stats',
+  report,
+}) => (
+  <article
+    className={`football-report-page football-quickie-page ${className}`.trim()}
+    data-football-report={dataFootballReport}
+  >
+    <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
+    <p className="football-quickie-scope-label">{report.scope.label}</p>
+    <TeamStats report={report} />
+    <IndividualStats report={report} />
+    <ScoringSummary report={report} />
+    <FootballReportFooterBrand />
+  </article>
+);
+
 export default function FootballQuickieStatsReport({ envelope }) {
   const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
   const [scope, setScope] = useState(() => resolveFootballQuickieScope(reportSearchParams()));
@@ -272,14 +290,7 @@ export default function FootballQuickieStatsReport({ envelope }) {
         </label>
         <button onClick={() => window.print()} type="button">Print / Save PDF</button>
       </nav>
-      <article className="football-report-page football-quickie-page" data-football-report="quickie-stats">
-        <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
-        <p className="football-quickie-scope-label">{report.scope.label}</p>
-        <TeamStats report={report} />
-        <IndividualStats report={report} />
-        <ScoringSummary report={report} />
-        <FootballReportFooterBrand />
-      </article>
+      <FootballQuickieReportPage report={report} />
     </main>
   );
 }

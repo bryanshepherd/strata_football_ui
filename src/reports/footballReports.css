@@ -402,6 +402,74 @@
   font-weight: 700;
 }
 
+.football-play-by-play-quarter-page,
+.football-play-by-play-quickie-page {
+  margin-bottom: 20px;
+}
+
+.football-play-by-play-quarter-page {
+  min-height: 11in;
+  overflow: visible;
+  padding-bottom: .55in;
+}
+
+.football-play-by-play-quarter-heading {
+  margin: 8px 0 3px;
+  padding: 0 0 3px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 9pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.football-play-by-play-table {
+  font-size: 6.4pt;
+  line-height: 1.08;
+}
+
+.football-play-by-play-down-column {
+  width: .82in;
+}
+
+.football-play-by-play-spot-column {
+  width: .72in;
+}
+
+.football-play-by-play-table td {
+  height: 14px;
+  padding: 2px 4px;
+  vertical-align: top;
+}
+
+.football-play-by-play-down,
+.football-play-by-play-spot {
+  white-space: nowrap;
+}
+
+.football-play-by-play-text {
+  text-align: left !important;
+}
+
+.football-play-by-play-drive-start td {
+  padding: 4px 5px 2px;
+  border-top: 1px solid #909b95;
+  text-align: left;
+  font-weight: 700;
+}
+
+.football-play-by-play-drive-end td {
+  padding: 2px 5px 4px;
+  border-bottom: 1.5px solid #909b95;
+  text-align: left;
+  font-weight: 700;
+}
+
+.football-play-by-play-score td {
+  border-top: 1px solid #909b95;
+  background: #eef2ef;
+  text-align: center;
+  font-weight: 700;
+}
+
 .football-quickie-page {
   padding: .24in .28in .55in;
 }
@@ -661,12 +729,22 @@
     margin-top: 0;
   }
 
+  .football-play-by-play-quarter-page,
+  .football-play-by-play-quickie-page {
+    margin-bottom: 0;
+  }
+
   .football-penalty-chart-page-break {
     break-before: page;
     page-break-before: always;
   }
 
   .football-drive-chart-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .football-play-by-play-page-break {
     break-before: page;
     page-break-before: always;
   }

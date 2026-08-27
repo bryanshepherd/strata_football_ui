@@ -541,6 +541,10 @@ describe('FootballScorerShell', () => {
         'href',
         '/index.html?report=quickie-stats&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
+      expect(screen.getByRole('link', { name: 'Play-by-Play' })).toHaveAttribute(
+        'href',
+        '/index.html?report=play-by-play&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
 
       fireEvent.click(screen.getByRole('button', { name: 'Fetch from server' }));
 
