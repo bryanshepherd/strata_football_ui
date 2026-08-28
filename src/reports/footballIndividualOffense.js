@@ -314,7 +314,12 @@ const buildTeamReport = (envelope, events, projected, players, identity, team, s
     ...(charged.passing.passAttempts > 0 || charged.passing.sacksTaken > 0 ? [charged.passing] : []),
   ], (left, right) => right.passYards - left.passYards || right.passAttempts - left.passAttempts);
   const receiving = sorted(
-    players.filter((player) => player.team === team && (player.targets > 0 || player.receptions > 0)),
+    players.filter((player) => player.team === team && (
+      player.targets > 0
+      || player.receptions > 0
+      || player.receivingYards !== 0
+      || player.receivingTouchdowns > 0
+    )),
     (left, right) => right.receivingYards - left.receivingYards || right.receptions - left.receptions,
   );
   const creditedPunters = players.filter((player) => player.team === team && player.punts > 0);

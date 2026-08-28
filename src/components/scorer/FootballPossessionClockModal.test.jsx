@@ -62,4 +62,16 @@ describe('FootballPossessionClockModal', () => {
     fireEvent.submit(input.closest('form'));
     expect(onSave).toHaveBeenLastCalledWith('08:01');
   });
+
+  it('labels a clock-only prompt as the end of the play', () => {
+    render(
+      <FootballPossessionClockModal
+        change={{ clockOnly: true, defaultClock: '06:05' }}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: /end of play clock/i })).toBeInTheDocument();
+    expect(screen.getByText('End of Play')).toBeInTheDocument();
+  });
 });

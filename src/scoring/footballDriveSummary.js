@@ -67,6 +67,12 @@ const isTouchdown = (event) => (
   || event?.result?.code === 'touchdown'
 );
 
+export const isFootballKickoffReturnTouchdown = (event) => (
+  event?.type === 'kickoff'
+  && isTouchdown(event)
+  && (event?.subtype === 'returned' || Boolean(event?.result?.return))
+);
+
 export const isFootballDriveSummaryTerminalEvent = (event) => {
   if (!event || isTouchdown(event)) return false;
   if (event.type === 'try') return true;
@@ -244,6 +250,24 @@ export function buildFootballDriveSummary(envelope, terminalEvent) {
   const events = envelope.events || [];
   const scoringPlaySummary = buildFootballScoringPlaySummary(envelope, terminalEvent);
   const scoringEvent = scoringPlaySummary?.scoringEvent;
+  if (isFootballKickoffReturnTouchdown(scoringEvent)) {
+    const teamCode = scoringEvent.result?.scoring?.team
+      || scoringEvent.result?.nextPossession
+      || scoringEvent.participants?.returner?.team;
+    const returnStart = scoringEvent.result?.return?.returnStartYardLine
+      || scoringEvent.result?.kick?.catchYardLine
+      || 'Unknown Spot';
+    return {
+      driveId: `KICKOFF-RETURN-${scoringEvent.eventId || scoringEvent.clientEventId || scoringEvent.sequence || 'TD'}`,
+      team: teamCode,
+      teamName: envelope.game?.teams?.[teamCode]?.name || envelope.game?.teams?.[teamCode]?.abbr || teamCode || 'Scoring Team',
+      plays: 0,
+      yards: 0,
+      timeOfPossession: '0:00',
+      scoringPlay: scoringPlaySummary.scoringPlay,
+      startInfo: `Start: ${formatFootballClockDisplay(scoringEvent.clock, '--:--')} at ${returnStart} by Kickoff Return`,
+    };
+  }
   const drive = completedDriveForScore(envelope, scoringEvent);
   if (!scoringEvent || !drive) return null;
 

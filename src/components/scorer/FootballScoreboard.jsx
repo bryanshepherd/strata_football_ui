@@ -1,5 +1,8 @@
 import React from 'react';
-import { footballDriveTimeOfPossession } from '../../scoring/footballDriveSummary';
+import {
+  footballDriveTimeOfPossession,
+  isFootballKickoffReturnTouchdown,
+} from '../../scoring/footballDriveSummary';
 import { formatFootballClockDisplay } from '../../utils/footballClock';
 import { formatFootballSpotForDisplay } from '../../utils/footballSpotNormalization';
 
@@ -40,6 +43,22 @@ const completedTouchdownContext = (envelope) => {
   const scoringTeam = envelope.liveState?.pendingTryTeam
     || touchdownEvent?.result?.scoring?.team
     || touchdownEvent?.possession;
+  if (isFootballKickoffReturnTouchdown(touchdownEvent)) {
+    return {
+      touchdownEvent,
+      drive: {
+        driveId: 'Kickoff Return',
+        team: scoringTeam,
+        result: 'touchdown',
+        startPeriod: touchdownEvent.period,
+        startClock: touchdownEvent.clock,
+        endPeriod: touchdownEvent.period,
+        endClock: touchdownEvent.clock,
+        plays: 0,
+        yards: 0,
+      },
+    };
+  }
   const drive = (exactDriveId
     ? completedDrives.find((candidate) => candidate.driveId === exactDriveId)
     : null)

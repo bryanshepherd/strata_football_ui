@@ -70,6 +70,72 @@ describe('football Quickie Stats projection', () => {
     expect(receiver).toMatchObject({ yac: -3, yacStated: true });
   });
 
+  it('shows the lateral recipient with receiving yards and no reception', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.game.teams.H.score = 6;
+    envelope.game.teams.V.score = 0;
+    envelope.rosters.teams.H.players['H-16'] = {
+      playerId: 'H-16', team: 'H', jersey: '16', displayName: 'Passer', active: true,
+    };
+    envelope.rosters.teams.H.players['H-49'] = {
+      playerId: 'H-49', team: 'H', jersey: '49', displayName: 'Original Receiver', active: true,
+    };
+    envelope.rosters.teams.H.players['H-47'] = {
+      playerId: 'H-47', team: 'H', jersey: '47', displayName: 'Lateral Receiver', active: true,
+    };
+    envelope.events = [{
+      eventId: 'PASS-LATERAL-TD-1',
+      sequence: 1,
+      status: 'accepted',
+      type: 'pass',
+      subtype: 'complete',
+      period: 1,
+      clock: '09:11',
+      possession: 'H',
+      preState: {
+        possession: 'H', down: 1, distance: 10, yardLine: 'H16', lineToGain: 'H26', driveId: 'DRV-1', driveNumber: 1,
+      },
+      participants: {
+        primary: { playerId: 'H-16', team: 'H', role: 'passer' },
+        receiver: { playerId: 'H-49', team: 'H', role: 'receiver' },
+        secondary: { playerId: 'H-49', team: 'H', role: 'intendedReceiver' },
+        others: [{ playerId: 'H-47', team: 'H', role: 'other' }],
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 84,
+        endYardLine: 'V00',
+        pass: { outcome: 'complete', terminalYardLine: 'V00', passingYards: 84, receivingYards: 84 },
+        laterals: [{ fromPlayerId: 'H-49', toPlayerId: 'H-47', spot: 'H24' }],
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+      penalties: [],
+    }];
+    envelope.stats = { teams: {}, players: {} };
+
+    const report = buildFootballQuickieStatsReport(envelope, { mode: 'quarter', quarter: 1 });
+    const originalReceiver = report.individual.H.receiving.find((player) => player.playerId === 'H-49');
+    const lateralReceiver = report.individual.H.receiving.find((player) => player.playerId === 'H-47');
+
+    expect(originalReceiver).toMatchObject({
+      targets: 1,
+      receptions: 1,
+      receivingYards: 8,
+      receivingTouchdowns: 0,
+      receivingLong: 8,
+    });
+    expect(lateralReceiver).toMatchObject({
+      targets: 0,
+      receptions: 0,
+      receivingYards: 76,
+      receivingTouchdowns: 1,
+      receivingLong: 0,
+      rushAttempts: 0,
+      rushYards: 0,
+    });
+  });
+
   it('builds an isolated half with only its points, possession, stats, and scoring rows', () => {
     const report = buildFootballQuickieStatsReport(baselineRecord.envelope, { mode: 'half', half: 1 });
     expect(report.scope).toMatchObject({ value: 'half-1', periods: [1, 2], label: 'First Half' });

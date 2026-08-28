@@ -113,6 +113,61 @@ describe('FootballScoreboard', () => {
     expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
   });
 
+  it('does not reuse a prior offensive drive for a kickoff-return touchdown', () => {
+    const fixture = getGameEnvelopeFixture('normal');
+    const kickoffTouchdown = {
+      eventId: 'EVT-KO-TD-1',
+      sequence: 13,
+      status: 'accepted',
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 1,
+      clock: '06:05',
+      possession: null,
+      participants: {
+        returner: { playerId: 'V-31', team: 'V', role: 'returner' },
+      },
+      result: {
+        code: 'touchdown',
+        nextPossession: 'V',
+        return: { type: 'Kickoff', returnYards: 99 },
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+    };
+    const envelope = {
+      ...fixture,
+      events: [...fixture.events, kickoffTouchdown],
+      liveState: {
+        ...fixture.liveState,
+        possession: null,
+        down: null,
+        distance: null,
+        driveId: null,
+        pendingTryTeam: 'V',
+        nextPlayContext: 'awaitingTry',
+      },
+      drives: {
+        current: null,
+        completed: [{
+          driveId: 'DRV-OLD-V-TD',
+          team: 'V',
+          result: 'touchdown',
+          startClock: '09:11',
+          endClock: '08:02',
+          plays: 2,
+          yards: 88,
+        }],
+      },
+    };
+
+    render(<FootballScoreboard envelope={envelope} />);
+
+    expect(screen.getByText('Drive').parentElement).toHaveTextContent('Kickoff Return · Touchdown');
+    expect(screen.getByText('TOP').parentElement).toHaveTextContent('0:00');
+    expect(screen.getByText('Plays').parentElement).toHaveTextContent('0');
+    expect(screen.getByText('Yards').parentElement).toHaveTextContent('0');
+  });
+
   it('shows timeout ovals and challenge circles as filled availability or empty spent indicators', () => {
     const fixture = getGameEnvelopeFixture('normal');
     const envelope = {

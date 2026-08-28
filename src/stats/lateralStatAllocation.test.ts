@@ -10,40 +10,31 @@ const PASS_LATERAL: LateralStatAllocationInput = {
     {
       lateralFromSpot: 40,
       lateralToSpot: 38,
-      continuationType: 'rush',
+      continuationType: 'receiving',
     },
   ],
 };
 
 describe('allocateLateralStats', () => {
-  it('allocates a completed pass lateral with a negative miscellaneous segment', () => {
+  it('keeps a completed-pass lateral in passing and receiving yardage', () => {
     const result = allocateLateralStats(PASS_LATERAL);
 
     expect(result.ok).toBe(true);
     expect(result.totalGain).toBe(35);
     expect(result.allocatedTotal).toBe(35);
-    expect(result.miscYards).toBe(-2);
+    expect(result.miscYards).toBe(0);
     expect(result.buckets).toMatchObject({
-      passingYards: 10,
-      receivingYards: 10,
-      rushingYards: 27,
+      passingYards: 35,
+      receivingYards: 35,
     });
     expect(result.attempts.rushingAttempts ?? 0).toBe(0);
     expect(result.segments).toEqual([
       {
         type: 'original',
-        yards: 10,
+        yards: 8,
         fromSpot: 30,
-        toSpot: 40,
-        bucket: 'passingYards+receivingYards',
-        createsAttempt: false,
-      },
-      {
-        type: 'lateralMisc',
-        yards: -2,
-        fromSpot: 40,
         toSpot: 38,
-        bucket: 'miscYards',
+        bucket: 'receivingYards',
         createsAttempt: false,
       },
       {
@@ -51,7 +42,7 @@ describe('allocateLateralStats', () => {
         yards: 27,
         fromSpot: 38,
         toSpot: 65,
-        bucket: 'rushingYards',
+        bucket: 'receivingYards',
         createsAttempt: false,
       },
     ]);
@@ -234,7 +225,7 @@ describe('allocateLateralStats', () => {
 
   it('fails the sanity check when input segments cannot reconcile', () => {
     const result = allocateLateralStats({
-      playFamily: 'pass',
+      playFamily: 'rush',
       startSpot: 30,
       firstSegmentEndSpot: 40,
       terminalSpot: 65,

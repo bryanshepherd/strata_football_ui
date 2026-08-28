@@ -9,6 +9,7 @@ export type LateralPlayFamily =
 
 export type LateralContinuationType =
   | 'rush'
+  | 'receiving'
   | 'fumbleReturn'
   | 'interceptionReturn'
   | 'kickReturn'
@@ -86,6 +87,7 @@ const PLAY_FAMILIES = new Set<LateralPlayFamily>([
 
 const CONTINUATION_TYPES = new Set<LateralContinuationType>([
   'rush',
+  'receiving',
   'fumbleReturn',
   'interceptionReturn',
   'kickReturn',
@@ -112,7 +114,10 @@ export function allocateLateralStats(input: LateralStatAllocationInput): Lateral
   validateInput(input, laterals, errors);
 
   const totalGain = safeDifference(input?.terminalSpot, input?.startSpot);
-  const originalYards = safeDifference(input?.firstSegmentEndSpot, input?.startSpot);
+  const originalEndSpot = input?.playFamily === 'pass' && laterals.length > 0
+    ? laterals[0].lateralToSpot
+    : input?.firstSegmentEndSpot;
+  const originalYards = safeDifference(originalEndSpot, input?.startSpot);
 
   if (Number.isFinite(originalYards)) {
     const originalBuckets = originalBucketKeys(input.playFamily);
@@ -121,7 +126,7 @@ export function allocateLateralStats(input: LateralStatAllocationInput): Lateral
       type: 'original' as const,
       yards: originalYards,
       fromSpot: input.startSpot,
-      toSpot: input.firstSegmentEndSpot,
+      toSpot: originalEndSpot,
       bucket: originalBuckets.join('+') || 'unknown',
       createsAttempt: Boolean(originalAttemptKey),
     };
@@ -134,6 +139,23 @@ export function allocateLateralStats(input: LateralStatAllocationInput): Lateral
   }
 
   laterals.forEach((lateral, index) => {
+    if (input.playFamily === 'pass') {
+      const continuationEndSpot = laterals[index + 1]?.lateralToSpot ?? input.terminalSpot;
+      const continuationYards = safeDifference(continuationEndSpot, lateral.lateralToSpot);
+      if (Number.isFinite(continuationYards)) {
+        segments.push({
+          type: 'continuation',
+          yards: continuationYards,
+          fromSpot: lateral.lateralToSpot,
+          toSpot: continuationEndSpot,
+          bucket: 'receivingYards',
+          createsAttempt: false,
+        });
+        addYards(buckets, 'receivingYards', continuationYards);
+      }
+      return;
+    }
+
     const miscYards = safeDifference(lateral.lateralToSpot, lateral.lateralFromSpot);
     if (Number.isFinite(miscYards)) {
       segments.push({
@@ -169,6 +191,10 @@ export function allocateLateralStats(input: LateralStatAllocationInput): Lateral
     .filter((segment) => segment.bucket === 'miscYards')
     .reduce((sum, segment) => sum + segment.yards, 0);
   const allocatedTotal = segments.reduce((sum, segment) => sum + segment.yards, 0);
+
+  if (input.playFamily === 'pass' && Number.isFinite(totalGain)) {
+    buckets.passingYards = totalGain;
+  }
 
   validateContinuity(input, laterals, errors);
 
@@ -269,7 +295,7 @@ function validateContinuity(
 function originalBucketKeys(playFamily: LateralPlayFamily): LateralStatBucketKey[] {
   switch (playFamily) {
     case 'pass':
-      return ['passingYards', 'receivingYards'];
+      return ['receivingYards'];
     case 'rush':
       return ['rushingYards'];
     case 'fumbleReturn':
@@ -299,6 +325,8 @@ function continuationBucketKey(continuationType: LateralContinuationType): Later
   switch (continuationType) {
     case 'rush':
       return 'rushingYards';
+    case 'receiving':
+      return 'receivingYards';
     case 'fumbleReturn':
       return 'fumbleReturnYards';
     case 'interceptionReturn':

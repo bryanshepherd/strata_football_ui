@@ -247,6 +247,69 @@ describe('football drive summary', () => {
     expect(summary.startInfo).toBe('Start: 6:38 at V28 by Fumble Recovery');
   });
 
+  it('shows a kickoff-return touchdown as zero offensive plays, yards, and possession time', () => {
+    const kickoffTouchdown = {
+      eventId: 'EVT-KO-TD',
+      sequence: 4,
+      status: 'accepted',
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 1,
+      clock: '06:05',
+      possession: null,
+      participants: {
+        kicker: { playerId: 'V-93', team: 'V', role: 'kicker' },
+        returner: { playerId: 'H-44', team: 'H', role: 'returner' },
+      },
+      result: {
+        code: 'touchdown',
+        nextPossession: 'H',
+        kick: { catchYardLine: 'H01', kickYards: 64 },
+        return: {
+          type: 'Kickoff',
+          returnerPlayerId: 'H-44',
+          returnStartYardLine: 'H01',
+          returnEndYardLine: 'V00',
+          returnYards: 99,
+        },
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+      description: 'Kickoff returned 99 yards for a touchdown.',
+    };
+    const pat = {
+      ...tryEvent('kick', {
+        code: 'made',
+        scoring: { team: 'H', points: 1, type: 'patKick' },
+      }, {
+        primary: { playerId: 'H-44' },
+        kicker: { playerId: 'H-44' },
+      }),
+      sequence: 5,
+      clock: '05:49',
+    };
+    const envelope = envelopeFor([punt, rushTouchdown, kickoffTouchdown, pat], {
+      team: 'H',
+      driveId: 'DRV-OLD-H-TD',
+      startYardLine: 'H12',
+      startClock: '09:11',
+      endClock: '08:02',
+      plays: 2,
+      yards: 88,
+      result: 'touchdown',
+    });
+
+    expect(buildFootballDriveSummary(envelope, pat)).toEqual({
+      driveId: 'KICKOFF-RETURN-EVT-KO-TD',
+      team: 'H',
+      teamName: 'West Virginia St.',
+      plays: 0,
+      yards: 0,
+      timeOfPossession: '0:00',
+      scoringPlay: 'Kickoff returned 99 yards for a touchdown. (Gregory Kick)',
+      startInfo: 'Start: 6:05 at H01 by Kickoff Return',
+    });
+  });
+
   it('keeps suffixes out of the last-name display', () => {
     expect(footballPlayerLastName('Larrey Williams III')).toBe('Williams');
     expect(footballPlayerLastName('Todd Gregory, Jr.')).toBe('Gregory');

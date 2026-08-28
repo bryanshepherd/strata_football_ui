@@ -876,6 +876,64 @@ const updatePlayerStat = (players, playerId, team, updater) => {
   };
 };
 
+export const allocateCompletedPassReceivingYards = (event, passingYards) => {
+  const receiver = event?.participants?.receiver
+    || event?.participants?.secondary
+    || event?.participants?.target;
+  if (!receiver?.playerId) return [];
+
+  const totalYards = finiteNumber(passingYards);
+  const laterals = Array.isArray(event?.result?.laterals) ? event.result.laterals : [];
+  if (laterals.length === 0) {
+    return [{
+      playerId: receiver.playerId,
+      team: receiver.team || event?.possession,
+      yards: totalYards,
+      reception: true,
+      terminal: true,
+    }];
+  }
+
+  const allocations = [];
+  let currentPlayerId = receiver.playerId;
+  let currentTeam = receiver.team || event?.possession;
+  let currentSpot = event?.preState?.yardLine;
+  let allocatedYards = 0;
+
+  for (const lateral of laterals) {
+    const segmentYards = calculateYardsGained(currentSpot, lateral?.spot, event?.possession);
+    if (!lateral?.toPlayerId || !Number.isFinite(segmentYards)) {
+      return [{
+        playerId: receiver.playerId,
+        team: receiver.team || event?.possession,
+        yards: totalYards,
+        reception: true,
+        terminal: true,
+      }];
+    }
+    allocations.push({
+      playerId: currentPlayerId,
+      team: currentTeam,
+      yards: segmentYards,
+      reception: allocations.length === 0,
+      terminal: false,
+    });
+    allocatedYards += segmentYards;
+    currentPlayerId = lateral.toPlayerId;
+    currentTeam = event?.possession;
+    currentSpot = lateral.spot;
+  }
+
+  allocations.push({
+    playerId: currentPlayerId,
+    team: currentTeam,
+    yards: totalYards - allocatedYards,
+    reception: false,
+    terminal: true,
+  });
+  return allocations;
+};
+
 const hasAcceptedSpotOfFoulPenalty = (event) => (event?.penalties || []).some((penalty) => (
   penalty.status === 'accepted'
   && penalty.spotOfFoul
@@ -1128,8 +1186,16 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         ...current,
         targets: finiteNumber(current.targets) + (isAttempt ? 1 : 0),
         receptions: finiteNumber(current.receptions) + (outcome === 'complete' ? 1 : 0),
-        receivingYards: finiteNumber(current.receivingYards) + (outcome === 'complete' ? passingYards : 0),
+        receivingYards: finiteNumber(current.receivingYards),
       }));
+      if (outcome === 'complete') {
+        allocateCompletedPassReceivingYards(event, passingYards).forEach((allocation) => {
+          players = updatePlayerStat(players, allocation.playerId, allocation.team || offense, (current) => ({
+            ...current,
+            receivingYards: finiteNumber(current.receivingYards) + allocation.yards,
+          }));
+        });
+      }
     }
 
     if (event.subtype === 'sack' || outcome === 'sack') {

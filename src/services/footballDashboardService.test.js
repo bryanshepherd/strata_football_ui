@@ -1477,6 +1477,68 @@ describe('local football test-game projection', () => {
     expect(penalty.gameEnvelope.drives.current).toMatchObject({ plays: 7, yards: 22 });
   });
 
+  it('splits completed-pass lateral yardage between receivers without creating a rush', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.stats.teams = {};
+    envelope.stats.players = {};
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'H16',
+      lineToGain: 'H26',
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PASS-LATERAL-TD-1', {
+      type: 'pass',
+      subtype: 'complete',
+      participants: {
+        primary: { playerId: 'H-16', team: 'H', role: 'passer' },
+        secondary: { playerId: 'H-49', team: 'H', role: 'intendedReceiver' },
+        receiver: { playerId: 'H-49', team: 'H', role: 'receiver' },
+        others: [{ playerId: 'H-47', team: 'H', role: 'other' }],
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 84,
+        endYardLine: 'V00',
+        pass: {
+          outcome: 'complete',
+          terminalYardLine: 'V00',
+          passingYards: 84,
+          receivingYards: 84,
+        },
+        laterals: [{ fromPlayerId: 'H-49', toPlayerId: 'H-47', spot: 'H24' }],
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+    }));
+
+    expect(response.gameEnvelope.stats.teams.H).toMatchObject({
+      pass: { att: 1, cmp: 1, int: 0, yds: 84 },
+    });
+    expect(response.gameEnvelope.stats.teams.H.rushAttempts).toBeUndefined();
+    expect(response.gameEnvelope.stats.teams.H.rushYards).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['H-16']).toMatchObject({
+      passAttempts: 1,
+      passCompletions: 1,
+      passYards: 84,
+    });
+    expect(response.gameEnvelope.stats.players['H-49']).toMatchObject({
+      targets: 1,
+      receptions: 1,
+      receivingYards: 8,
+    });
+    expect(response.gameEnvelope.stats.players['H-47']).toMatchObject({
+      receivingYards: 76,
+    });
+    expect(response.gameEnvelope.stats.players['H-47'].targets).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['H-47'].receptions).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['H-47'].rushAttempts).toBeUndefined();
+    expect(response.gameEnvelope.stats.players['H-47'].rushYards).toBeUndefined();
+  });
+
   it('charges spike, kneel, and aborted play statistics to the team without individual attempts', async () => {
     let envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.stats.teams = {};
@@ -2124,6 +2186,23 @@ describe('local football test-game projection', () => {
       endClock: '07:30',
     });
     expect(recorded.drives.current).toMatchObject({ team: 'V', startPeriod: 1, startClock: '07:30' });
+  });
+
+  it('updates only the game clock when a special-teams touchdown has no possession transition', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const originalStats = clone(envelope.stats);
+    const originalDrives = clone(envelope.drives);
+
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: null,
+      nextPossession: null,
+      period: 1,
+      clock: '08:30',
+    });
+
+    expect(recorded.clock).toMatchObject({ clock: '08:30', clockTenths: 5100, isRunning: false });
+    expect(recorded.stats).toEqual(originalStats);
+    expect(recorded.drives).toEqual(originalDrives);
   });
 
   it('uses the active drive start clock when possession is changed manually', () => {

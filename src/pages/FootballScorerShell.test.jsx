@@ -1656,6 +1656,43 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('asks for the ending clock on a kickoff-return touchdown and reports a zero offensive drive', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    completeKickoffReturnFlowInputs('E', 'H00');
+
+    let summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(summaryDialog).toHaveTextContent(/return for 80 yards for a touchdown/i);
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const clockDialog = await screen.findByRole('dialog', { name: /end of play clock/i });
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    expect(clockInput).toHaveValue('8:42');
+    fireEvent.change(clockInput, { target: { value: '0830' } });
+    fireEvent.submit(clockInput.closest('form'));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /end of play clock/i })).not.toBeInTheDocument());
+    const scoreboardSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="scoreboard"]');
+    expect(within(scoreboardSlot).getByText('Drive').parentElement).toHaveTextContent('Kickoff Return · Touchdown');
+    expect(within(scoreboardSlot).getByText('TOP').parentElement).toHaveTextContent('0:00');
+    expect(within(scoreboardSlot).getByText('Plays').parentElement).toHaveTextContent('0');
+    expect(within(scoreboardSlot).getByText('Yards').parentElement).toHaveTextContent('0');
+
+    fireEvent.keyDown(window, { key: 'a', code: 'KeyA' });
+    fireEvent.click(within(screen.getByRole('dialog', { name: /pat type/i })).getByRole('button', { name: /^kick k$/i }));
+    const kickerInput = screen.getByLabelText(/kicker jersey/i);
+    fireEvent.change(kickerInput, { target: { value: '31' } });
+    fireEvent.submit(kickerInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: /^good/i }));
+    summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const driveSummary = await screen.findByRole('dialog', { name: /drive summary/i });
+    expect(within(driveSummary).getByText('Plays').parentElement).toHaveTextContent('0');
+    expect(within(driveSummary).getByText('Yards').parentElement).toHaveTextContent('0');
+    expect(within(driveSummary).getByText('Time of Poss').parentElement).toHaveTextContent('0:00');
+    expect(driveSummary).toHaveTextContent('Start: 8:42 at V20 by Kickoff Return');
+  });
+
   it('kickoff receive branches use kick receive meanings for T and C', async () => {
     const { unmount } = renderScorer();
 
@@ -2657,7 +2694,7 @@ function startKickoffReturnTerminalSelection() {
   expect(screen.getByRole('dialog', { name: /return result/i })).toBeInTheDocument();
 }
 
-function completeKickoffReturnFlowInputs(terminalResult) {
+function completeKickoffReturnFlowInputs(terminalResult, finalSpot = 'V31') {
   startKickoffReturnTerminalSelection();
   const buttonName = terminalResult === 'T' ? /^tackle/i : terminalResult === 'O' ? /^out of bounds/i : /^end of play/i;
   fireEvent.click(screen.getByRole('button', { name: buttonName }));
@@ -2678,7 +2715,7 @@ function completeKickoffReturnFlowInputs(terminalResult) {
 
   const finalSpotDialog = screen.getByRole('dialog', { name: /return final spot/i });
   const spotInput = within(finalSpotDialog).getByLabelText(/^final spot$/i);
-  fireEvent.change(spotInput, { target: { value: 'V31' } });
+  fireEvent.change(spotInput, { target: { value: finalSpot } });
   fireEvent.submit(spotInput.closest('form'));
 }
 

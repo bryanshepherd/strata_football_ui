@@ -26,6 +26,7 @@ import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEdit
 import { gamePhaseForEnvelope, pregameForEnvelope } from '../pregame/footballPregame';
 import {
   buildFootballDriveSummary,
+  isFootballKickoffReturnTouchdown,
   isFootballDriveSummaryTerminalEvent,
 } from '../scoring/footballDriveSummary';
 import { applyFootballGameWrapUp } from '../scoring/footballGameWrapUp';
@@ -331,18 +332,23 @@ export default function FootballScorerShell() {
       && isFootballDriveSummaryTerminalEvent(acceptedEvent)
       ? acceptedEvent
       : null;
+    const kickoffReturnTouchdown = result?.status !== 'duplicateAccepted'
+      && isFootballKickoffReturnTouchdown(acceptedEvent);
     if (acceptedEnvelope?.game?.status === 'final' && !acceptedEnvelope.game.wrapUp?.completedAt) {
       setWrapUpSaveState({ saving: false, error: '' });
       setWrapUpOpen(true);
     }
-    if (acceptedEnvelope && previousPossession !== nextPossession && (previousPossession || nextPossession)) {
+    if (acceptedEnvelope && (kickoffReturnTouchdown || (
+      previousPossession !== nextPossession && (previousPossession || nextPossession)
+    ))) {
       setPossessionClockChange({
-        previousPossession,
-        nextPossession,
+        previousPossession: kickoffReturnTouchdown ? null : previousPossession,
+        nextPossession: kickoffReturnTouchdown ? null : nextPossession,
         period: acceptedEnvelope.clock?.period || acceptedEnvelope.game?.period || 1,
         defaultClock: acceptedEnvelope.clock?.clock || envelope.clock?.clock || '',
         envelope: acceptedEnvelope,
         driveSummaryEvent,
+        clockOnly: kickoffReturnTouchdown,
       });
     } else if (acceptedEnvelope && driveSummaryEvent) {
       setDriveSummary(buildFootballDriveSummary(acceptedEnvelope, driveSummaryEvent));

@@ -1,4 +1,7 @@
-import { projectFootballStatsForEvents } from '../services/footballDashboardService';
+import {
+  allocateCompletedPassReceivingYards,
+  projectFootballStatsForEvents,
+} from '../services/footballDashboardService';
 import {
   buildFootballScoringSummary,
   formatFootballReportDate,
@@ -119,7 +122,9 @@ const passYardsAfterCatch = (envelope, event) => {
     length,
   );
   const terminalSpot = relativeSpot(
-    event?.result?.pass?.terminalYardLine ?? event?.result?.endYardLine,
+    event?.result?.laterals?.[0]?.spot
+      ?? event?.result?.pass?.terminalYardLine
+      ?? event?.result?.endYardLine,
     team,
     length,
   );
@@ -374,15 +379,47 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
         const yards = passYards(envelope, event);
         const recorded = finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards);
         const correction = yards - recorded;
+        const recordedReceiving = allocateCompletedPassReceivingYards(event, recorded);
+        const officialReceiving = allocateCompletedPassReceivingYards(event, yards);
+        const recordedByPlayer = new Map();
+        recordedReceiving.forEach((allocation) => {
+          recordedByPlayer.set(
+            allocation.playerId,
+            finiteNumber(recordedByPlayer.get(allocation.playerId)) + allocation.yards,
+          );
+        });
+        const officialByPlayer = new Map();
+        officialReceiving.forEach((allocation) => {
+          officialByPlayer.set(
+            allocation.playerId,
+            finiteNumber(officialByPlayer.get(allocation.playerId)) + allocation.yards,
+          );
+        });
         if (passer) {
           passer.passYards += correction;
           passer.passLong = Math.max(passer.passLong, yards);
           if (event?.result?.scoring?.type === 'touchdown') passer.passTouchdowns += 1;
         }
+        new Set([...recordedByPlayer.keys(), ...officialByPlayer.keys()]).forEach((playerId) => {
+          const allocation = officialReceiving.find((candidate) => candidate.playerId === playerId)
+            || recordedReceiving.find((candidate) => candidate.playerId === playerId);
+          const player = get(playerId, allocation?.team || event.possession);
+          if (player) {
+            player.receivingYards += finiteNumber(officialByPlayer.get(playerId))
+              - finiteNumber(recordedByPlayer.get(playerId));
+          }
+        });
+        const receptionAllocation = officialReceiving.find((allocation) => allocation.reception);
+        const receptionPlayer = get(receptionAllocation?.playerId, receptionAllocation?.team || event.possession);
+        if (receptionPlayer) {
+          receptionPlayer.receivingLong = Math.max(receptionPlayer.receivingLong, receptionAllocation.yards);
+        }
+        if (event?.result?.scoring?.type === 'touchdown') {
+          const touchdownAllocation = officialReceiving.find((allocation) => allocation.terminal);
+          const touchdownReceiver = get(touchdownAllocation?.playerId, touchdownAllocation?.team || event.possession);
+          if (touchdownReceiver) touchdownReceiver.receivingTouchdowns += 1;
+        }
         if (receiver) {
-          receiver.receivingYards += correction;
-          receiver.receivingLong = Math.max(receiver.receivingLong, yards);
-          if (event?.result?.scoring?.type === 'touchdown') receiver.receivingTouchdowns += 1;
           const yac = passYardsAfterCatch(envelope, event);
           if (yac !== null) {
             receiver.yac += yac;
@@ -518,7 +555,12 @@ const individualProjection = (players, team) => ({
   passing: rank(players, team, (player) => player.passAttempts > 0 || player.sacksTaken > 0, (left, right) => (
     right.passYards - left.passYards || right.passAttempts - left.passAttempts
   ), 3),
-  receiving: rank(players, team, (player) => player.targets > 0 || player.receptions > 0, (left, right) => (
+  receiving: rank(players, team, (player) => (
+    player.targets > 0
+    || player.receptions > 0
+    || player.receivingYards !== 0
+    || player.receivingTouchdowns > 0
+  ), (left, right) => (
     right.receivingYards - left.receivingYards || right.receptions - left.receptions
   ), 4),
   punting: rank(players, team, (player) => player.punts > 0, (left, right) => (

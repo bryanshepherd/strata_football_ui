@@ -45,6 +45,68 @@ describe('football Individual Offense projection', () => {
     ]));
   });
 
+  it('allocates a completed-pass lateral to both receivers in Individual Offense', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.rosters.teams.H.players['H-16'] = {
+      playerId: 'H-16', team: 'H', jersey: '16', displayName: 'Passer', active: true,
+    };
+    envelope.rosters.teams.H.players['H-49'] = {
+      playerId: 'H-49', team: 'H', jersey: '49', displayName: 'Original Receiver', active: true,
+    };
+    envelope.rosters.teams.H.players['H-47'] = {
+      playerId: 'H-47', team: 'H', jersey: '47', displayName: 'Lateral Receiver', active: true,
+    };
+    envelope.events = [{
+      eventId: 'PASS-LATERAL-TD-1',
+      sequence: 1,
+      status: 'accepted',
+      type: 'pass',
+      subtype: 'complete',
+      period: 1,
+      clock: '09:11',
+      possession: 'H',
+      preState: {
+        possession: 'H', down: 1, distance: 10, yardLine: 'H16', lineToGain: 'H26', driveId: 'DRV-1', driveNumber: 1,
+      },
+      participants: {
+        primary: { playerId: 'H-16', team: 'H', role: 'passer' },
+        receiver: { playerId: 'H-49', team: 'H', role: 'receiver' },
+        secondary: { playerId: 'H-49', team: 'H', role: 'intendedReceiver' },
+        others: [{ playerId: 'H-47', team: 'H', role: 'other' }],
+        defenders: [],
+      },
+      result: {
+        code: 'complete',
+        yards: 84,
+        endYardLine: 'V00',
+        pass: { outcome: 'complete', terminalYardLine: 'V00', passingYards: 84, receivingYards: 84 },
+        laterals: [{ fromPlayerId: 'H-49', toPlayerId: 'H-47', spot: 'H24' }],
+        scoring: { team: 'H', points: 6, type: 'touchdown' },
+      },
+      penalties: [],
+    }];
+    envelope.stats = { teams: {}, players: {} };
+
+    const report = buildFootballIndividualOffenseReport(envelope);
+    const receiving = report.teamReports.H.receiving;
+
+    expect(report.teamReports.H.passing.totals).toMatchObject({ passYards: 84, passTouchdowns: 1 });
+    expect(receiving.totals).toMatchObject({ receptions: 1, receivingYards: 84, receivingTouchdowns: 1 });
+    expect(receiving.players.find((player) => player.playerId === 'H-49')).toMatchObject({
+      receptions: 1,
+      receivingYards: 8,
+      receivingTouchdowns: 0,
+      receivingLong: 8,
+    });
+    expect(receiving.players.find((player) => player.playerId === 'H-47')).toMatchObject({
+      receptions: 0,
+      receivingYards: 76,
+      receivingTouchdowns: 1,
+      rushAttempts: 0,
+      rushYards: 0,
+    });
+  });
+
   it('credits return counts, yards, and long returns to the individual returners', () => {
     const report = buildFootballIndividualOffenseReport(baselineRecord.envelope);
     const home = report.teamReports.H.returns;

@@ -26,7 +26,8 @@ FCQI should store spots and participants. The projection/stat layer should deriv
 Universal allocation rule:
 
 - The original play or return family owns the first advancement segment.
-- The lateral exchange itself is miscellaneous yards.
+- On rushes and returns, the lateral exchange itself is miscellaneous yards.
+- On a completed forward pass, receiving yards are split at the spot where each backward pass is caught, and the passer keeps the full passing gain.
 - The player receiving the lateral owns the next advancement segment in the continuation stat family.
 - Receiving a lateral does not create a new attempt.
 - The sum of all allocated segments must equal total play gain or return gain.
@@ -55,7 +56,7 @@ Multiple laterals should be represented as ordered segments. A segment's `finalS
 
 ## Core Allocation Rule
 
-The lateral exchange itself creates miscellaneous yards:
+For rushes and returns, the lateral exchange itself creates miscellaneous yards:
 
 ```text
 miscellaneous yards = lateralToSpot - lateralFromSpot
@@ -73,7 +74,9 @@ For every continuation segment after the lateral:
 continuation yards = nextTerminalSpot - lateralToSpot
 ```
 
-The original play or return family owns the advancement before the lateral leaves the original player. Examples: completed pass owns pass/receiving yardage to the lateral-from spot, a rush owns rushing yardage to the lateral-from spot, and a return owns return yardage to the lateral-from spot.
+The original play or return family owns the advancement before the lateral leaves the original player. A rush owns rushing yardage to the lateral-from spot, and a return owns return yardage to the lateral-from spot.
+
+Completed passes are the exception to the lateral-exchange miscellaneous-yard rule. The passer receives the entire gain from the line of scrimmage to the dead-ball spot. The player who caught the forward pass receives one reception and receiving yards from the line of scrimmage to the spot where the backward pass is caught. Each subsequent lateral recipient receives no reception but does receive receiving yards from that catch spot to the next lateral catch spot or the dead-ball spot.
 
 Receiving a lateral does not create a new attempt.
 
@@ -86,7 +89,7 @@ The continuation stat family controls how the lateral receiver's post-lateral ad
 | Continuation type | Lateral receiver yardage |
 | --- | --- |
 | `rush` | rushing yards |
-| `receiving` | receiving yards only when a future football rule model explicitly supports a receiving continuation; normal completed-pass lateral advancement after the lateral is `rush` |
+| `receiving` | receiving yards; a completed-pass lateral uses this family and creates no additional reception |
 | `fumbleReturn` | fumble return yards |
 | `interceptionReturn` | interception return yards |
 | `kickReturn` | kickoff return yards |
@@ -107,21 +110,21 @@ Final V35 = engine 65
 
 Stats:
 
-- QB passing yards = 10
-- WR receiving yards = 10
-- Team miscellaneous yards = -2
-- RB rushing yards = 27
-- RB rushing attempts = 0
+- QB passing yards = 35
+- WR receiving yards = 8 and one reception
+- RB receiving yards = 27 and no reception
+- Team miscellaneous yards = 0
+- Rushing yards = 0
 - Total play gain = 35
 
 Accounting:
 
 ```text
-10 passing + (-2 misc) + 27 rushing = 35
+8 receiving + 27 receiving = 35
 65 - 30 = 35
 ```
 
-The original receiver gets receiving yards only through the spot where the lateral leaves the player. The lateral exchange itself is miscellaneous. The next ball carrier's advancement is rushing yardage, not another reception or attempt.
+The original receiver gets receiving yards through the spot where the backward pass is caught. The next player receives receiving yards but no reception. The team and passer retain the full passing gain.
 
 ## Rush Lateral Example
 
