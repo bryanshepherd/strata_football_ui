@@ -2064,7 +2064,7 @@ describe('local football test-game projection', () => {
 
   it('repairs a missing opening kickoff spot from the completed coin toss', () => {
     const envelope = clone(getGameEnvelopeFixture('pregame'));
-    envelope.game.rules.kickoffSpot = 'H35';
+    envelope.game.rules.kickoffSpot = 40;
     envelope.pregame = {
       gamePhase: 'awaitingKickoff',
       coinToss: {
@@ -2084,7 +2084,7 @@ describe('local football test-game projection', () => {
 
     expect(normalizeFootballScoringSetupEnvelope(envelope).liveState).toMatchObject({
       possession: null,
-      yardLine: 'V35',
+      yardLine: 'V40',
       kickoffTeam: 'V',
       nextPlayContext: 'awaitingKickoff',
     });

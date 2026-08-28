@@ -1,5 +1,6 @@
 import type { TeamCode } from '../quick-input/footballIntentSchema';
 import type { PlayerResolutionRosterPlayer } from '../quick-input/playerResolution';
+import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
 
 export type FootballGamePhase = 'pregame' | 'awaitingKickoff' | 'live' | 'halftime' | 'final';
 export type CoinTossChoice = 'kick' | 'receive' | 'side' | 'defer';
@@ -217,19 +218,21 @@ export function validateCoinToss(record: CoinTossRecord, roster: readonly Player
   return errors.length ? { ok: false, errors } : { ok: true };
 }
 
-export function awaitingKickoffState(rules: { minutesPerPeriod?: number; kickoffSpot?: string }, toss: CoinTossRecord) {
+export function awaitingKickoffState(rules: { minutesPerPeriod?: number; kickoffSpot?: unknown }, toss: CoinTossRecord) {
   if (!toss.firstHalfKickingTeam || !toss.firstHalfReceivingTeam) throw new Error('Completed toss is required to initialize awaiting kickoff.');
   const seconds = Math.max(1, Number(rules.minutesPerPeriod || 0)) * 60;
-  const configuredKickoffSpot = String(rules.kickoffSpot || '');
-  const kickoffYard = configuredKickoffSpot.match(/^[HV](\d{1,2})$/i)?.[1];
-  const kickoffSpot = kickoffYard
-    ? `${toss.firstHalfKickingTeam}${kickoffYard.padStart(2, '0')}`
-    : rules.kickoffSpot || null;
+  const configuredKickoffSpot = normalizeFootballSpot(rules.kickoffSpot, { defaultSide: 'H' });
+  const kickoffYard = configuredKickoffSpot?.match(/^[HV](\d{1,2})$/)?.[1];
+  const kickoffSpot = configuredKickoffSpot === '50'
+    ? '50'
+    : kickoffYard
+      ? `${toss.firstHalfKickingTeam}${kickoffYard}`
+      : null;
   return {
     gamePhase: 'awaitingKickoff' as const,
     game: { status: 'pregame', period: 1 },
     clock: { period: 1, clock: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:00`, clockTenths: seconds * 10, isRunning: false, playClock: null, lastStartedAt: null },
-    liveState: { possession: null, down: null, distance: null, yardLine: kickoffSpot, lineToGain: null, goalToGo: false, redZone: false, driveId: null, driveNumber: 0, nextPlayContext: 'awaitingKickoff' },
+    liveState: { possession: null, down: null, distance: null, yardLine: kickoffSpot, lineToGain: null, goalToGo: false, redZone: false, driveId: null, driveNumber: 0, kickoffTeam: toss.firstHalfKickingTeam, nextPlayContext: 'awaitingKickoff' },
     kickingTeam: toss.firstHalfKickingTeam,
     receivingTeam: toss.firstHalfReceivingTeam,
   };

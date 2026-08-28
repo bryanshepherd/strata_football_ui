@@ -54,11 +54,26 @@ describe('football pregame coin toss domain', () => {
     expect(awaitingKickoffState({ minutesPerPeriod: 12, kickoffSpot: 'V35' }, toss)).toMatchObject({
       gamePhase: 'awaitingKickoff',
       clock: { clock: '12:00', period: 1, isRunning: false },
-      liveState: { possession: null, down: null, distance: null, yardLine: 'V35', driveId: null },
+      liveState: { possession: null, down: null, distance: null, yardLine: 'V35', kickoffTeam: 'V', driveId: null },
       kickingTeam: 'V',
       receivingTeam: 'H',
     });
     expect(awaitingKickoffState({ minutesPerPeriod: 12, kickoffSpot: 'H35' }, toss).liveState.yardLine).toBe('V35');
+  });
+
+  it('qualifies a numeric kickoff rule with the coin-toss kicking team', () => {
+    const toss = complete({ winnerInitialChoice: 'receive', direction: 'north' });
+    expect(awaitingKickoffState({ minutesPerPeriod: 15, kickoffSpot: 40 }, toss)).toMatchObject({
+      liveState: { yardLine: 'V40', kickoffTeam: 'V' },
+      kickingTeam: 'V',
+      receivingTeam: 'H',
+    });
+  });
+
+  it('keeps midfield canonical and rejects malformed kickoff rules', () => {
+    const toss = complete({ winnerInitialChoice: 'kick', direction: 'south' });
+    expect(awaitingKickoffState({ kickoffSpot: 50 }, toss).liveState.yardLine).toBe('50');
+    expect(awaitingKickoffState({ kickoffSpot: { side: 'H', yard: 40 } }, toss).liveState.yardLine).toBeNull();
   });
 
   it.each([
