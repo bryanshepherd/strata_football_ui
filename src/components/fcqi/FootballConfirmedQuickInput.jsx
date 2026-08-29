@@ -38,6 +38,7 @@ export const getHighestFootballFcqiSeedCounter = (envelope) => (
 export const getFootballFcqiAssistantMessage = (state) => {
   if (!state || state.status === 'idle' || state.status === 'cancelled') return 'Choose a play type.';
   if (state.queuedPenaltyRequested) return 'Penalty queued — resolve before submitting';
+  if (state.miscFumbleRequested) return 'Misc. fumble added — play can be submitted normally.';
   if (state.status === 'jersey.disambiguating') return 'Multiple players found. Confirm the correct player.';
   if (state.status === 'summary.reviewing') return 'Review play summary before confirming.';
   if (state.status === 'submitting.confirmed') return 'Submit request built.';
@@ -336,6 +337,11 @@ export default function FootballConfirmedQuickInput({
       if (event.shiftKey && event.key.toLowerCase() === 'e' && isActiveFcqiPlayFlow(currentState)) {
         event.preventDefault();
         publishState(applyEvent({ type: 'QUEUE_PENALTY_REQUEST' }));
+        return;
+      }
+      if (event.shiftKey && event.key.toLowerCase() === 'f' && isMiscFumbleFcqiFlow(currentState)) {
+        event.preventDefault();
+        publishState(applyEvent({ type: 'TOGGLE_MISC_FUMBLE' }));
         return;
       }
       if (event.target?.closest?.(editableSelector)) return;
@@ -687,6 +693,12 @@ export default function FootballConfirmedQuickInput({
           </div>
         )}
 
+        {currentState.miscFumbleRequested && (
+          <div className="rounded border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+            Misc. fumble added — Shift+F to remove
+          </div>
+        )}
+
         {currentState.error && currentState.error.code === 'UNRESOLVED_QUEUED_PENALTY' && (
           <div className="rounded border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
             {currentState.error.message}
@@ -763,6 +775,8 @@ export default function FootballConfirmedQuickInput({
         submitError={submitStatus.status === 'error' ? submitStatus.error : ''}
         submitLabel={replacementMode ? 'Replace Play' : 'Submit Play'}
         unresolvedQueuedPenalty={Boolean(currentState.queuedPenaltyRequested)}
+        miscFumbleActive={Boolean(currentState.miscFumbleRequested)}
+        miscFumbleAvailable={isMiscFumbleFcqiFlow(currentState)}
         summary={currentState.status === 'summary.reviewing' ? currentState.summary : null}
       />
       {penaltyReviewOpen && (
@@ -933,4 +947,9 @@ function isActiveFcqiPlayFlow(state) {
     && state.status !== 'submitted'
     && state.status !== 'submitting.confirmed',
   );
+}
+
+function isMiscFumbleFcqiFlow(state) {
+  const family = state?.flow || state?.draft?.play?.family;
+  return isActiveFcqiPlayFlow({ ...state, flow: family }) && ['rush', 'pass', 'punt'].includes(family);
 }

@@ -744,6 +744,52 @@ describe('local football test-game projection', () => {
     expect(conflict.gameEnvelope.events).toHaveLength(first.gameEnvelope.events.length);
   });
 
+  it('counts a miscellaneous fumble without changing the completed play projection', async () => {
+    const baselineEnvelope = clone(getGameEnvelopeFixture('normal'));
+    const miscEnvelope = clone(getGameEnvelopeFixture('normal'));
+    const primary = { playerId: 'H-22', team: 'H', role: 'rusher' };
+    const baseEvent = {
+      type: 'rush',
+      subtype: null,
+      participants: { primary, secondary: null, defenders: [] },
+      result: { code: 'tackle', yards: 3, endYardLine: 'H47', firstDown: false },
+      description: 'HOM #22 Jordan Smith rush for 3 yards to the H47.',
+    };
+    const miscEvent = {
+      ...baseEvent,
+      result: {
+        ...baseEvent.result,
+        fumble: {
+          fumblerPlayerId: 'H-22',
+          spot: 'H44',
+          recoveredByPlayerId: 'H-22',
+          recoveredByTeam: 'H',
+          recoverySpot: 'H44',
+          turnover: false,
+        },
+      },
+      description: 'HOM #22 Jordan Smith rush for 3 yards to the H47, misc. fumble.',
+    };
+
+    const baseline = await submitFootballEventLocally(
+      baselineEnvelope,
+      playRequest(baselineEnvelope, 'fcqi-rush-baseline-client', baseEvent),
+    );
+    const misc = await submitFootballEventLocally(
+      miscEnvelope,
+      playRequest(miscEnvelope, 'fcqi-rush-misc-fumble-client', miscEvent),
+    );
+
+    expect(misc.gameEnvelope.liveState).toEqual(baseline.gameEnvelope.liveState);
+    expect(misc.gameEnvelope.drives).toEqual(baseline.gameEnvelope.drives);
+    const { clientEventId: _baselineClientEventId, ...baselineProjection } = baseline.projection;
+    const { clientEventId: _miscClientEventId, ...miscProjection } = misc.projection;
+    expect(miscProjection).toEqual(baselineProjection);
+    expect(misc.gameEnvelope.stats.teams.H.fumbles).toEqual({ num: 1, lost: 0 });
+    expect(misc.gameEnvelope.stats.players['H-22']).toMatchObject({ fumbles: 1, fumblesLost: 0 });
+    expect(baseline.gameEnvelope.stats.teams.H.fumbles).toBeUndefined();
+  });
+
   it('accepts a clock correction and advances the event sequence', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const response = await submitFootballEventLocally(

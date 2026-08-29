@@ -3,6 +3,8 @@ import FootballFlowProgress from './FootballFlowProgress';
 
 export default function FootballPlaySummaryModal({
   isSubmitting = false,
+  miscFumbleActive = false,
+  miscFumbleAvailable = false,
   onCancel,
   onConfirm,
   onEdit,
@@ -85,6 +87,11 @@ export default function FootballPlaySummaryModal({
               Penalty queued — resolve before submitting
             </div>
           )}
+          {miscFumbleActive && (
+            <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+              Misc. fumble added — it affects fumble statistics only and does not block submission.
+            </div>
+          )}
           {submitError && (
             <div className="rounded border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">
               {submitError}
@@ -93,9 +100,12 @@ export default function FootballPlaySummaryModal({
         </div>
 
         <div className={`flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4 ${unresolvedQueuedPenalty ? 'border-amber-300' : 'border-zinc-200'}`}>
-          <span className="text-xs font-black uppercase tracking-wide text-amber-900">
-            Shift+E for Flag on the Play
-          </span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-black uppercase tracking-wide">
+            <span className="text-amber-900">Shift+E for Flag on the Play</span>
+            {miscFumbleAvailable && (
+              <span className="text-emerald-800">Shift+F for Misc. Fumble{miscFumbleActive ? ' — Added' : ''}</span>
+            )}
+          </div>
           <div className="flex flex-wrap justify-end gap-2">
           <button
             className={`rounded border px-3 py-2 text-sm font-semibold ${

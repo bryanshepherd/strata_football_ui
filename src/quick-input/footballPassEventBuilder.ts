@@ -52,7 +52,6 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     pass.receivingYards = yards;
     pass.outOfBounds = intent.result.code === 'outOfBounds';
     if (intent.result.scoring) result.scoring = { ...intent.result.scoring };
-    if (intent.result.fumble) result.fumble = { ...intent.result.fumble };
     if (intent.result.turnover) result.turnover = { ...intent.result.turnover };
     if (intent.result.return) result.return = { ...intent.result.return };
     if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
@@ -77,11 +76,11 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     if (intent.result.scoring) result.scoring = { ...intent.result.scoring };
     result.turnover = turnover ? { ...turnover } : null;
     if (intent.result.return) result.return = { ...intent.result.return };
-    if (intent.result.fumble) result.fumble = { ...intent.result.fumble };
     if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
     if (intent.result.endYardLine) result.endYardLine = intent.result.endYardLine;
     if (intent.result.nextPossession) result.nextPossession = intent.result.nextPossession;
   }
+  if (intent.result.fumble) result.fumble = { ...intent.result.fumble };
   if (errors.length) return { ok: false, errors, warnings: warning };
   const summary = generateFootballPlaySummary(intent);
   const event: DraftScoringEvent = {

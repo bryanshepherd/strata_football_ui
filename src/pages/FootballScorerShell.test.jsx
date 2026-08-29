@@ -313,7 +313,7 @@ describe('FootballScorerShell', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Play replacement canceled. No play was changed.');
   });
 
-  it('replaces a final-game play through FCQI without appending or reopening the game', async () => {
+  it('replaces a final-game play and flags a downstream context mismatch without blocking it', async () => {
     const finalEnvelope = cloneNormalEnvelope();
     finalEnvelope.gameId = 'FB-FINAL-REPLACE-SUBMIT';
     finalEnvelope.rosters.gameId = finalEnvelope.gameId;
@@ -345,7 +345,7 @@ describe('FootballScorerShell', () => {
       result: { code: 'tackle', yards: 0, endYardLine: 'H44' },
       description: 'Home State #22 Jordan Smith rush for no gain to the H44.',
     };
-    const checkpoint = {
+    const replacementPostState = {
       possession: 'H',
       down: 1,
       distance: 10,
@@ -355,6 +355,10 @@ describe('FootballScorerShell', () => {
       redZone: false,
       driveId: 'DRV-0002',
       driveNumber: 2,
+    };
+    const checkpoint = {
+      ...replacementPostState,
+      down: 3,
     };
     finalEnvelope.events.push({
       eventId: 'EVT-000013',
@@ -385,7 +389,9 @@ describe('FootballScorerShell', () => {
     fireEvent.click(within(summaryDialog).getByRole('button', { name: /^replace play$/i }));
 
     expect((await screen.findAllByText('Replaced play.')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('status')).toHaveTextContent('Play #2 was replaced. The game remains final and downstream context was preserved.');
+    expect(screen.getByRole('status')).toHaveTextContent('Play #2 was replaced.');
+    expect(screen.getByRole('status')).toHaveTextContent('The replacement calculates H, 1 & 10, V49, but play #3 begins H, 3 & 10, V49.');
+    expect(screen.getByRole('status')).toHaveTextContent('review play #3 next');
     expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
     const stored = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY));
     const savedEnvelope = stored.games['FB-FINAL-REPLACE-SUBMIT'].envelope;
@@ -397,7 +403,7 @@ describe('FootballScorerShell', () => {
       sequence: 2,
       type: 'pass',
       subtype: 'complete',
-      postState: checkpoint,
+      postState: replacementPostState,
       source: { replacement: { previousType: 'rush' } },
     });
     expect(savedEnvelope.events[2].preState).toEqual(checkpoint);
@@ -1929,6 +1935,60 @@ describe('FootballScorerShell', () => {
       fireEvent.keyDown(summaryDialog, { key: 'Enter', code: 'Enter' });
       expect(submitMock.fetchSpy).not.toHaveBeenCalled();
       expect(screen.getByRole('dialog', { name: /^penalty$/i })).toBeInTheDocument();
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('toggles Shift+F during a Rush, keeps submission enabled, and submits a stats-only fumble', async () => {
+    const submitMock = mockSubmitSuccess();
+
+    try {
+      renderScorer();
+
+      fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+      const jerseyInput = screen.getByLabelText(/rusher jersey/i);
+      fireEvent.change(jerseyInput, { target: { value: '22' } });
+      fireEvent.submit(jerseyInput.closest('form'));
+
+      fireEvent.keyDown(window, { key: 'F', code: 'KeyF', shiftKey: true });
+      expect(screen.getAllByText(/misc\. fumble added/i).length).toBeGreaterThan(0);
+      const flowDialog = screen.getByRole('dialog', { name: /rush result/i });
+      expect(within(flowDialog).getByText(/shift\+f for misc\. fumble — added/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+      const tacklerInput = screen.getByLabelText(/^tackler jersey/i);
+      fireEvent.change(tacklerInput, { target: { value: '44' } });
+      fireEvent.submit(tacklerInput.closest('form'));
+      const secondTacklerInput = screen.getByLabelText(/second tackler jersey/i);
+      fireEvent.change(secondTacklerInput, { target: { value: '' } });
+      fireEvent.submit(secondTacklerInput.closest('form'));
+      const spotInput = screen.getByLabelText(/final ball spot/i);
+      fireEvent.change(spotInput, { target: { value: 'V49' } });
+      fireEvent.submit(spotInput.closest('form'));
+
+      const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+      expect(summaryDialog).toHaveTextContent(/jordan smith rush for 7 yards/i);
+      expect(summaryDialog).toHaveTextContent(/misc\. fumble/i);
+      const submitButton = within(summaryDialog).getByRole('button', { name: /^submit play$/i });
+      expect(submitButton).toBeEnabled();
+
+      fireEvent.click(submitButton);
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
+      expect(submittedRequest(submitMock.fetchSpy).event.result).toMatchObject({
+        code: 'tackle',
+        yards: 7,
+        endYardLine: 'V49',
+        fumble: {
+          fumblerPlayerId: 'H-22',
+          spot: 'H44',
+          recoveredByPlayerId: 'H-22',
+          recoveredByTeam: 'H',
+          recoverySpot: 'H44',
+          turnover: false,
+        },
+      });
+      expect(submittedRequest(submitMock.fetchSpy).event.result.turnover).toBeUndefined();
     } finally {
       submitMock.restore();
     }

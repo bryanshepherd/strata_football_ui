@@ -527,8 +527,8 @@ export default function FootballScorerShell() {
       gameEnvelope: result.envelope,
       envelope: result.envelope,
       projection: null,
-      warnings: [],
-      rawResponse: { success: true, status: 'replaced' },
+      warnings: result.warnings || [],
+      rawResponse: { success: true, status: 'replaced', warnings: result.warnings || [] },
     };
   }, [envelope, replacementPlay]);
 
@@ -542,9 +542,12 @@ export default function FootballScorerShell() {
     setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
     setReplacementPlay(null);
     setEditingPlay(null);
+    const contextWarning = result.warnings?.find((warning) => warning.code === 'REPLACEMENT_CONTEXT_MISMATCH');
     setPlayEditFeedback({
-      tone: 'success',
-      message: `Play #${result.acceptedEvent.sequence} was replaced. The game remains final and downstream context was preserved.`,
+      tone: contextWarning ? 'warning' : 'success',
+      message: contextWarning
+        ? `Play #${result.acceptedEvent.sequence} was replaced. ${contextWarning.message}`
+        : `Play #${result.acceptedEvent.sequence} was replaced. The game remains final and downstream context was preserved.`,
     });
     if (requestedGameId && dashboardGameId) {
       enqueueFootballEnvelopeMirror({
@@ -1091,7 +1094,7 @@ export const FootballInputSlot = ({
               <div className="text-sm font-black">Replacing play #{replacementPlay.sequence}</div>
               <p className="mt-1 text-sm">
                 The original sequence, Q{replacementPlay.period} {formatFootballClockDisplay(replacementPlay.clock, '--:--')}, and starting context are locked.
-                The replacement must agree with the next recorded play before it can be saved.
+                If its result disagrees with the next recorded play, the replacement will be saved and the inconsistency will be flagged for review.
               </p>
             </div>
             <button
@@ -1146,6 +1149,7 @@ export const FootballInputAssistantSlot = ({ envelope, fcqiState }) => {
   const lastEvent = envelope.events[envelope.events.length - 1];
   const assistantMessage = getFootballFcqiAssistantMessage(fcqiState);
   const queuedPenaltyActive = Boolean(fcqiState?.queuedPenaltyRequested);
+  const miscFumbleActive = Boolean(fcqiState?.miscFumbleRequested);
 
   return (
     <section
@@ -1167,6 +1171,11 @@ export const FootballInputAssistantSlot = ({ envelope, fcqiState }) => {
           </div>
         </div>
         <div className={`flex flex-wrap items-center gap-2 text-xs font-semibold ${queuedPenaltyActive ? 'text-yellow-950' : 'text-zinc-600'}`}>
+          {miscFumbleActive && (
+            <span className="rounded bg-emerald-100 px-2 py-1 text-emerald-900">
+              Misc. Fumble
+            </span>
+          )}
           <span className={`rounded px-2 py-1 ${queuedPenaltyActive ? 'bg-yellow-200 text-yellow-950' : 'bg-emerald-50 text-emerald-800'}`}>
             {formatStatus(envelope.game.status)}
           </span>

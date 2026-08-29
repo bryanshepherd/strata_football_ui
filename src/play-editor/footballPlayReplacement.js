@@ -283,34 +283,23 @@ export function replaceFootballPlayInEnvelope(
     };
   }
 
-  const mismatches = CONTEXT_FIELDS.filter((field) => {
-    if (checkpoint[field] === undefined) return false;
-    if (valuesMatch(field, replacementProjection.liveState?.[field], checkpoint[field])) return false;
-    const originalAlreadyDiffers = !valuesMatch(field, originalProjection.liveState?.[field], checkpoint[field]);
-    return !(
-      originalAlreadyDiffers
-      && valuesMatch(field, replacementProjection.liveState?.[field], originalProjection.liveState?.[field])
-    );
-  });
-
-  if (mismatches.length > 0) {
-    return {
-      ok: false,
-      errors: [{
+  const mismatches = CONTEXT_FIELDS.filter((field) => (
+    checkpoint[field] !== undefined
+    && !valuesMatch(field, replacementProjection.liveState?.[field], checkpoint[field])
+  ));
+  const warnings = mismatches.length > 0
+    ? [{
         code: 'REPLACEMENT_CONTEXT_MISMATCH',
         field: `event.result.${mismatches[0]}`,
-        message: `The replacement calculates ${contextLabel(replacementProjection.liveState)}, but ${nextEventLabel} begins ${contextLabel(checkpoint)}. Edit the replacement so ${mismatches.join(', ')} matches the recorded context.`,
+        message: `The replacement calculates ${contextLabel(replacementProjection.liveState)}, but ${nextEventLabel} begins ${contextLabel(checkpoint)}. The replacement was saved and the recorded downstream context was preserved; review ${nextEventLabel} next.`,
         details: {
           fields: mismatches,
           calculated: clone(replacementProjection.liveState),
           checkpoint,
           checkpointEventSequence: checkpointEvent?.sequence || null,
         },
-      }],
-      projection: replacementProjection,
-      checkpoint,
-    };
-  }
+      }]
+    : [];
 
   event.postState = clone(replacementProjection.liveState);
   const events = clone(envelope.events);
@@ -332,5 +321,6 @@ export function replaceFootballPlayInEnvelope(
     event: normalized.events[eventIndex],
     projection: replacementProjection,
     checkpoint,
+    warnings,
   };
 }

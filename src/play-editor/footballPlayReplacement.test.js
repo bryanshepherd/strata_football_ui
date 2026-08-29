@@ -199,15 +199,40 @@ describe('football historical play replacement', () => {
     expect(result.envelope.stats.players['H-22']).toMatchObject({ rushAttempts: 1, rushYards: 3 });
   });
 
-  it('blocks a replacement that would contradict the next recorded play context', () => {
+  it('saves and flags a replacement that contradicts the next recorded play context', () => {
     const envelope = baseEnvelope();
     const result = replaceFootballPlayInEnvelope(envelope, envelope.events[0], passReplacement('H31', 6));
 
-    expect(result.ok).toBe(false);
-    expect(result.errors[0]).toMatchObject({ code: 'REPLACEMENT_CONTEXT_MISMATCH' });
-    expect(result.errors[0].details.fields).toEqual(expect.arrayContaining(['distance', 'yardLine']));
-    expect(result.errors[0].message).toContain('play #2');
+    expect(result.ok).toBe(true);
+    expect(result.warnings[0]).toMatchObject({ code: 'REPLACEMENT_CONTEXT_MISMATCH' });
+    expect(result.warnings[0].details.fields).toEqual(expect.arrayContaining(['distance', 'yardLine']));
+    expect(result.warnings[0].message).toContain('play #2');
+    expect(result.envelope.events[0]).toMatchObject({ type: 'pass', postState: { yardLine: 'H31' } });
+    expect(result.envelope.events[1].preState).toEqual(envelope.events[1].preState);
     expect(envelope.events[0].type).toBe('rush');
+  });
+
+  it('allows the operator to continue replacing later plays after a flagged mismatch', () => {
+    const envelope = baseEnvelope();
+    const firstResult = replaceFootballPlayInEnvelope(
+      envelope,
+      envelope.events[0],
+      passReplacement('H31', 6),
+    );
+
+    expect(firstResult.ok).toBe(true);
+    expect(firstResult.warnings).toHaveLength(1);
+    const nextPlay = firstResult.envelope.events[1];
+    expect(() => buildFootballPlayReplacementEnvelope(firstResult.envelope, nextPlay)).not.toThrow();
+
+    const secondResult = replaceFootballPlayInEnvelope(firstResult.envelope, nextPlay, {
+      ...clone(nextPlay),
+      clientEventId: 'replacement-rush-2-client',
+    });
+
+    expect(secondResult.ok).toBe(true);
+    expect(secondResult.envelope.events[0].postState.yardLine).toBe('H31');
+    expect(secondResult.envelope.events[1].eventId).toBe('EVT-000002');
   });
 
   it('updates the final score by the scoring delta while preserving kickoff context', () => {

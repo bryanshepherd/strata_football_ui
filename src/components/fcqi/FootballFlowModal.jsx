@@ -879,7 +879,7 @@ export default function FootballFlowModal({
     if (!activeButtons || state.status !== 'token.awaiting') return undefined;
 
     const onKeyDown = (event) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.defaultPrevented || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
       const match = activeButtons.find((button) => button.hotkey.toLowerCase() === event.key.toLowerCase());
       if (!match) return;
       event.preventDefault();
@@ -935,7 +935,9 @@ export default function FootballFlowModal({
       onCancel={onCancel}
       onStepClick={onStepClick}
       queuedPenaltyActive={Boolean(state.queuedPenaltyRequested)}
+      miscFumbleActive={Boolean(state.miscFumbleRequested)}
       showPenaltyShortcut={['rush', 'pass', 'punt', 'kick', 'teamPlay'].includes(state.flow)}
+      showMiscFumbleShortcut={['rush', 'pass', 'punt'].includes(state.flow)}
       progressSteps={state.flow === 'gameControl' ? [] : progressSteps}
       title={activeStep.title}
     >
@@ -1040,7 +1042,7 @@ export default function FootballFlowModal({
   );
 }
 
-const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, queuedPenaltyActive, showPenaltyShortcut, title }) => (
+const ModalFrame = ({ children, eyebrow, miscFumbleActive, onCancel, onStepClick, progressSteps, queuedPenaltyActive, showMiscFumbleShortcut, showPenaltyShortcut, title }) => (
   <div className="fixed inset-0 z-40 grid place-items-center bg-zinc-950/55 p-4" role="presentation">
     <section
       aria-label={title}
@@ -1050,6 +1052,7 @@ const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, q
           ? 'border-amber-400 bg-amber-50'
           : 'border-zinc-300 bg-white'
       }`}
+      data-misc-fumble={miscFumbleActive ? 'true' : 'false'}
       data-penalty-queued={queuedPenaltyActive ? 'true' : 'false'}
       role="dialog"
     >
@@ -1071,13 +1074,18 @@ const ModalFrame = ({ children, eyebrow, onCancel, onStepClick, progressSteps, q
         <FootballFlowProgress onStepClick={onStepClick} steps={progressSteps} />
         {children}
       </div>
-      {showPenaltyShortcut && (
-        <div className={`border-t px-5 py-3 text-center text-xs font-black uppercase tracking-wide ${
+      {(showPenaltyShortcut || showMiscFumbleShortcut) && (
+        <div className={`flex flex-wrap justify-center gap-x-5 gap-y-1 border-t px-5 py-3 text-center text-xs font-black uppercase tracking-wide ${
           queuedPenaltyActive
             ? 'border-amber-300 bg-amber-100 text-amber-950'
+            : miscFumbleActive
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
             : 'border-zinc-200 bg-zinc-50 text-zinc-600'
         }`}>
-          Shift+E for Flag on the Play
+          {showPenaltyShortcut && <span>Shift+E for Flag on the Play</span>}
+          {showMiscFumbleShortcut && (
+            <span>Shift+F for Misc. Fumble{miscFumbleActive ? ' — Added' : ''}</span>
+          )}
         </div>
       )}
     </section>

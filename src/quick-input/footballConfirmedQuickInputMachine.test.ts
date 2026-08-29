@@ -474,6 +474,101 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(state.buildResult).toBeUndefined();
   });
 
+  it('adds a nonblocking miscellaneous fumble to a Rush and can remove it from the summary', () => {
+    const reviewing = transition(completeRushDraft(), { type: 'GENERATE_SUMMARY' });
+    const marked = transition(reviewing, { type: 'TOGGLE_MISC_FUMBLE' });
+
+    expect(marked).toMatchObject({
+      status: 'summary.reviewing',
+      miscFumbleRequested: true,
+      draft: {
+        result: {
+          code: 'tackle',
+          yards: 7,
+          endYardLine: 'V49',
+          fumble: {
+            fumblerPlayerId: 'H-22',
+            spot: 'H44',
+            recoveredByPlayerId: 'H-22',
+            recoveredByTeam: 'H',
+            recoverySpot: 'H44',
+            turnover: false,
+          },
+        },
+      },
+    });
+    expect(marked.summary?.summaryText).toContain('misc. fumble');
+
+    const confirmed = transition(marked, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:10Z' });
+    expect(confirmed.status).toBe('submitting.confirmed');
+    expect(confirmed.buildResult).toMatchObject({
+      ok: true,
+      event: {
+        result: {
+          code: 'tackle',
+          yards: 7,
+          endYardLine: 'V49',
+          fumble: { fumblerPlayerId: 'H-22', recoveredByPlayerId: 'H-22', turnover: false },
+        },
+      },
+    });
+
+    const removed = transition(marked, { type: 'TOGGLE_MISC_FUMBLE' });
+    expect(removed.miscFumbleRequested).toBe(false);
+    expect(removed.draft?.result.fumble).toBeUndefined();
+    expect(removed.summary?.summaryText).not.toContain('misc. fumble');
+  });
+
+  it('adds a miscellaneous fumble to an incomplete Pass without changing its outcome', () => {
+    const ready = completeIncompletePassDraft();
+    const marked = transition(ready, { type: 'TOGGLE_MISC_FUMBLE' });
+    const reviewing = transition(marked, { type: 'GENERATE_SUMMARY' });
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:10Z' });
+
+    expect(reviewing.summary?.summaryText).toContain('pass incomplete');
+    expect(reviewing.summary?.summaryText).toContain('misc. fumble');
+    expect(confirmed.status).toBe('submitting.confirmed');
+    expect(confirmed.buildResult).toMatchObject({
+      ok: true,
+      event: {
+        type: 'pass',
+        subtype: 'incomplete',
+        result: {
+          code: 'incomplete',
+          fumble: { fumblerPlayerId: 'H-12', recoveredByPlayerId: 'H-12', turnover: false },
+        },
+      },
+    });
+  });
+
+  it('adds a miscellaneous fumble to a Punt without changing the kick or possession result', () => {
+    const ready = completePuntReturnDraft({ terminalResult: '.', tacklers: [] });
+    const marked = transition(ready, { type: 'TOGGLE_MISC_FUMBLE' });
+    const reviewing = transition(marked, { type: 'GENERATE_SUMMARY' });
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:10Z' });
+
+    expect(reviewing.summary?.summaryText).toContain('misc. fumble');
+    expect(confirmed.buildResult).toMatchObject({
+      ok: true,
+      event: {
+        type: 'punt',
+        result: {
+          endYardLine: 'V31',
+          nextPossession: 'V',
+          fumble: { fumblerPlayerId: 'H-9', recoveredByPlayerId: 'H-9', turnover: false },
+        },
+      },
+    });
+  });
+
+  it('ignores the miscellaneous-fumble modifier outside Rush, Pass, and Punt flows', () => {
+    const kick = transition(startKick(), { type: 'TOGGLE_MISC_FUMBLE' });
+    const teamPlay = transition(startTeamPlay(), { type: 'TOGGLE_MISC_FUMBLE' });
+
+    expect(kick.miscFumbleRequested).toBeUndefined();
+    expect(teamPlay.miscFumbleRequested).toBeUndefined();
+  });
+
   it('unresolved queued penalty keeps summary visible but blocks confirmation', () => {
     const ready = completeRushDraft();
     const queued = transition(ready, { type: 'QUEUE_PENALTY_REQUEST' });

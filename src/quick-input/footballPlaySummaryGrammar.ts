@@ -109,6 +109,10 @@ function rushSummary(context: SummaryContext): string {
   const tacklers = tacklerPhrase(intent.participants.defenders);
   if (tacklers) clauses.push(tacklers);
   if (intent.result.fumble) {
+    if (isMiscellaneousFumble(intent)) {
+      clauses.push('misc. fumble');
+      return sentence(joinClauses(clauses));
+    }
     const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, intent.result.fumble.forcedByPlayerId);
     const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, intent.result.fumble.recoveredByPlayerId);
     clauses.push(`fumbled ${spotPhrase(context, 'at', intent.result.fumble.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`);
@@ -136,6 +140,7 @@ function passSummary(context: SummaryContext): string {
       .map((playerId) => participantByPlayerId(intent, playerId))
       .filter(Boolean) as DraftParticipant[];
     if (hurryDefenders.length > 0) clauses.push(`hurried by ${formatPlayerList(hurryDefenders)}`);
+    if (isMiscellaneousFumble(intent)) clauses.push('misc. fumble');
 
     return sentence(joinClauses(clauses));
   }
@@ -155,6 +160,10 @@ function passSummary(context: SummaryContext): string {
   const tacklers = tacklerPhrase(intent.participants.defenders);
   if (tacklers) clauses.push(tacklers);
   if (intent.result.fumble) {
+    if (isMiscellaneousFumble(intent)) {
+      clauses.push('misc. fumble');
+      return sentence(joinClauses(clauses));
+    }
     const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, intent.result.fumble.forcedByPlayerId);
     const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, intent.result.fumble.recoveredByPlayerId);
     const recoveryTeam = intent.result.fumble.recoveredByTeam;
@@ -186,7 +195,9 @@ function sackSummary(context: SummaryContext): string {
   const endSpot = typeof intent.result.yards === 'number'
     ? ` ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}`
     : '';
-  const fumble = intent.result.fumble ? ', fumbled' : '';
+  const fumble = isMiscellaneousFumble(intent)
+    ? ', misc. fumble'
+    : intent.result.fumble ? ', fumbled' : '';
 
   return sentence(`${team} ${formatPlayer(passer)} sacked${defenderPhrase} ${yardage}${endSpot}${fumble}`);
 }
@@ -224,6 +235,7 @@ function interceptionSummary(context: SummaryContext): string {
 
   const tacklers = tacklerPhrase(defendersByRoles(intent, ['tackler', 'assistTackler']));
   if (tacklers) clauses.push(tacklers);
+  if (isMiscellaneousFumble(intent)) clauses.push('misc. fumble');
 
   return sentence(joinClauses(clauses));
 }
@@ -279,13 +291,19 @@ function puntSummary(context: SummaryContext): string {
     return sentence(`${puntLead} ${distance} into the end zone, touchback`);
   }
 
+  if ((intent.result.code === 'touchback' || intent.play.subtype === 'touchback') && isMiscellaneousFumble(intent)) {
+    return sentence(`${puntLead} ${distance} into the end zone, touchback, misc. fumble`);
+  }
+
   if ((intent.result.code === 'outOfBounds' || intent.play.subtype === 'outOfBounds') && !intent.result.return) {
-    return sentence(`${puntLead} ${distance} out-of-bounds ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
+    const miscFumble = isMiscellaneousFumble(intent) ? ', misc. fumble' : '';
+    return sentence(`${puntLead} ${distance} out-of-bounds ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}${miscFumble}`);
   }
 
   if (intent.result.code === 'blocked' || intent.play.subtype === 'blocked') {
     const blocker = participantByRole(intent, 'blocker') ?? intent.participants.defenders[0];
-    return sentence(`${team} ${formatPlayer(punter)} punt blocked${blocker ? ` by ${formatPlayer(blocker)}` : ''} ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}`);
+    const miscFumble = isMiscellaneousFumble(intent) ? ', misc. fumble' : '';
+    return sentence(`${team} ${formatPlayer(punter)} punt blocked${blocker ? ` by ${formatPlayer(blocker)}` : ''} ${spotPhrase(context, 'at', intent.result.endYardLine, 'result.endYardLine')}${miscFumble}`);
   }
 
   const clauses = [`${puntLead} ${distance} ${spotPhrase(context, 'to', catchSpot, 'result.kick.catchYardLine')}`];
@@ -312,6 +330,7 @@ function puntSummary(context: SummaryContext): string {
     appendReturnFumbleClauses(context, clauses);
   }
   clauses.push(...lateralClauses(context));
+  if (isMiscellaneousFumble(intent)) clauses.push('misc. fumble');
 
   return sentence(joinClauses(clauses));
 }
@@ -639,6 +658,24 @@ function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | und
   return intent.participants.primary;
 }
 
+export function isMiscellaneousFumble(intent: FootballDraftIntent): boolean {
+  const primary = intent.participants.primary;
+  const fumble = intent.result.fumble;
+  const snapSpot = intent.prePlay.yardLine;
+  return Boolean(
+    primary
+    && fumble
+    && intent.result.code !== 'fumble'
+    && fumble.turnover === false
+    && !fumble.forcedByPlayerId
+    && fumble.fumblerPlayerId === primary.playerId
+    && fumble.recoveredByPlayerId === primary.playerId
+    && fumble.recoveredByTeam === primary.team
+    && fumble.spot === snapSpot
+    && fumble.recoverySpot === snapSpot
+  );
+}
+
 function participantByRole(intent: FootballDraftIntent, role: DraftParticipant['role']): DraftParticipant | undefined {
   return allParticipants(intent).find((participant) => participant.role === role);
 }
@@ -667,7 +704,7 @@ function appendRecoveryClause(context: SummaryContext, clauses: string[]): void 
 function appendReturnFumbleClauses(context: SummaryContext, clauses: string[]): void {
   const { intent } = context;
   const fumble = intent.result.fumble;
-  if (!fumble) return;
+  if (!fumble || isMiscellaneousFumble(intent)) return;
   const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, fumble.forcedByPlayerId);
   clauses.push(`fumbled ${spotPhrase(context, 'at', fumble.spot, 'result.fumble.spot')}`);
   if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);

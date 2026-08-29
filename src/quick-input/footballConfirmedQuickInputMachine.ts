@@ -15,6 +15,7 @@ import {
 } from './playerResolution';
 import {
   generateFootballPlaySummary,
+  isMiscellaneousFumble,
   type FootballPlaySummaryResult,
 } from './footballPlaySummaryGrammar';
 import {
@@ -200,6 +201,7 @@ export type FootballConfirmedQuickInputState = {
   duplicate?: FootballQuickInputDuplicateResolution;
   error?: FootballQuickInputError;
   queuedPenaltyRequested?: boolean;
+  miscFumbleRequested?: boolean;
 };
 
 export type RushFlowTokens = {
@@ -454,6 +456,7 @@ export type FootballQuickInputEvent =
   | { type: 'CANCEL_DUPLICATE' }
   | { type: 'ADD_TACKLER' }
   | { type: 'QUEUE_PENALTY_REQUEST' }
+  | { type: 'TOGGLE_MISC_FUMBLE' }
   | {
       type: 'VERIFY_PENALTY_ENFORCEMENT';
       enforcementOrder: string[];
@@ -649,6 +652,54 @@ export function transitionFootballQuickInput(
         error: state.queuedPenaltyRequested && state.error?.code === 'UNRESOLVED_QUEUED_PENALTY'
           ? undefined
           : state.error,
+      },
+    };
+  }
+
+  if (event.type === 'TOGGLE_MISC_FUMBLE') {
+    if (!isMiscFumbleEligibleState(state)) return { state: cloneState(state) };
+    const miscFumbleRequested = !state.miscFumbleRequested;
+    const nextState: FootballConfirmedQuickInputState = {
+      ...baseActiveState(state),
+      miscFumbleRequested,
+      buildResult: undefined,
+    };
+
+    if (!state.draft) return { state: nextState };
+
+    const nextDraft = applyMiscFumbleModifier(cloneDraft(state.draft), miscFumbleRequested);
+    if (miscFumbleRequested && !isMiscellaneousFumble(nextDraft)) {
+      return {
+        state: {
+          ...cloneState(state),
+          error: {
+            code: 'MISC_FUMBLE_CONFLICT',
+            message: 'This play already includes a material fumble.',
+            field: 'result.fumble',
+          },
+        },
+      };
+    }
+    nextDraft.revision += 1;
+    nextDraft.updatedAt = context.now ?? nextDraft.updatedAt;
+    nextDraft.confirmation = undefined;
+
+    if (state.status === 'summary.reviewing') {
+      nextDraft.status = 'summaryGenerated';
+      return {
+        state: {
+          ...nextState,
+          draft: nextDraft,
+          summary: generateFootballPlaySummary(nextDraft),
+        },
+      };
+    }
+
+    return {
+      state: {
+        ...nextState,
+        draft: nextDraft,
+        summary: undefined,
       },
     };
   }
@@ -3621,9 +3672,7 @@ function makeReadyState(
     duplicate: undefined,
   };
 
-  return {
-    ...readyState,
-    draft: readyState.flow === 'teamPlay'
+  const draft = readyState.flow === 'teamPlay'
       ? buildTeamPlayDraft(readyState, context)
       : readyState.flow === 'pass'
       ? buildPassDraft(readyState, context)
@@ -3635,7 +3684,12 @@ function makeReadyState(
             ? buildPenaltyOnlyDraft(readyState, context)
             : readyState.flow === 'gameControl'
               ? buildGameControlDraft(readyState, context)
-              : buildRushDraft(readyState, context),
+              : buildRushDraft(readyState, context);
+
+  return {
+    ...readyState,
+    miscFumbleRequested: readyState.miscFumbleRequested && isMiscellaneousFumble(draft),
+    draft,
   };
 }
 
@@ -4124,7 +4178,7 @@ function confirmSummary(
 }
 
 function buildRushDraft(
-  state: Pick<FootballConfirmedQuickInputState, 'tokens'>,
+  state: Pick<FootballConfirmedQuickInputState, 'tokens' | 'miscFumbleRequested'>,
   context: FootballQuickInputContext,
 ): FootballDraftIntent {
   const rusher = state.tokens.rusher;
@@ -4133,7 +4187,7 @@ function buildRushDraft(
   }
 
   const revision = 1;
-  return {
+  const draft: FootballDraftIntent = {
     schemaVersion: 'football.draftIntent.v1',
     intentId: context.intentId ?? 'fcqi-rush-draft-1',
     clientEventId: context.clientEventId ?? 'fcqi-rush-client-1',
@@ -4168,6 +4222,7 @@ function buildRushDraft(
     penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
     warnings: [],
   };
+  return applyMiscFumbleModifier(draft, Boolean(state.miscFumbleRequested));
 }
 
 function buildTeamPlayDraft(
@@ -4251,7 +4306,7 @@ function buildTeamPlayDraft(
 }
 
 function buildPassDraft(
-  state: Pick<FootballConfirmedQuickInputState, 'tokens'>,
+  state: Pick<FootballConfirmedQuickInputState, 'tokens' | 'miscFumbleRequested'>,
   context: FootballQuickInputContext,
 ): FootballDraftIntent {
   const passer = state.tokens.passer;
@@ -4264,7 +4319,7 @@ function buildPassDraft(
   const result = buildPassResult(state.tokens, context);
   const fumbler = passFumbler(state.tokens);
 
-  return {
+  const draft: FootballDraftIntent = {
     schemaVersion: 'football.draftIntent.v1',
     intentId: context.intentId ?? 'fcqi-pass-draft-1',
     clientEventId: context.clientEventId ?? 'fcqi-pass-client-1',
@@ -4310,6 +4365,7 @@ function buildPassDraft(
     penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
     warnings: [],
   };
+  return applyMiscFumbleModifier(draft, Boolean(state.miscFumbleRequested));
 }
 
 function passSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']['subtype'] {
@@ -4544,7 +4600,7 @@ function passDefenders(tokens: FootballFlowTokens): DraftParticipant[] {
 }
 
 function buildPuntDraft(
-  state: Pick<FootballConfirmedQuickInputState, 'tokens'>,
+  state: Pick<FootballConfirmedQuickInputState, 'tokens' | 'miscFumbleRequested'>,
   context: FootballQuickInputContext,
 ): FootballDraftIntent {
   const punter = state.tokens.punter;
@@ -4556,7 +4612,7 @@ function buildPuntDraft(
   const result = buildPuntResult(state.tokens, context);
   const subtype = puntSubtype(state.tokens);
 
-  return {
+  const draft: FootballDraftIntent = {
     schemaVersion: 'football.draftIntent.v1',
     intentId: context.intentId ?? 'fcqi-punt-draft-1',
     clientEventId: context.clientEventId ?? 'fcqi-punt-client-1',
@@ -4603,6 +4659,7 @@ function buildPuntDraft(
     penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
     warnings: [],
   };
+  return applyMiscFumbleModifier(draft, Boolean(state.miscFumbleRequested));
 }
 
 function puntSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']['subtype'] {
@@ -6863,6 +6920,45 @@ function isGameControlSpecificTokenStep(step: FootballTokenStep): step is GameCo
     'gameControlClock',
     'gameControlChallengeStatus',
   ].includes(step);
+}
+
+function applyMiscFumbleModifier(draft: FootballDraftIntent, enabled: boolean): FootballDraftIntent {
+  const nextDraft = cloneDraft(draft);
+  const primary = nextDraft.participants.primary;
+  const snapSpot = nextDraft.prePlay.yardLine;
+
+  if (!enabled) {
+    if (!isMiscellaneousFumble(nextDraft)) return nextDraft;
+    nextDraft.result.fumble = undefined;
+    nextDraft.participants.fumbler = undefined;
+    nextDraft.participants.recoveredBy = undefined;
+    return nextDraft;
+  }
+
+  if (!primary || !snapSpot || nextDraft.result.fumble) return nextDraft;
+
+  // Preserve the completed play outcome. A same-player recovery at the snap spot
+  // is the canonical stats-only representation of a miscellaneous fumbled snap.
+  nextDraft.result.fumble = {
+    fumblerPlayerId: primary.playerId,
+    spot: snapSpot,
+    recoveredByPlayerId: primary.playerId,
+    recoveredByTeam: primary.team,
+    recoverySpot: snapSpot,
+    turnover: false,
+  };
+  nextDraft.participants.fumbler = asRole(primary, 'fumbler');
+  nextDraft.participants.recoveredBy = asRole(primary, 'recoverer');
+  return nextDraft;
+}
+
+function isMiscFumbleEligibleState(state: FootballConfirmedQuickInputState): boolean {
+  const family = state.flow ?? state.draft?.play.family;
+  return (family === 'rush' || family === 'pass' || family === 'punt')
+    && state.status !== 'idle'
+    && state.status !== 'cancelled'
+    && state.status !== 'submitted'
+    && state.status !== 'submitting.confirmed';
 }
 
 function isActivePlayState(state: FootballConfirmedQuickInputState): boolean {
