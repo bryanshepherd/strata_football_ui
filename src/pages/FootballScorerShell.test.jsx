@@ -266,6 +266,143 @@ describe('FootballScorerShell', () => {
     expect(screen.getByRole('button', { name: /undo last test event/i })).toBeEnabled();
   });
 
+  it('starts a historical replacement from a final game without reopening ordinary scoring', async () => {
+    const finalEnvelope = cloneNormalEnvelope();
+    finalEnvelope.gameId = 'FB-FINAL-REPLACE-UI';
+    finalEnvelope.rosters.gameId = finalEnvelope.gameId;
+    finalEnvelope.game.status = 'final';
+    finalEnvelope.game.period = 4;
+    finalEnvelope.game.wrapUp = { completedAt: '2026-08-29T01:00:00.000Z' };
+    finalEnvelope.pregame = { gamePhase: 'final' };
+    finalEnvelope.events[0].sequence = 1;
+    finalEnvelope.events[1].sequence = 2;
+    finalEnvelope.events[1].period = 4;
+    finalEnvelope.events[1].clock = '00:30';
+    finalEnvelope.events[1].preState = {
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'H32',
+      lineToGain: 'H42',
+      goalToGo: false,
+      redZone: false,
+      driveId: 'DRV-0002',
+      driveNumber: 2,
+    };
+    saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
+
+    renderScorer('/scorer?envelopeGameId=FB-FINAL-REPLACE-UI');
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit play 2/i }));
+    const editor = screen.getByRole('dialog', { name: /edit play 2/i });
+    fireEvent.click(within(editor).getAllByRole('button', { name: /replace this play/i })[0]);
+    const confirmation = within(editor).getByRole('alertdialog', { name: /replace this play/i });
+    fireEvent.click(within(confirmation).getByRole('button', { name: /start replacement/i }));
+
+    expect(screen.getByRole('heading', { name: /replacement entry/i })).toBeInTheDocument();
+    expect(screen.getByText('Replacing play #2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^rush/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /game control/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /edit play 1/i })).toBeDisabled();
+    expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
+    expect(finalEnvelope.events).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel replacement/i }));
+    expect(screen.getByRole('heading', { name: /play entry/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Play replacement canceled. No play was changed.');
+  });
+
+  it('replaces a final-game play through FCQI without appending or reopening the game', async () => {
+    const finalEnvelope = cloneNormalEnvelope();
+    finalEnvelope.gameId = 'FB-FINAL-REPLACE-SUBMIT';
+    finalEnvelope.rosters.gameId = finalEnvelope.gameId;
+    finalEnvelope.game.status = 'final';
+    finalEnvelope.game.period = 4;
+    finalEnvelope.game.wrapUp = { completedAt: '2026-08-29T01:00:00.000Z' };
+    finalEnvelope.pregame = { gamePhase: 'final' };
+    finalEnvelope.events[0].sequence = 1;
+    finalEnvelope.events[1] = {
+      ...finalEnvelope.events[1],
+      sequence: 2,
+      type: 'rush',
+      subtype: null,
+      period: 4,
+      clock: '00:30',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 2,
+        distance: 6,
+        yardLine: 'H44',
+        lineToGain: '50',
+        goalToGo: false,
+        redZone: false,
+        driveId: 'DRV-0002',
+        driveNumber: 2,
+      },
+      participants: { primary: { playerId: 'H-22', team: 'H', role: 'rusher', jersey: '22', displayName: 'Jordan Smith' } },
+      result: { code: 'tackle', yards: 0, endYardLine: 'H44' },
+      description: 'Home State #22 Jordan Smith rush for no gain to the H44.',
+    };
+    const checkpoint = {
+      possession: 'H',
+      down: 1,
+      distance: 10,
+      yardLine: 'V49',
+      lineToGain: 'V39',
+      goalToGo: false,
+      redZone: false,
+      driveId: 'DRV-0002',
+      driveNumber: 2,
+    };
+    finalEnvelope.events.push({
+      eventId: 'EVT-000013',
+      clientEventId: 'final-control-client',
+      sequence: 3,
+      type: 'gameControl',
+      subtype: 'endQuarter',
+      status: 'accepted',
+      period: 4,
+      clock: '00:00',
+      possession: 'H',
+      preState: checkpoint,
+      result: { code: 'periodUpdate', gameControl: { action: 'endQuarter', period: 4 } },
+      description: 'End quarter 4.',
+    });
+    finalEnvelope.liveState = checkpoint;
+    finalEnvelope.stats.sourceEventSequence = 3;
+    saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
+
+    renderScorer('/scorer?envelopeGameId=FB-FINAL-REPLACE-SUBMIT');
+    fireEvent.click(await screen.findByRole('button', { name: /edit play 2/i }));
+    const editor = screen.getByRole('dialog', { name: /edit play 2/i });
+    fireEvent.click(within(editor).getAllByRole('button', { name: /replace this play/i })[0]);
+    fireEvent.click(within(editor).getByRole('button', { name: /start replacement/i }));
+
+    completePassFlowInputs();
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^replace play$/i }));
+
+    expect((await screen.findAllByText('Replaced play.')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('status')).toHaveTextContent('Play #2 was replaced. The game remains final and downstream context was preserved.');
+    expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
+    const stored = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY));
+    const savedEnvelope = stored.games['FB-FINAL-REPLACE-SUBMIT'].envelope;
+    expect(savedEnvelope.game.status).toBe('final');
+    expect(savedEnvelope.events).toHaveLength(3);
+    expect(savedEnvelope.events[1]).toMatchObject({
+      eventId: 'EVT-000012',
+      clientEventId: 'fixture-pass-1',
+      sequence: 2,
+      type: 'pass',
+      subtype: 'complete',
+      postState: checkpoint,
+      source: { replacement: { previousType: 'rush' } },
+    });
+    expect(savedEnvelope.events[2].preState).toEqual(checkpoint);
+  });
+
   it('continues submission IDs above an imported envelope instead of reusing an old play ID', async () => {
     const importedEnvelope = gameEnvelopeFixtures.secondQuarterRecovery;
     expect(getHighestFootballFcqiSeedCounter(importedEnvelope)).toBe(52);

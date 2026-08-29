@@ -13,6 +13,7 @@ export default function FootballPlaySummaryModal({
   progressSteps = [],
   requiresPenaltyReview = false,
   submitError = '',
+  submitLabel = 'Submit Play',
   summary,
   unresolvedQueuedPenalty = false,
 }) {
@@ -136,7 +137,7 @@ export default function FootballPlaySummaryModal({
             title={submitTitle}
             type="button"
           >
-            {isSubmitting ? 'Submitting...' : requiresPenaltyReview ? 'Review Enforcement' : 'Submit Play'}
+            {isSubmitting ? 'Submitting...' : requiresPenaltyReview ? 'Review Enforcement' : submitLabel}
           </button>
           </div>
         </div>

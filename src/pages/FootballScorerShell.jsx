@@ -23,6 +23,10 @@ import {
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
 import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
+import {
+  buildFootballPlayReplacementEnvelope,
+  replaceFootballPlayInEnvelope,
+} from '../play-editor/footballPlayReplacement';
 import { gamePhaseForEnvelope, pregameForEnvelope } from '../pregame/footballPregame';
 import {
   buildFootballDriveSummary,
@@ -163,6 +167,7 @@ export default function FootballScorerShell() {
   const [wrapUpOpen, setWrapUpOpen] = useState(false);
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
   const [editingPlay, setEditingPlay] = useState(null);
+  const [replacementPlay, setReplacementPlay] = useState(null);
   const [playEditFeedback, setPlayEditFeedback] = useState(null);
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const [recoveryState, setRecoveryState] = useState(() => ({ recovering: false, error: '' }));
@@ -171,6 +176,11 @@ export default function FootballScorerShell() {
     () => buildActiveScorerEnvelope(baseEnvelope, acceptedScorerState),
     [acceptedScorerState, baseEnvelope],
   );
+  const inputEnvelope = useMemo(() => (
+    envelope && replacementPlay
+      ? buildFootballPlayReplacementEnvelope(envelope, replacementPlay)
+      : envelope
+  ), [envelope, replacementPlay]);
   const traceEntries = useMemo(
     () => (debugMode && envelope ? buildFootballFixtureDebugTrace(envelope) : []),
     [debugMode, envelope],
@@ -194,6 +204,7 @@ export default function FootballScorerShell() {
     setWrapUpOpen(false);
     setWrapUpSaveState({ saving: false, error: '' });
     setEditingPlay(null);
+    setReplacementPlay(null);
     setPlayEditFeedback(null);
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
     setRecoveryState({ recovering: false, error: '' });
@@ -273,6 +284,7 @@ export default function FootballScorerShell() {
       setFcqiState(createInitialFootballQuickInputState());
       setFcqiResetKey((current) => current + 1);
       setEditingPlay(null);
+      setReplacementPlay(null);
       setPlayEditFeedback(null);
       setWrapUpOpen(false);
       setLoadedGameState({
@@ -473,12 +485,77 @@ export default function FootballScorerShell() {
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
   const requestPlayReplacement = useCallback((play) => {
+    try {
+      buildFootballPlayReplacementEnvelope(envelope, play);
+      setEditingPlay(null);
+      setReplacementPlay(play);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey((current) => current + 1);
+      setPlayEditFeedback({
+        tone: 'warning',
+        message: `Replacing play #${play.sequence}. Choose the correct play family in Replacement Entry.`,
+      });
+    } catch (error) {
+      setPlayEditFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Replacement could not be started.',
+      });
+    }
+  }, [envelope]);
+
+  const cancelPlayReplacement = useCallback(() => {
+    setReplacementPlay(null);
+    setFcqiState(createInitialFootballQuickInputState());
+    setFcqiResetKey((current) => current + 1);
+    setPlayEditFeedback({ tone: 'warning', message: 'Play replacement canceled. No play was changed.' });
+  }, []);
+
+  const replacementSubmitAdapter = useCallback(async (submitRequest) => {
+    const result = replaceFootballPlayInEnvelope(envelope, replacementPlay, submitRequest?.event);
+    if (!result.ok) {
+      return {
+        ok: false,
+        errors: result.errors,
+        warnings: [],
+        rawResponse: { success: false, errors: result.errors },
+      };
+    }
+    return {
+      ok: true,
+      status: 'replaced',
+      acceptedEvent: result.event,
+      gameEnvelope: result.envelope,
+      envelope: result.envelope,
+      projection: null,
+      warnings: [],
+      rawResponse: { success: true, status: 'replaced' },
+    };
+  }, [envelope, replacementPlay]);
+
+  const handleReplacementAccepted = useCallback((result) => {
+    const replacementEnvelope = result?.gameEnvelope || result?.envelope;
+    if (!replacementEnvelope || !result?.acceptedEvent) return;
+    const persistedEnvelope = requestedGameId
+      ? saveDashboardSeededFootballEnvelope(requestedGameId, replacementEnvelope) || replacementEnvelope
+      : replacementEnvelope;
+    setLocalUndoStack((current) => [...current, envelope]);
+    setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+    setReplacementPlay(null);
     setEditingPlay(null);
     setPlayEditFeedback({
-      tone: 'warning',
-      message: `Play #${play.sequence} was not changed. That structural change requires replacing the play.`,
+      tone: 'success',
+      message: `Play #${result.acceptedEvent.sequence} was replaced. The game remains final and downstream context was preserved.`,
     });
-  }, []);
+    if (requestedGameId && dashboardGameId) {
+      enqueueFootballEnvelopeMirror({
+        gameId: requestedGameId,
+        dashboardGameId,
+        envelope: persistedEnvelope,
+      });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
   const recordPossessionClock = useCallback((clock) => {
     if (!possessionClockChange) return;
@@ -712,21 +789,28 @@ export default function FootballScorerShell() {
         input={(
           <FootballInputSlot
             debugMode={debugMode}
-            envelope={envelope}
+            envelope={inputEnvelope}
             fcqiResetKey={fcqiResetKey}
             fcqiState={fcqiState}
+            onCancelReplacement={cancelPlayReplacement}
             onFcqiStateChange={setFcqiState}
             onOpenPenaltyEditor={openPenaltyCodeEditor}
             onOpenStarters={openStartersEditor}
-            onSubmitAccepted={handleSubmitAccepted}
+            onSubmitAccepted={replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
-            submitAdapter={useLocalTestGame ? localSubmitAdapter : undefined}
+            replacementPlay={replacementPlay}
+            submitAdapter={replacementPlay
+              ? replacementSubmitAdapter
+              : useLocalTestGame
+                ? localSubmitAdapter
+                : undefined}
           />
         )}
         eventLog={(
           <FootballEventLogSlot
             canUndo={localUndoStack.length > 0}
             editFeedback={playEditFeedback}
+            editingDisabled={Boolean(replacementPlay)}
             envelope={envelope}
             onEditEvent={openPlayEditor}
             onUndoLastEvent={useLocalTestGame ? undoLastLocalEvent : undefined}
@@ -982,11 +1066,13 @@ export const FootballInputSlot = ({
   envelope,
   fcqiResetKey,
   fcqiState,
+  onCancelReplacement,
   onFcqiStateChange,
   onOpenPenaltyEditor,
   onOpenStarters,
   onPregameEnvelopeChange,
   onSubmitAccepted,
+  replacementPlay,
   submitAdapter,
 }) => {
   const showPregameWorkspace = envelope.game.status === 'pregame';
@@ -998,6 +1084,26 @@ export const FootballInputSlot = ({
 
   return (
     <div className="space-y-4 p-4">
+      {replacementPlay && (
+        <section className="rounded border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950" role="status">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-black">Replacing play #{replacementPlay.sequence}</div>
+              <p className="mt-1 text-sm">
+                The original sequence, Q{replacementPlay.period} {formatFootballClockDisplay(replacementPlay.clock, '--:--')}, and starting context are locked.
+                The replacement must agree with the next recorded play before it can be saved.
+              </p>
+            </div>
+            <button
+              className="rounded border border-amber-600 bg-white px-3 py-2 text-sm font-black text-amber-950 hover:bg-amber-100"
+              onClick={onCancelReplacement}
+              type="button"
+            >
+              Cancel Replacement
+            </button>
+          </div>
+        </section>
+      )}
       {showPregameWorkspace && (
         <FootballPregameWorkspace
           envelope={envelope}
@@ -1014,6 +1120,7 @@ export const FootballInputSlot = ({
         onOpenStarters={onOpenStarters}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
+        replacementMode={Boolean(replacementPlay)}
         state={fcqiState}
         submitAdapter={submitAdapter}
         teamAliases={teamAliases}
@@ -1022,11 +1129,12 @@ export const FootballInputSlot = ({
   );
 };
 
-export const FootballEventLogSlot = ({ canUndo = false, editFeedback, envelope, onEditEvent, onUndoLastEvent }) => (
+export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onUndoLastEvent }) => (
   <div className="h-full p-4">
     <GameLogColumn
       canUndo={canUndo}
       editFeedback={editFeedback}
+      editingDisabled={editingDisabled}
       envelope={envelope}
       onEditEvent={onEditEvent}
       onUndoLastEvent={onUndoLastEvent}
@@ -1135,7 +1243,7 @@ const EnvelopeRow = ({ label, value }) => (
 
 const EDITABLE_EVENT_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
 
-const GameLogColumn = ({ canUndo, editFeedback, envelope, onEditEvent, onUndoLastEvent }) => {
+const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
   const logItems = buildGameLogItems(envelope);
   return (
     <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
@@ -1203,8 +1311,10 @@ const GameLogColumn = ({ canUndo, editFeedback, envelope, onEditEvent, onUndoLas
                     {onEditEvent && EDITABLE_EVENT_TYPES.has(item.event.type) && (
                       <button
                         aria-label={`Edit play ${item.event.sequence ?? ''}`}
-                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800"
+                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                        disabled={editingDisabled}
                         onClick={() => onEditEvent(item.event)}
+                        title={editingDisabled ? 'Finish or cancel the current replacement first' : 'Edit this play'}
                         type="button"
                       >
                         Edit

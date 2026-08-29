@@ -143,6 +143,7 @@ export default function FootballConfirmedQuickInput({
   onOpenStarters,
   onSubmitAccepted,
   onStateChange,
+  replacementMode = false,
   state,
   submitAdapter = submitFootballFcqiEvent,
   teamAliases,
@@ -176,6 +177,10 @@ export default function FootballConfirmedQuickInput({
   const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
     && Boolean(envelope.liveState?.pendingTryTeam);
   const showPatPrompt = awaitingPatTry && !isActiveFcqiPlayFlow(currentState);
+  const familyAvailable = (family) => (
+    isPlayFamilyAvailable(gamePhase, family)
+    && (!replacementMode || family !== 'gameControl')
+  );
 
   const publishState = (nextState) => {
     onStateChange?.(nextState);
@@ -211,7 +216,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startRush = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
+    if (!familyAvailable('rush')) return;
     const nextStartMeta = createStartMeta('rush', startedBy, 'R');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -225,7 +230,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPass = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'pass')) return;
+    if (!familyAvailable('pass')) return;
     const nextStartMeta = createStartMeta('pass', startedBy, 'P');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -239,7 +244,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startTeamPlay = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'rush')) return;
+    if (!familyAvailable('rush')) return;
     const nextStartMeta = createStartMeta('team-play', startedBy, 'T');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -253,7 +258,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPunt = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'punt')) return;
+    if (!familyAvailable('punt')) return;
     const nextStartMeta = createStartMeta('punt', startedBy, 'U');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -267,7 +272,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startKick = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'kickoff') || !kickoffContextReady) return;
+    if (!familyAvailable('kickoff') || !kickoffContextReady) return;
     const nextStartMeta = createStartMeta('kick', startedBy, 'K');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -281,7 +286,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPat = (startedBy) => {
-    if (!awaitingPatTry || !isPlayFamilyAvailable(gamePhase, 'kickoff')) return;
+    if (!awaitingPatTry || !familyAvailable('kickoff')) return;
     const nextStartMeta = createStartMeta('pat', startedBy, 'A');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -298,7 +303,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startPenalty = (startedBy, source = 'immediate') => {
-    if (!isPlayFamilyAvailable(gamePhase, 'penalty')) return;
+    if (!familyAvailable('penalty')) return;
     const nextStartMeta = createStartMeta('penalty', startedBy, 'E');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -312,7 +317,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startGameControl = (startedBy) => {
-    if (!isPlayFamilyAvailable(gamePhase, 'gameControl')) return;
+    if (!familyAvailable('gameControl')) return;
     const nextStartMeta = createStartMeta('game-control', startedBy, 'G');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
     setStartMeta(nextStartMeta);
@@ -456,7 +461,9 @@ export default function FootballConfirmedQuickInput({
         status: 'success',
         message: result.status === 'duplicateAccepted'
           ? 'Submit accepted as duplicate.'
-          : 'Submitted play.',
+          : result.status === 'replaced'
+            ? 'Replaced play.'
+            : 'Submitted play.',
         error: '',
         result,
       });
@@ -528,7 +535,7 @@ export default function FootballConfirmedQuickInput({
     <section className="rounded border border-zinc-300 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">Play Entry</h2>
+          <h2 className="text-base font-semibold">{replacementMode ? 'Replacement Entry' : 'Play Entry'}</h2>
         </div>
         {submitStatus.status === 'submitting' && (
           <span className="rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-800">
@@ -570,7 +577,7 @@ export default function FootballConfirmedQuickInput({
                   ? 'rush'
                   : button.label.toLowerCase();
             const enabled = button.enabled
-              && isPlayFamilyAvailable(gamePhase, family)
+              && familyAvailable(family)
               && (family !== 'kickoff' || kickoffContextReady);
             return (
             <button
@@ -728,6 +735,7 @@ export default function FootballConfirmedQuickInput({
         progressSteps={progressSteps}
         requiresPenaltyReview={requiresPenaltyReview}
         submitError={submitStatus.status === 'error' ? submitStatus.error : ''}
+        submitLabel={replacementMode ? 'Replace Play' : 'Submit Play'}
         unresolvedQueuedPenalty={Boolean(currentState.queuedPenaltyRequested)}
         summary={currentState.status === 'summary.reviewing' ? currentState.summary : null}
       />
