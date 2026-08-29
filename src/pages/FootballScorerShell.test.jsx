@@ -9,6 +9,7 @@ import {
   FOOTBALL_DASHBOARD_STORAGE_KEY,
   FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
+  getDashboardSeededFootballEnvelopeRecord,
   saveDashboardSeededFootballEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
@@ -143,6 +144,87 @@ function cloneNormalEnvelope() {
   return JSON.parse(JSON.stringify(gameEnvelopeFixtures.normal));
 }
 
+function finalEnvelopeWithBallContextRevision(gameId) {
+  const envelope = cloneNormalEnvelope();
+  const firstContext = {
+    possession: 'H',
+    down: 2,
+    distance: 18,
+    yardLine: 'V32',
+    lineToGain: 'V14',
+    goalToGo: false,
+    redZone: false,
+    driveId: 'DRV-0002',
+    driveNumber: 2,
+  };
+  const laterContext = {
+    ...firstContext,
+    down: 2,
+    distance: 7,
+    yardLine: 'V21',
+  };
+  envelope.gameId = gameId;
+  envelope.rosters.gameId = gameId;
+  envelope.game.status = 'final';
+  envelope.game.period = 4;
+  envelope.game.wrapUp = { completedAt: '2026-08-29T01:00:00.000Z' };
+  envelope.pregame = { gamePhase: 'final' };
+  envelope.clock = { ...envelope.clock, period: 4, clock: '00:00', clockTenths: 0, isRunning: false };
+  envelope.liveState = { ...laterContext, down: 3, distance: 7 };
+  envelope.events = [
+    {
+      ...envelope.events[0],
+      eventId: 'EVT-CONTEXT-BEFORE',
+      clientEventId: 'context-before',
+      sequence: 1,
+      period: 4,
+      clock: '04:12',
+      preState: firstContext,
+      result: { code: 'tackle', yards: 6, endYardLine: 'V26', firstDown: false, driveEnds: false },
+      description: 'HOM #22 Jordan Smith rush for 6 yards to the V26.',
+    },
+    {
+      eventId: 'EVT-CONTEXT-REVISION',
+      clientEventId: 'context-revision',
+      sequence: 2,
+      status: 'accepted',
+      type: 'gameControl',
+      subtype: 'setBallContext',
+      period: 4,
+      clock: '04:12',
+      possession: 'H',
+      preState: { ...firstContext, down: 3, distance: 7, yardLine: 'V21' },
+      result: {
+        code: 'noPlay',
+        gameControl: {
+          action: 'setBallContext',
+          possession: 'H',
+          down: 2,
+          distance: 7,
+          spot: 'V21',
+          lineToGain: 'V14',
+        },
+      },
+      description: 'HOM ball context set to 2 and 7 at the V21, line to gain the V14.',
+      source: { kind: 'fcqi', baseEventSequence: 1 },
+    },
+    {
+      ...envelope.events[1],
+      eventId: 'EVT-CONTEXT-AFTER',
+      clientEventId: 'context-after',
+      sequence: 3,
+      period: 4,
+      clock: '03:50',
+      preState: laterContext,
+      result: { code: 'complete', yards: 7, endYardLine: 'V14', firstDown: true, driveEnds: false },
+      description: 'HOM pass complete for 7 yards to the V14.',
+      source: { kind: 'fcqi', baseEventSequence: 2 },
+    },
+  ];
+  envelope.stats.sourceEventSequence = 3;
+  return envelope;
+}
+
 function canonicalEnvelopeForRequest(request) {
   const envelope = cloneNormalEnvelope();
   envelope.gameId = request.gameId;
@@ -264,6 +346,54 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('dialog', { name: /edit play 12/i })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Play #12 was updated in the local envelope.');
     expect(screen.getByRole('button', { name: /undo last test event/i })).toBeEnabled();
+  });
+
+  it('edits a ball context revision in a final game without rewriting the next play context', async () => {
+    const finalEnvelope = finalEnvelopeWithBallContextRevision('FB-FINAL-CONTEXT-EDIT');
+    const nextPlayContext = structuredClone(finalEnvelope.events[2].preState);
+    saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
+
+    renderScorer('/scorer?envelopeGameId=FB-FINAL-CONTEXT-EDIT');
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit ball context revision 2/i }));
+    const editor = screen.getByRole('dialog', { name: /edit ball context revision 2/i });
+    fireEvent.change(within(editor).getByLabelText(/^down$/i), { target: { value: '3' } });
+    fireEvent.change(within(editor).getByLabelText(/^distance$/i), { target: { value: '6' } });
+    fireEvent.change(within(editor).getByLabelText(/ball spot/i), { target: { value: 'V20' } });
+    fireEvent.click(within(editor).getByRole('button', { name: /save changes/i }));
+
+    const saved = getDashboardSeededFootballEnvelopeRecord(finalEnvelope.gameId).envelope;
+    expect(saved.game.status).toBe('final');
+    expect(saved.events[1].result.gameControl).toMatchObject({ down: 3, distance: 6, spot: 'V20' });
+    expect(saved.events[1].description).toBe('HOM ball context set to 3 and 6 at the V20, line to gain the V14.');
+    expect(saved.events[2].preState).toEqual(nextPlayContext);
+    expect(screen.getByRole('status')).toHaveTextContent('Later recorded contexts were preserved.');
+    expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
+  });
+
+  it('deletes a redundant ball context revision from a final game and preserves later checkpoints', async () => {
+    const finalEnvelope = finalEnvelopeWithBallContextRevision('FB-FINAL-CONTEXT-DELETE');
+    const nextPlayContext = structuredClone(finalEnvelope.events[2].preState);
+    saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
+
+    renderScorer('/scorer?envelopeGameId=FB-FINAL-CONTEXT-DELETE');
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit ball context revision 2/i }));
+    const editor = screen.getByRole('dialog', { name: /edit ball context revision 2/i });
+    fireEvent.click(within(editor).getByRole('button', { name: /delete revision/i }));
+    const confirmation = within(editor).getByRole('alertdialog', { name: /delete ball context revision 2/i });
+    fireEvent.click(within(confirmation).getByRole('button', { name: /delete revision/i }));
+
+    const saved = getDashboardSeededFootballEnvelopeRecord(finalEnvelope.gameId).envelope;
+    expect(saved.game.status).toBe('final');
+    expect(saved.events.map((event) => event.eventId)).toEqual(['EVT-CONTEXT-BEFORE', 'EVT-CONTEXT-AFTER']);
+    expect(saved.events.map((event) => event.sequence)).toEqual([1, 2]);
+    expect(saved.events[1].preState).toEqual(nextPlayContext);
+    expect(saved.events[1].source.baseEventSequence).toBe(1);
+    expect(saved.stats.sourceEventSequence).toBe(2);
+    expect(screen.getByRole('status')).toHaveTextContent('Later records were renumbered');
+    expect(screen.queryByRole('button', { name: /edit ball context revision/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
   });
 
   it('starts a historical replacement from a final game without reopening ordinary scoring', async () => {

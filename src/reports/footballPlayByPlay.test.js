@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
 import {
   buildFootballPlayByPlayReport,
+  formatFootballPlayText,
   formatFootballPlaySpot,
 } from './footballPlayByPlay';
 
@@ -47,6 +48,28 @@ describe('football Play-by-Play projection', () => {
     expect(formatFootballPlaySpot('50', report.teams)).toBe('50');
     expect(firstQuarter.rows.filter((row) => row.kind === 'play').every((row) => !/^[HV]\d/.test(row.spot))).toBe(true);
     expect(firstQuarter.rows.filter((row) => row.kind === 'play').every((row) => !/\b[HV]\d{1,2}\b/.test(row.text))).toBe(true);
+  });
+
+  it('labels accepted dead-ball penalties in already-recorded play descriptions', () => {
+    const teams = {
+      H: { name: 'Sissonville', abbr: 'SIS' },
+      V: { name: 'Ripley', abbr: 'RIP' },
+    };
+    const event = {
+      type: 'rush',
+      description: '#5 Jackson Cook rush for 6 yards to the RIPLEY 26, PENALTY SISSON Holding, enforced 10 yards from the RIPLEY 26 to the RIPLEY 36, replay down; PENALTY RIPLEY Personal Foul, 15 yards to the RIPLEY 21, replay down.',
+      penalties: [
+        { status: 'accepted', timing: 'liveBall' },
+        { status: 'accepted', timing: 'deadBall' },
+      ],
+    };
+
+    expect(formatFootballPlayText(event, teams)).toBe(
+      '#5 Jackson Cook rush for 6 yards to the RIPLEY 26, PENALTY SISSON Holding, enforced 10 yards from the RIPLEY 26 to the RIPLEY 36, replay down; Deadball foul, PENALTY RIPLEY Personal Foul, 15 yards to the RIPLEY 21, replay down.',
+    );
+
+    event.description = formatFootballPlayText(event, teams);
+    expect(formatFootballPlayText(event, teams)).not.toContain('Deadball foul, Deadball foul');
   });
 
   it('opens each half with the recorded coin-toss choices', () => {

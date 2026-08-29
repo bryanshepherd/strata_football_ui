@@ -199,8 +199,29 @@ const halfStartCommentRows = (envelope, events, period) => {
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const acceptedDeadBallPenalty = (penalty) => (
+  penalty?.status === 'accepted'
+  && (
+    String(penalty?.timing || '').toLowerCase() === 'deadball'
+    || penalty?.deadBall === true
+    || penalty?.liveBall === false
+  )
+);
+
+const labelDeadBallPenalties = (text, penalties) => {
+  let penaltyIndex = 0;
+  return text.replace(/\bPENALTY\b/g, (label, offset, source) => {
+    const penalty = penalties?.[penaltyIndex];
+    penaltyIndex += 1;
+    if (!acceptedDeadBallPenalty(penalty)) return label;
+    const precedingText = source.slice(Math.max(0, offset - 24), offset);
+    return /Deadball foul,\s*$/i.test(precedingText) ? label : `Deadball foul, ${label}`;
+  });
+};
+
 export const formatFootballPlayText = (event, teams) => {
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
+  text = labelDeadBallPenalties(text, event?.penalties);
   const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
   if (!timeout) {
     const prefixes = Object.values(teams || {})

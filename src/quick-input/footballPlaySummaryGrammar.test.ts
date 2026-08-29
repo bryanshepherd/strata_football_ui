@@ -312,6 +312,48 @@ describe('footballPlaySummaryGrammar', () => {
     );
   });
 
+  it('labels an accepted attached dead-ball foul after a live-ball foul', () => {
+    expectSummary(
+      baseIntent({
+        family: 'rush',
+        subtype: null,
+        primary: participant('rusher', 'H', 'H-22', '22', 'Jordan Smith'),
+        result: { code: 'tackle', yards: 6, endYardLine: 'V26' },
+        penalties: [
+          {
+            penaltyId: 'pen-live',
+            team: 'H',
+            code: 'HLD',
+            name: 'Holding',
+            yards: -10,
+            enforcedFrom: 'END',
+            finalSpot: 'V36',
+            downConsequence: 'REPEAT',
+            status: 'accepted',
+            accepted: true,
+            liveBall: true,
+            deadBall: false,
+          },
+          {
+            penaltyId: 'pen-dead',
+            team: 'V',
+            code: 'PF',
+            name: 'Personal Foul',
+            yards: 15,
+            enforcedFrom: 'END',
+            finalSpot: 'V21',
+            downConsequence: 'REPEAT',
+            status: 'accepted',
+            accepted: true,
+            liveBall: false,
+            deadBall: true,
+          },
+        ],
+      }),
+      'HOM #22 Jordan Smith rush for 6 yards to the V26, PENALTY HOM Holding, 10 yards to the V36, replay down; Deadball foul, PENALTY VIS Personal Foul, 15 yards to the V21, replay down.',
+    );
+  });
+
   it('formats attached previous-spot penalties without verbalizing previous spot', () => {
     const result = generateFootballPlaySummary(baseIntent({
       family: 'rush',

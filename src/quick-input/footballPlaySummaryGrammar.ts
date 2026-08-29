@@ -548,7 +548,7 @@ function penaltiesSummary(
 }
 
 function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
-  const parts = [`PENALTY ${penaltyBasicText(context, penalty)}`];
+  const parts = [penaltyLeadText(context, penalty)];
 
   if (penalty.status === 'declined') {
     parts.push('declined');
@@ -574,7 +574,7 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
 }
 
 function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): string {
-  const parts = [`PENALTY ${penaltyBasicText(context, penalty)}`];
+  const parts = [penaltyLeadText(context, penalty)];
 
   if (penalty.status === 'declined') {
     parts.push('declined');
@@ -607,6 +607,15 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
   appendPenaltyEjection(context, penalty, parts);
 
   return parts.join(', ');
+}
+
+function penaltyLeadText(context: SummaryContext, penalty: DraftPenalty): string {
+  const text = `PENALTY ${penaltyBasicText(context, penalty)}`;
+  const penaltyTiming = (penalty as DraftPenalty & { timing?: string }).timing;
+  const deadBall = String(penaltyTiming || '').toLowerCase() === 'deadball'
+    || penalty.deadBall === true
+    || penalty.liveBall === false;
+  return penalty.status === 'accepted' && deadBall ? `Deadball foul, ${text}` : text;
 }
 
 function appendPenaltyEjection(context: SummaryContext, penalty: DraftPenalty, parts: string[]): void {

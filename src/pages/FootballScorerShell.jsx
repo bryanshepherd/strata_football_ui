@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
+import FootballBallContextRevisionModal from '../components/editor/FootballBallContextRevisionModal';
 import FootballPlayEditorModal from '../components/editor/FootballPlayEditorModal';
 import FootballConfirmedQuickInput, {
   getFootballFcqiAssistantMessage,
@@ -23,6 +24,11 @@ import {
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
 import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
+import {
+  deleteFootballBallContextRevision,
+  isFootballBallContextRevision,
+  updateFootballBallContextRevision,
+} from '../play-editor/footballBallContextRevision';
 import {
   buildFootballPlayReplacementEnvelope,
   replaceFootballPlayInEnvelope,
@@ -453,6 +459,68 @@ export default function FootballScorerShell() {
 
   const closePlayEditor = useCallback(() => setEditingPlay(null), []);
 
+  const saveBallContextRevision = useCallback((revision) => {
+    try {
+      const amendedEnvelope = updateFootballBallContextRevision(envelope, editingPlay, revision);
+      const persistedEnvelope = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, amendedEnvelope) || amendedEnvelope
+        : amendedEnvelope;
+      const sequence = editingPlay?.sequence;
+      setLocalUndoStack((current) => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setPlayEditFeedback({
+        tone: 'success',
+        message: `Ball context revision #${sequence} was updated. Later recorded contexts were preserved.`,
+      });
+      if (requestedGameId && dashboardGameId) {
+        enqueueFootballEnvelopeMirror({
+          gameId: requestedGameId,
+          dashboardGameId,
+          envelope: persistedEnvelope,
+        });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    } catch (error) {
+      setPlayEditFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'The ball context revision could not be saved.',
+      });
+    }
+  }, [dashboardGameId, editingPlay, envelope, flushServerSync, requestedGameId]);
+
+  const removeBallContextRevision = useCallback(() => {
+    try {
+      const amendedEnvelope = deleteFootballBallContextRevision(envelope, editingPlay);
+      const persistedEnvelope = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, amendedEnvelope) || amendedEnvelope
+        : amendedEnvelope;
+      const sequence = editingPlay?.sequence;
+      setLocalUndoStack((current) => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setPlayEditFeedback({
+        tone: 'success',
+        message: `Ball context revision #${sequence} was deleted. Later records were renumbered and their recorded contexts were preserved.`,
+      });
+      if (requestedGameId && dashboardGameId) {
+        enqueueFootballEnvelopeMirror({
+          gameId: requestedGameId,
+          dashboardGameId,
+          envelope: persistedEnvelope,
+        });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    } catch (error) {
+      setPlayEditFeedback({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'The ball context revision could not be deleted.',
+      });
+    }
+  }, [dashboardGameId, editingPlay, envelope, flushServerSync, requestedGameId]);
+
   const savePlayEditor = useCallback((editedPlay) => {
     try {
       const amendedEnvelope = applyFootballPlayEditToEnvelope(envelope, editedPlay);
@@ -871,7 +939,7 @@ export default function FootballScorerShell() {
         saving={wrapUpSaveState.saving}
       />
       <FootballPlayEditorModal
-        isOpen={Boolean(editingPlay)}
+        isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay)}
         onClose={closePlayEditor}
         onReplace={requestPlayReplacement}
         onSave={savePlayEditor}
@@ -882,6 +950,15 @@ export default function FootballScorerShell() {
           H: envelope.game.teams.H.name || envelope.game.teams.H.abbr || 'Home',
           V: envelope.game.teams.V.name || envelope.game.teams.V.abbr || 'Visitor',
         }}
+      />
+      <FootballBallContextRevisionModal
+        downs={envelope.game.rules?.downs || 4}
+        event={editingPlay}
+        isOpen={Boolean(editingPlay) && isFootballBallContextRevision(editingPlay)}
+        onClose={closePlayEditor}
+        onDelete={removeBallContextRevision}
+        onSave={saveBallContextRevision}
+        saveError={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''}
       />
 
       {debugMode && <FootballDebugTracePanel entries={traceEntries} />}
@@ -1251,6 +1328,9 @@ const EnvelopeRow = ({ label, value }) => (
 );
 
 const EDITABLE_EVENT_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
+const isEditableGameLogEvent = (event) => (
+  EDITABLE_EVENT_TYPES.has(event?.type) || isFootballBallContextRevision(event)
+);
 
 const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
   const logItems = buildGameLogItems(envelope);
@@ -1317,13 +1397,19 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {onEditEvent && EDITABLE_EVENT_TYPES.has(item.event.type) && (
+                    {onEditEvent && isEditableGameLogEvent(item.event) && (
                       <button
-                        aria-label={`Edit play ${item.event.sequence ?? ''}`}
+                        aria-label={isFootballBallContextRevision(item.event)
+                          ? `Edit ball context revision ${item.event.sequence ?? ''}`
+                          : `Edit play ${item.event.sequence ?? ''}`}
                         className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                         disabled={editingDisabled}
                         onClick={() => onEditEvent(item.event)}
-                        title={editingDisabled ? 'Finish or cancel the current replacement first' : 'Edit this play'}
+                        title={editingDisabled
+                          ? 'Finish or cancel the current replacement first'
+                          : isFootballBallContextRevision(item.event)
+                            ? 'Edit or delete this ball context revision'
+                            : 'Edit this play'}
                         type="button"
                       >
                         Edit

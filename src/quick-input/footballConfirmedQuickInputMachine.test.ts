@@ -695,7 +695,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
 
     const reviewing = transitionWithContext(ready, { type: 'GENERATE_SUMMARY' }, context);
-    expect(reviewing.summary?.summaryText).toBe('PENALTY VIS Offsides, 2 yards from the V3 to the V1.');
+    expect(reviewing.summary?.summaryText).toBe('Deadball foul, PENALTY VIS Offsides, 2 yards from the V3 to the V1.');
   });
 
   it('retains a queued penalized player who was not otherwise in the play', () => {
