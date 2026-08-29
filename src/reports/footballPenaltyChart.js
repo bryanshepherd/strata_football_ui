@@ -38,30 +38,30 @@ const teamAliases = (envelope) => TEAM_CODES.flatMap((team) => {
     .filter(Boolean);
 }).sort((left, right) => right.length - left.length);
 
-const foulNameFromDescription = (envelope, event) => {
+const foulNameFromDescription = (envelope, event, penaltyIndex) => {
   const description = String(event?.description || '').trim();
   const immediate = description.match(/^Penalty:\s+(.+?)\s+on\s+[^,]+(?:,|$)/i);
-  if (immediate) return immediate[1].trim();
+  if (immediate) return penaltyIndex === 0 ? immediate[1].trim() : '';
 
   const aliases = teamAliases(envelope);
   if (aliases.length === 0) return '';
   const aliasPattern = aliases.map(escapeRegExp).join('|');
-  const attached = description.match(new RegExp(
+  const attached = [...description.matchAll(new RegExp(
     `\\bPENALTY\\s+(?:${aliasPattern})\\s+(.+?)(?=\\s+\\(#|,\\s*(?:[-+]?\\d+\\s+yards?|declined|offsetting|enforced|from\\b|accepted\\b)|\\.$|$)`,
-    'i',
-  ));
-  if (attached?.[1]) return attached[1].trim();
+    'gi',
+  ))];
+  if (attached[penaltyIndex]?.[1]) return attached[penaltyIndex][1].trim();
 
-  const generic = description.match(/\bPENALTY\s+(.+?)(?=\s+\(#|,\s*(?:[-+]?\d+\s+yards?|declined|offsetting|enforced|from\b|accepted\b)|\.$|$)/i);
-  if (!generic?.[1]) return '';
-  const candidate = generic[1].trim();
+  const generic = [...description.matchAll(/\bPENALTY\s+(.+?)(?=\s+\(#|,\s*(?:[-+]?\d+\s+yards?|declined|offsetting|enforced|from\b|accepted\b)|\.$|$)/gi)];
+  if (!generic[penaltyIndex]?.[1]) return '';
+  const candidate = generic[penaltyIndex][1].trim();
   const leadingAlias = aliases.find((alias) => candidate.toLowerCase().startsWith(`${alias.toLowerCase()} `));
   return leadingAlias ? candidate.slice(leadingAlias.length).trim() : candidate;
 };
 
-const penaltyName = (envelope, event, penalty) => (
+const penaltyName = (envelope, event, penalty, penaltyIndex) => (
   String(penalty?.name || '').trim()
-  || foulNameFromDescription(envelope, event)
+  || foulNameFromDescription(envelope, event, penaltyIndex)
   || legacyPenaltyNames[String(penalty?.code || '').toUpperCase()]
   || fallbackPenaltyNames[String(penalty?.code || '').toUpperCase()]
   || String(penalty?.code || 'Penalty')
@@ -157,7 +157,7 @@ const projectPenalty = (envelope, event, penalty, penaltyIndex, section) => {
     disposition: dispositionLabel(status),
     status,
     accepted: status === 'accepted',
-    foulName: penaltyName(envelope, event, penalty),
+    foulName: penaltyName(envelope, event, penalty, penaltyIndex),
     player: playerLabel(envelope, event, penalty),
     yards: yards === null ? '—' : String(Math.abs(yards)),
     postFoulSpot: postFoulSpot(event, penalty),

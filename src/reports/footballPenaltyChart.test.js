@@ -82,4 +82,50 @@ describe('football penalty chart report projection', () => {
       accepted: false,
     });
   });
+
+  it('uses each foul clause for a multiple-foul play instead of repeating the first foul name', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.game.teams.H = { ...envelope.game.teams.H, name: 'Sissonville High School', abbr: 'SISSON' };
+    envelope.game.teams.V = { ...envelope.game.teams.V, name: 'Ripley High School', abbr: 'RIPLEY' };
+    envelope.events = [{
+      eventId: 'EVT-MULTIPLE-FOUL',
+      clientEventId: 'multiple-foul',
+      sequence: 1,
+      status: 'accepted',
+      type: 'rush',
+      period: 4,
+      clock: '04:12',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 2,
+        distance: 18,
+        yardLine: 'V32',
+        lineToGain: 'V14',
+      },
+      result: { code: 'tackle', yards: 6, endYardLine: 'V26' },
+      penalties: [
+        {
+          penaltyId: 'hold-sissonville', code: 'HOLD', team: 'H', status: 'accepted',
+          yards: 10, enforcedFrom: 'endOfPlay', finalSpot: 'V36', timing: 'liveBall', replayDown: true,
+        },
+        {
+          penaltyId: 'pf-ripley', code: 'PF', team: 'V', status: 'accepted',
+          yards: 15, enforcedFrom: 'endOfPlay', finalSpot: 'V21', timing: 'deadBall', replayDown: true,
+        },
+      ],
+      description: 'SISSON #5 Jackson Cook rush for 6 yards to the V26, tackled by #44 Jeremiah Smith, PENALTY SISSON Holding, enforced 10 yards from the V26 to the V36, replay down; Deadball foul, PENALTY RIPLEY Personal Foul, 15 yards to the V21, replay down.',
+    }];
+
+    const multipleFoulReport = buildFootballPenaltyChartReport(envelope);
+    const sissonvilleFoul = section(multipleFoulReport, 'H', 'offense').penalties[0];
+    const ripleyFoul = section(multipleFoulReport, 'V', 'defense').penalties[0];
+
+    expect(sissonvilleFoul).toMatchObject({
+      team: 'H', foulName: 'Holding', yards: '10', postFoulSpot: 'V36',
+    });
+    expect(ripleyFoul).toMatchObject({
+      team: 'V', foulName: 'Personal Foul', yards: '15', postFoulSpot: 'V21',
+    });
+  });
 });
