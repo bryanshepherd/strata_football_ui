@@ -215,7 +215,8 @@ function genericCurrentIndex(state) {
   if (state.flow === 'penalty') {
     if (step === 'penaltyName') return 0;
     if (step === 'penaltyTeam') return 1;
-    if (step === 'penaltyResolution') return 2;
+    if (step === 'penaltyTiming') return 2;
+    if (step === 'penaltyResolution') return 3;
     return 3;
   }
   if (state.flow === 'gameControl') {

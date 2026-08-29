@@ -327,6 +327,8 @@ export default function FootballScorerShell() {
       (responseEvent?.eventId && event.eventId === responseEvent.eventId)
       || (responseEvent?.clientEventId && event.clientEventId === responseEvent.clientEventId)
     )) || acceptedEnvelope?.events?.[acceptedEnvelope.events.length - 1] || responseEvent;
+    const isPossessionCorrection = acceptedEvent?.type === 'gameControl'
+      && acceptedEvent?.result?.gameControl?.action === 'setPossession';
     const driveSummaryEvent = result?.status !== 'duplicateAccepted'
       && isFootballDriveSummaryTerminalEvent(acceptedEvent)
       ? acceptedEvent
@@ -335,13 +337,19 @@ export default function FootballScorerShell() {
       setWrapUpSaveState({ saving: false, error: '' });
       setWrapUpOpen(true);
     }
-    if (acceptedEnvelope && previousPossession !== nextPossession && (previousPossession || nextPossession)) {
+    if (
+      acceptedEnvelope
+      && !isPossessionCorrection
+      && previousPossession !== nextPossession
+      && (previousPossession || nextPossession)
+    ) {
       setPossessionClockChange({
         previousPossession,
         nextPossession,
         period: acceptedEnvelope.clock?.period || acceptedEnvelope.game?.period || 1,
         defaultClock: acceptedEnvelope.clock?.clock || envelope.clock?.clock || '',
         envelope: acceptedEnvelope,
+        endedDriveId: result?.projection?.driveTransition?.endedDriveId || acceptedEvent?.preState?.driveId || null,
         driveSummaryEvent,
       });
     } else if (acceptedEnvelope && driveSummaryEvent) {
@@ -479,6 +487,7 @@ export default function FootballScorerShell() {
       nextPossession: possessionClockChange.nextPossession,
       period: possessionClockChange.period,
       clock,
+      endedDriveId: possessionClockChange.endedDriveId,
     });
     if (requestedGameId) {
       updatedEnvelope = saveDashboardSeededFootballEnvelope(requestedGameId, updatedEnvelope) || updatedEnvelope;

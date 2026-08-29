@@ -954,6 +954,16 @@ const playEarnedFirstDown = (event, projection, eventHistory) => {
 };
 
 const offenseLostPossession = (event, offense) => {
+  const officialOutcome = event?.result?.officialOutcome;
+  const officialState = officialOutcome?.source === 'penaltyEnforcement'
+    ? officialOutcome.verified || officialOutcome.calculated
+    : null;
+  if (validTeamCode(officialState?.possession)) {
+    return officialState.possession !== offense;
+  }
+  if (hasAcceptedPreviousSpotPenalty(event) && (hasReplayDownPenalty(event) || hasAcceptedAutomaticFirstDownPenalty(event))) {
+    return false;
+  }
   const recoveredByTeam = event?.result?.fumble?.recoveredByTeam;
   const turnoverTeam = event?.result?.turnover?.team;
   const nextPossession = event?.result?.nextPossession;
@@ -1175,7 +1185,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
   }
 
   const kickoffReturn = kickoffReturnStat(event);
-  if (kickoffReturn) {
+  if (kickoffReturn && !suppressPlayStats) {
     const { returner, returnTeam, returnYards } = kickoffReturn;
     teams = updateTeamStat(teams, returnTeam, (current) => ({
       ...current,
@@ -1193,7 +1203,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
   }
 
   const blockedPunt = blockedPuntStat(event);
-  if (validTeamCode(offense) && event.type === 'punt') {
+  if (validTeamCode(offense) && event.type === 'punt' && !suppressPlayStats) {
     const puntYards = blockedPunt?.puntYards
       ?? finiteNumber(result.kick?.kickYards ?? result.kickYards);
     teams = updateTeamStat(teams, offense, (current) => {
@@ -1219,7 +1229,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     }
   }
 
-  const puntReturn = event.type === 'punt' ? puntReturnStat(event, blockedPunt) : null;
+  const puntReturn = event.type === 'punt' && !suppressPlayStats ? puntReturnStat(event, blockedPunt) : null;
   if (puntReturn) {
     const { returnTeam, returnYards, playerCredits } = puntReturn;
     teams = updateTeamStat(teams, returnTeam, (current) => ({
@@ -1277,8 +1287,17 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     playEarnedFirstDown(event, projection, eventHistory)
     && hasAcceptedAutomaticFirstDownPenalty(event)
   );
-  const firstDownCredits = Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
-  if (validTeamCode(offense) && firstDownCredits > 0 && ['rush', 'pass', 'penalty'].includes(event?.type)) {
+  const officialOutcome = result.officialOutcome?.source === 'penaltyEnforcement'
+    ? result.officialOutcome.verified || result.officialOutcome.calculated
+    : null;
+  const firstDownCredits = officialOutcome
+    ? Number(officialOutcome.firstDownAwarded === true && officialOutcome.firstDownAwardedTo === offense)
+    : Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
+  if (
+    validTeamCode(offense)
+    && firstDownCredits > 0
+    && (officialOutcome || hasAcceptedAutomaticFirstDownPenalty(event) || ['rush', 'pass', 'penalty'].includes(event?.type))
+  ) {
     teams = updateTeamStat(teams, offense, (current) => ({
       ...current,
       firstDowns: finiteNumber(current.firstDowns) + firstDownCredits,
@@ -1521,10 +1540,14 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
   };
   for (const drive of envelope?.drives?.completed || []) {
     if (!validTeamCode(drive?.team) || !drive.startClock || !drive.endClock) continue;
+    const startPeriod = finiteNumber(drive.startPeriod, 1);
+    const endPeriod = finiteNumber(drive.endPeriod, startPeriod);
+    const halftimePeriod = Math.floor(finiteNumber(envelope?.game?.rules?.periods, 4) / 2);
+    if (startPeriod <= halftimePeriod && endPeriod > halftimePeriod) continue;
     segments[drive.team].push({
-      startPeriod: finiteNumber(drive.startPeriod, 1),
+      startPeriod,
       startClock: possessionStartClock(drive),
-      endPeriod: finiteNumber(drive.endPeriod, drive.startPeriod || 1),
+      endPeriod,
       endClock: drive.endClock,
     });
   }
@@ -1562,6 +1585,12 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
       timeOfPossession,
     };
   }
+  const currentPeriod = Math.max(1, finiteNumber(envelope?.clock?.period || envelope?.game?.period, 1));
+  const currentClockSeconds = clockSeconds(envelope?.clock?.clock);
+  const elapsedGameSeconds = ((currentPeriod - 1) * periodSeconds)
+    + (currentClockSeconds === null ? 0 : Math.max(0, periodSeconds - currentClockSeconds));
+  const derivedTotal = ['H', 'V'].reduce((total, team) => total + finiteNumber(teams[team]?.timeOfPossession), 0);
+  if (derivedTotal > elapsedGameSeconds + 1) return stats;
   return { ...(stats || {}), teams };
 }
 
@@ -1668,6 +1697,7 @@ export function recordFootballPossessionClock(envelope, {
   nextPossession,
   period,
   clock,
+  endedDriveId,
 }) {
   const normalizedClock = normalizeClockText(clock);
   if (!envelope || !normalizedClock) throw new Error('Possession clock must use MM:SS format.');
@@ -1676,6 +1706,9 @@ export function recordFootballPossessionClock(envelope, {
   const latestEvent = [...(envelope.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');
+  if (latestEvent?.type === 'gameControl' && latestEvent?.result?.gameControl?.action === 'setPossession') {
+    return envelope;
+  }
   const receivingTeam = kickoffReceivingTeam(latestEvent);
   const kickoffSeconds = clockSeconds(latestEvent?.clock);
   const possessionChangeSeconds = clockSeconds(normalizedClock);
@@ -1764,15 +1797,16 @@ export function recordFootballPossessionClock(envelope, {
     ? envelope.drives.completed.map((drive) => ({ ...drive }))
     : [];
   if (validTeamCode(previousPossession) && previousPossession !== nextPossession) {
-    for (let index = completedDrives.length - 1; index >= 0; index -= 1) {
-      if (completedDrives[index].team === previousPossession) {
-        completedDrives[index] = {
-          ...completedDrives[index],
-          endPeriod: periodNumber,
-          endClock: normalizedClock,
-        };
-        break;
-      }
+    const targetDriveId = endedDriveId || latestEvent?.preState?.driveId;
+    const targetIndex = targetDriveId
+      ? completedDrives.findIndex((drive) => drive.driveId === targetDriveId)
+      : -1;
+    if (targetIndex >= 0 && completedDrives[targetIndex].team === previousPossession) {
+      completedDrives[targetIndex] = {
+        ...completedDrives[targetIndex],
+        endPeriod: periodNumber,
+        endClock: normalizedClock,
+      };
     }
   }
 
@@ -1822,6 +1856,85 @@ const decrementTeamCount = (counts, team) => ({
   ...counts,
   [team]: Math.max(0, Number(counts[team] || 0) - 1),
 });
+
+const closeCurrentDriveAtPeriodEnd = (drives = {}, period, result) => {
+  if (!drives.current) return drives;
+  const completed = Array.isArray(drives.completed) ? drives.completed : [];
+  if (completed.some((drive) => drive.driveId === drives.current.driveId)) {
+    return { ...drives, current: null };
+  }
+  return {
+    ...drives,
+    current: null,
+    completed: [...completed, {
+      ...drives.current,
+      result: result || drives.current.result,
+      endPeriod: period,
+      endClock: '00:00',
+    }],
+  };
+};
+
+const correctPossessionDrive = (drives = {}, { possession, period, clock, spot }) => {
+  if (!validTeamCode(possession)) return drives;
+  const completed = Array.isArray(drives.completed) ? drives.completed.map((drive) => ({ ...drive })) : [];
+  const current = drives.current ? { ...drives.current } : null;
+  if (current?.team === possession) return { ...drives, current, completed };
+
+  if (current && finiteNumber(current.plays) === 0) {
+    const correctionClock = normalizeClockText(clock);
+    const reopenIndex = completed.findLastIndex((drive) => (
+      drive.team === possession
+      && finiteNumber(drive.endPeriod, -1) === finiteNumber(period, -2)
+      && normalizeClockText(drive.endClock) === correctionClock
+    ));
+    if (reopenIndex >= 0) {
+      const reopened = { ...completed[reopenIndex], result: null };
+      reopened.driveNumber = finiteNumber(
+        reopened.driveNumber,
+        Number(String(reopened.driveId || '').match(/(\d+)$/)?.[1]),
+      );
+      delete reopened.endPeriod;
+      delete reopened.endClock;
+      completed.splice(reopenIndex, 1);
+      return { ...drives, current: reopened, completed };
+    }
+  }
+
+  if (current) {
+    return {
+      ...drives,
+      completed,
+      current: {
+        ...current,
+        team: possession,
+        startYardLine: finiteNumber(current.plays) === 0 ? spot || current.startYardLine : current.startYardLine,
+        startReason: 'manualPossessionCorrection',
+      },
+    };
+  }
+
+  const driveNumber = Math.max(
+    completed.length,
+    ...completed.map((drive) => finiteNumber(drive.driveNumber)),
+  ) + 1;
+  return {
+    ...drives,
+    completed,
+    current: {
+      driveId: `DRV-${String(driveNumber).padStart(4, '0')}`,
+      driveNumber,
+      team: possession,
+      startYardLine: spot,
+      startReason: 'manualPossessionChange',
+      startPeriod: period,
+      startClock: normalizeClockText(clock),
+      plays: 0,
+      yards: 0,
+      result: null,
+    },
+  };
+};
 
 const applyGameControlProjection = (envelope, event) => {
   const control = event?.result?.gameControl;
@@ -1887,9 +2000,13 @@ const applyGameControlProjection = (envelope, event) => {
 
   if (control.action === 'endQuarter') {
     const status = period >= periods ? 'final' : period === Math.floor(periods / 2) ? 'halftime' : envelope.game.status;
+    const drives = ['halftime', 'final'].includes(status)
+      ? closeCurrentDriveAtPeriodEnd(envelope.drives, period, status === 'halftime' ? 'endOfHalf' : 'endOfGame')
+      : envelope.drives;
     return withEvent({
       game: { ...envelope.game, period, status },
       clock: { ...envelope.clock, period, clock: '00:00', clockTenths: 0, isRunning: false },
+      drives,
       pregame: envelope.pregame ? { ...envelope.pregame, gamePhase: status === 'final' ? 'final' : status === 'halftime' ? 'halftime' : 'live' } : envelope.pregame,
     });
   }
@@ -1903,6 +2020,9 @@ const applyGameControlProjection = (envelope, event) => {
     const liveState = resetTimeouts
       ? { ...envelope.liveState, timeouts: initializeTeamCounts({}, resolveTimeoutLimit(rules)) }
       : envelope.liveState;
+    const drives = resetTimeouts
+      ? closeCurrentDriveAtPeriodEnd(envelope.drives, period - 1, 'endOfHalf')
+      : envelope.drives;
     return withEvent({
       game: { ...envelope.game, period, status: 'inProgress' },
       clock: { ...envelope.clock, period, clock: `${String(minutes).padStart(2, '0')}:00`, clockTenths: minutes * 600, isRunning: false },
@@ -1922,7 +2042,7 @@ const applyGameControlProjection = (envelope, event) => {
             nextPlayContext: 'awaitingKickoff',
           }
         : liveState,
-      drives: kickoffTeam ? { ...envelope.drives, current: null } : envelope.drives,
+      drives: kickoffTeam ? { ...drives, current: null } : drives,
       pregame: envelope.pregame
         ? { ...envelope.pregame, gamePhase: kickoffTeam ? 'awaitingKickoff' : 'live' }
         : envelope.pregame,
@@ -1945,16 +2065,27 @@ const applyGameControlProjection = (envelope, event) => {
 
   if (control.action === 'setPossession') {
     const spot = envelope.liveState?.yardLine || control.spot;
-    const liveState = createLiveState({
-      possession: control.possession,
-      down: envelope.liveState?.down || 1,
-      distance: envelope.liveState?.distance,
-      yardLine: spot,
-      lineToGain: envelope.liveState?.lineToGain,
-      driveId: envelope.liveState?.driveId,
-      driveNumber: envelope.liveState?.driveNumber,
+    const possession = control.possession;
+    const correctedDrives = correctPossessionDrive(envelope.drives, {
+      possession,
+      period: event.period,
+      clock: event.clock,
+      spot,
     });
-    return withEvent({ liveState: { ...envelope.liveState, ...liveState } });
+    const currentDrive = correctedDrives.current;
+    const liveState = createLiveState({
+      possession,
+      down: 1,
+      yardLine: spot,
+      driveId: currentDrive?.driveId || envelope.liveState?.driveId,
+      driveNumber: currentDrive?.driveNumber
+        || Number(String(currentDrive?.driveId || '').match(/(\d+)$/)?.[1])
+        || envelope.liveState?.driveNumber,
+    });
+    return withEvent({
+      liveState: { ...envelope.liveState, ...liveState },
+      drives: correctedDrives,
+    });
   }
 
   if (control.action === 'startDrive') {

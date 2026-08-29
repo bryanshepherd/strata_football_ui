@@ -10,6 +10,7 @@ import FootballDuplicatePlayerModal from './FootballDuplicatePlayerModal';
 import FootballFlowModal from './FootballFlowModal';
 import { buildFootballFlowProgressSteps } from './FootballFlowProgress';
 import FootballPlaySummaryModal from './FootballPlaySummaryModal';
+import FootballPenaltyEnforcementReviewModal from './FootballPenaltyEnforcementReviewModal';
 import { gamePhaseForEnvelope, isPlayFamilyAvailable, pregameForEnvelope } from '../../pregame/footballPregame';
 import { footballPenaltyRulesetFromRules } from '../../quick-input/penaltyTable';
 
@@ -101,6 +102,7 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'patPassReturnAttempted') return 'Choose Return or No Return.';
   if (state.currentStep === 'penaltyName') return 'Enter penalty name.';
   if (state.currentStep === 'penaltyTeam') return 'Choose penalty team.';
+  if (state.currentStep === 'penaltyTiming') return 'Choose whether the foul was live ball or dead ball.';
   if (state.currentStep === 'penaltyResolution') return 'Choose penalty resolution.';
   if (state.currentStep === 'penaltyPlayerJersey') return 'Enter penalized player or skip.';
   if (state.currentStep === 'penaltyEjected') return 'Choose whether the penalized person was ejected.';
@@ -154,6 +156,7 @@ export default function FootballConfirmedQuickInput({
     startedAt: envelope.updatedAt,
   });
   const [penaltyMessage, setPenaltyMessage] = useState('');
+  const [penaltyReviewOpen, setPenaltyReviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({
     status: 'idle',
     message: '',
@@ -404,11 +407,15 @@ export default function FootballConfirmedQuickInput({
     publishState(applyEvent({ type: 'SELECT_DUPLICATE_PLAYER', playerId }));
   };
 
-  const confirmSummary = async () => {
+  const submitConfirmedState = async (stateToConfirm) => {
     if (submitInFlightRef.current) return;
 
     setPenaltyMessage('');
-    const confirmedState = applyEvent({ type: 'CONFIRM_SUMMARY', confirmedAt: new Date().toISOString() });
+    const confirmedState = transitionFootballQuickInput(
+      stateToConfirm,
+      { type: 'CONFIRM_SUMMARY', confirmedAt: new Date().toISOString() },
+      context,
+    ).state;
     const nextBuildResult = confirmedState.buildResult;
 
     if (!nextBuildResult?.ok) {
@@ -443,6 +450,7 @@ export default function FootballConfirmedQuickInput({
 
       onSubmitAccepted?.(result);
       publishState(createInitialFootballQuickInputState());
+      setPenaltyReviewOpen(false);
       setPenaltyMessage('');
       setSubmitStatus({
         status: 'success',
@@ -464,7 +472,30 @@ export default function FootballConfirmedQuickInput({
     }
   };
 
+  const acceptedPenaltyCount = currentState.draft?.penalties?.filter((penalty) => penalty.status === 'accepted').length || 0;
+  const requiresPenaltyReview = acceptedPenaltyCount > 1
+    && currentState.draft?.result?.officialOutcome?.operatorVerified !== true;
+
+  const confirmSummary = async () => {
+    if (requiresPenaltyReview) {
+      setPenaltyReviewOpen(true);
+      return;
+    }
+    await submitConfirmedState(currentState);
+  };
+
+  const confirmPenaltyEnforcement = async (review) => {
+    const reviewedState = applyEvent({
+      type: 'VERIFY_PENALTY_ENFORCEMENT',
+      ...review,
+    });
+    publishState(reviewedState);
+    setPenaltyReviewOpen(false);
+    await submitConfirmedState(reviewedState);
+  };
+
   const editPlay = () => {
+    setPenaltyReviewOpen(false);
     clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -477,6 +508,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const cancelFlow = () => {
+    setPenaltyReviewOpen(false);
     clearModalStepHistory();
     setPenaltyMessage('');
     clearSubmitStatus();
@@ -691,12 +723,22 @@ export default function FootballConfirmedQuickInput({
         onEnterPenalty={enterPenalty}
         onStepClick={jumpToStep}
         onConfirm={confirmSummary}
+        penaltyCount={currentState.draft?.penalties?.length || 0}
         penaltyMessage={penaltyMessage}
         progressSteps={progressSteps}
+        requiresPenaltyReview={requiresPenaltyReview}
         submitError={submitStatus.status === 'error' ? submitStatus.error : ''}
         unresolvedQueuedPenalty={Boolean(currentState.queuedPenaltyRequested)}
         summary={currentState.status === 'summary.reviewing' ? currentState.summary : null}
       />
+      {penaltyReviewOpen && (
+        <FootballPenaltyEnforcementReviewModal
+          draft={currentState.draft}
+          onCancel={() => setPenaltyReviewOpen(false)}
+          onConfirm={confirmPenaltyEnforcement}
+          teamAliases={context.teamAliases}
+        />
+      )}
     </section>
   );
 }
@@ -717,7 +759,7 @@ function formatSubmitErrors(errors) {
   return errors.map((error) => error.message || error.code).join(' ');
 }
 
-function buildQuickInputContext(envelope, startMeta, teamAliases) {
+export function buildQuickInputContext(envelope, startMeta, teamAliases) {
   const pregame = pregameForEnvelope(envelope);
   const phase = gamePhaseForEnvelope(envelope);
   const possession = envelope.liveState.possession || null;
@@ -725,7 +767,11 @@ function buildQuickInputContext(envelope, startMeta, teamAliases) {
   const setupActionTeam = envelope.liveState.nextPlayContext === 'awaitingTry'
     ? latestEvent?.result?.scoring?.team || latestEvent?.possession
     : envelope.liveState.nextPlayContext === 'awaitingKickoff'
-      ? latestEvent?.participants?.primary?.team || latestEvent?.participants?.kicker?.team || latestEvent?.possession
+      ? envelope.liveState.kickoffTeam
+        || latestEvent?.result?.gameControl?.secondHalf?.kickingTeam
+        || latestEvent?.participants?.primary?.team
+        || latestEvent?.participants?.kicker?.team
+        || latestEvent?.possession
       : envelope.liveState.nextPlayContext === 'awaitingSafetyKick'
         ? latestEvent?.possession
         : !possession && latestEvent?.type === 'try'

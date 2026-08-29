@@ -313,6 +313,14 @@ function copyResult(result: DraftResult): DraftResult {
     turnover: result.turnover ? { ...result.turnover } : undefined,
     scoring: result.scoring ? { ...result.scoring } : undefined,
     gameControl: result.gameControl ? { ...result.gameControl } : undefined,
+    officialOutcome: result.officialOutcome
+      ? {
+          ...result.officialOutcome,
+          enforcementOrder: [...result.officialOutcome.enforcementOrder],
+          calculated: { ...result.officialOutcome.calculated },
+          verified: result.officialOutcome.verified ? { ...result.officialOutcome.verified } : undefined,
+        }
+      : undefined,
   };
 }
 

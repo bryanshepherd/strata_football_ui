@@ -1048,7 +1048,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       status: 'token.error',
       error: {
         code: 'INVALID_DOWN_CONSEQUENCE',
-        message: 'Down Counts is available only for an offensive foul enforced from the succeeding spot.',
+        message: 'Down Counts is available for a dead-ball foul or an offensive foul enforced from the succeeding spot.',
       },
     });
   });
@@ -2641,6 +2641,60 @@ describe('footballConfirmedQuickInputMachine', () => {
           yards: -2,
           teamCharged: true,
           fumble: { fumblerPlayerId: 'TM', spot: 'H42', recoverySpot: 'H43' },
+        },
+      },
+    });
+  });
+
+  it('requires ordered official-state verification before submitting multiple accepted fouls', () => {
+    const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
+    const firstFoul = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Holding', 'H', 'A', '', 'F', 'V45', 'H45', 'R'],
+    );
+    const secondEntry = startQueuedPenalty(firstFoul);
+    const selectedSecondTeam = commitPenaltyTokens(secondEntry, ['Offside', 'V']);
+
+    expect(selectedSecondTeam).toMatchObject({
+      status: 'token.awaiting',
+      currentStep: 'penaltyTiming',
+      currentToken: 'L',
+    });
+
+    const twoFouls = commitPenaltyTokens(
+      selectedSecondTeam,
+      ['D', 'A', '', 'S', 'V44', 'D'],
+    );
+    expect(twoFouls.error).toBeUndefined();
+    expect(twoFouls.status).toBe('summary.reviewing');
+    expect(twoFouls.draft?.penalties).toHaveLength(2);
+    expect(twoFouls.draft?.penalties.map((penalty) => penalty.penaltyId)).toEqual([
+      'fcqi-rush-client-100-pen-1',
+      'fcqi-rush-client-100-pen-2',
+    ]);
+    expect(twoFouls.draft?.penalties[1]).toMatchObject({ liveBall: false, deadBall: true });
+
+    const blocked = transition(twoFouls, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+    expect(blocked.error).toMatchObject({ code: 'MULTIPLE_PENALTY_REVIEW_REQUIRED' });
+
+    const reviewed = transition(twoFouls, {
+      type: 'VERIFY_PENALTY_ENFORCEMENT',
+      enforcementOrder: twoFouls.draft!.penalties.map((penalty) => penalty.penaltyId),
+      down: 2,
+      distance: 6,
+      yardLine: 'V44',
+      firstDownAwarded: false,
+    });
+    const confirmed = transition(reviewed, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+    expect(confirmed.buildResult).toMatchObject({
+      ok: true,
+      event: {
+        result: {
+          officialOutcome: {
+            source: 'penaltyEnforcement',
+            operatorVerified: true,
+            verified: { down: 2, distance: 6, yardLine: 'V44', firstDownAwarded: false },
+          },
         },
       },
     });

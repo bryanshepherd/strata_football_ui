@@ -8,8 +8,10 @@ export default function FootballPlaySummaryModal({
   onEdit,
   onEnterPenalty,
   onStepClick,
+  penaltyCount = 0,
   penaltyMessage = '',
   progressSteps = [],
+  requiresPenaltyReview = false,
   submitError = '',
   summary,
   unresolvedQueuedPenalty = false,
@@ -104,7 +106,7 @@ export default function FootballPlaySummaryModal({
             onClick={onEnterPenalty}
             type="button"
           >
-            Enter Penalty
+            {penaltyCount > 0 ? 'Add Foul' : 'Enter Penalty'}
           </button>
           <button
             className="rounded border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
@@ -134,7 +136,7 @@ export default function FootballPlaySummaryModal({
             title={submitTitle}
             type="button"
           >
-            {isSubmitting ? 'Submitting...' : 'Submit Play'}
+            {isSubmitting ? 'Submitting...' : requiresPenaltyReview ? 'Review Enforcement' : 'Submit Play'}
           </button>
           </div>
         </div>

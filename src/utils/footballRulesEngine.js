@@ -224,6 +224,20 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     return applyPossessionFreeSetupPenalty(envelope, event, preState, endYardLine, trace);
   }
 
+  const officialPenaltyState = penaltyOfficialState(event)
+    || legacyPenaltyOfficialState(event, preState, endYardLine, rules);
+  if (officialPenaltyState) {
+    return applyPenaltyOfficialOutcome(
+      envelope,
+      event,
+      preState,
+      officialPenaltyState,
+      options,
+      trace,
+      rules,
+    );
+  }
+
   if (isTouchdownEvent(event, statisticalEndYardLine, possession, explicitScoringCounts)) {
     const scoring = event.result?.scoring || { team: possession, points: 6, type: 'touchdown' };
     const scoringTeam = normalizeTeamCode(scoring.team) || possession;
@@ -402,6 +416,82 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
     },
     yardsGained: null,
     firstDown: true,
+  });
+}
+
+function applyPenaltyOfficialOutcome(envelope, event, preState, official, options, trace, rules) {
+  const previousPossession = normalizeTeamCode(event.possession || preState.possession);
+  const possession = normalizeTeamCode(official.possession);
+  const yardLine = official.yardLine;
+  const lineToGain = official.lineToGain
+    || calculateLineToGain(yardLine, possession, rules.yardsToFirstDown);
+  const distance = Number.isInteger(official.distance)
+    ? official.distance
+    : calculateYardsToGain(yardLine, lineToGain, possession);
+  const down = Number.isInteger(official.down) ? official.down : 1;
+  const samePossession = possession && possession === previousPossession;
+
+  addTrace(trace, 'penalty', 'official penalty enforcement outcome', {
+    input: { previousPossession, observedResult: event.result, penalties: event.penalties },
+    result: { possession, down, distance, yardLine, lineToGain },
+    reason: 'The final enforced penalty outcome is the authority for possession, down, distance, and spot.',
+  });
+
+  if (samePossession) {
+    return finish({
+      envelope,
+      event,
+      trace,
+      liveState: createLiveState({
+        possession,
+        down,
+        distance,
+        yardLine,
+        lineToGain,
+        driveId: preState.driveId,
+        driveNumber: preState.driveNumber,
+      }),
+      driveTransition: continueDrive(preState.driveId),
+      yardsGained: calculateYardsGained(preState.yardLine, yardLine, possession),
+      firstDown: official.firstDownAwarded === true,
+      scoringUpdate: null,
+    });
+  }
+
+  const driveResult = previousPossession
+    ? event.type === 'punt'
+      ? 'punt'
+      : preState.down >= rules.downs
+        ? 'turnoverOnDowns'
+        : 'penaltyPossessionChange'
+    : 'penaltyEnforcement';
+  const drive = createStartedDrive(envelope, possession, yardLine, driveResult, options);
+  return finish({
+    envelope,
+    event,
+    trace,
+    liveState: createLiveState({
+      possession,
+      down,
+      distance,
+      yardLine,
+      lineToGain,
+      driveId: drive.driveId,
+      driveNumber: drive.driveNumber,
+    }),
+    driveTransition: {
+      shouldEndCurrent: Boolean(previousPossession),
+      shouldStartNew: true,
+      endedDriveId: previousPossession ? preState.driveId : null,
+      startedDrive: drive,
+      driveResult,
+      reason: 'penaltyOfficialOutcome',
+    },
+    yardsGained: previousPossession
+      ? calculateYardsGained(preState.yardLine, yardLine, previousPossession)
+      : null,
+    firstDown: official.firstDownAwarded === true,
+    scoringUpdate: null,
   });
 }
 
@@ -711,6 +801,34 @@ function resultYards(event, preState, endYardLine, possession) {
   }
 
   return calculateYardsGained(preState.yardLine, endYardLine, possession);
+}
+
+function penaltyOfficialState(event) {
+  const review = event?.result?.officialOutcome;
+  if (!review || review.source !== 'penaltyEnforcement') return null;
+  const official = review.verified || review.calculated;
+  const possession = normalizeTeamCode(official?.possession);
+  if (!possession || !official?.yardLine || !Number.isInteger(official?.down)) return null;
+  return { ...official, possession };
+}
+
+function legacyPenaltyOfficialState(event, preState, endYardLine, rules) {
+  if (event?.type !== 'punt' || (!hasAutomaticFirstDown(event) && !hasReplayDown(event))) return null;
+  const possession = normalizeTeamCode(event.possession || preState.possession);
+  if (!possession || !endYardLine) return null;
+  const firstDownAwarded = hasAutomaticFirstDown(event);
+  const down = firstDownAwarded ? 1 : preState.down || 1;
+  const lineToGain = firstDownAwarded
+    ? calculateLineToGain(endYardLine, possession, rules.yardsToFirstDown)
+    : preState.lineToGain || calculateLineToGain(preState.yardLine, possession, rules.yardsToFirstDown);
+  return {
+    possession,
+    down,
+    distance: calculateYardsToGain(endYardLine, lineToGain, possession),
+    yardLine: endYardLine,
+    lineToGain,
+    firstDownAwarded,
+  };
 }
 
 function penaltyAdjustedEndYardLine(event, preState) {

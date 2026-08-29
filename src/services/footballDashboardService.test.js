@@ -779,6 +779,75 @@ describe('local football test-game projection', () => {
     expect(possession.gameEnvelope.liveState.timeouts).toEqual({ H: 2, V: 3 });
   });
 
+  it('treats roughing-the-kicker enforcement as the final authority and suppresses the nullified punt', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = { ...envelope.liveState, down: 4 };
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-RTK-PUNT-1', {
+      type: 'punt',
+      subtype: 'fairCatch',
+      participants: {
+        primary: { playerId: 'H-12', team: 'H', role: 'punter' },
+        punter: { playerId: 'H-12', team: 'H', role: 'punter' },
+        returner: { playerId: 'V-31', team: 'V', role: 'returner' },
+        secondary: null,
+        defenders: [],
+      },
+      result: { code: 'fairCatch', kickYards: 36, endYardLine: 'V20', nextPossession: 'V', driveEnds: true },
+      penalties: [{
+        penaltyId: 'rtk-1', code: 'RTK', team: 'V', status: 'accepted', timing: 'liveBall', yards: 15,
+        enforcedFrom: 'previousSpot', finalSpot: 'V41', automaticFirstDown: true, replayDown: true,
+      }],
+    }));
+
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'H', down: 1, distance: 10, yardLine: 'V41', lineToGain: 'V31', driveId: 'DRV-0002',
+    });
+    expect(response.gameEnvelope.drives.current).toMatchObject({ driveId: 'DRV-0002', team: 'H' });
+    expect(response.gameEnvelope.drives.completed).toHaveLength(0);
+    expect(response.gameEnvelope.stats.teams.H?.punts?.num || 0).toBe(0);
+    expect(response.gameEnvelope.stats.teams.H.firstDowns).toBe(1);
+    expect(response.gameEnvelope.stats.teams.V.penalties).toMatchObject({ num: 1, yds: 15 });
+  });
+
+  it('repairs the active drive when set possession corrects an immediately-created empty drive', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '01:20' };
+    envelope.game = { ...envelope.game, period: 2 };
+    envelope.drives = {
+      completed: [{ ...envelope.drives.current, result: 'punt', endPeriod: 2, endClock: '01:20' }],
+      current: { driveId: 'DRV-0003', driveNumber: 3, team: 'V', startYardLine: 'V20', startReason: 'punt', plays: 0, yards: 0, result: null },
+    };
+    envelope.liveState = { ...envelope.liveState, possession: 'V', driveId: 'DRV-0003', driveNumber: 3, yardLine: 'V41' };
+    const request = gameControlRequest('LOCAL-POSSESSION-REOPEN-1', 'setPossession', { possession: 'H' });
+    request.event.period = 2;
+    request.event.clock = '01:20';
+    const response = await submitFootballEventLocally(envelope, request);
+
+    expect(response.gameEnvelope.liveState).toMatchObject({ possession: 'H', down: 1, driveId: 'DRV-0002', driveNumber: 2 });
+    expect(response.gameEnvelope.drives.current).toMatchObject({ driveId: 'DRV-0002', team: 'H', result: null });
+    expect(response.gameEnvelope.drives.completed).toHaveLength(0);
+  });
+
+  it('reassigns an empty third-quarter drive instead of reopening a first-half drive', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 3, clock: '12:00' };
+    envelope.game = { ...envelope.game, period: 3 };
+    envelope.drives = {
+      completed: [{ ...envelope.drives.current, result: 'endOfHalf', endPeriod: 2, endClock: '00:00' }],
+      current: { driveId: 'DRV-0003', driveNumber: 3, team: 'V', startYardLine: 'V25', startReason: 'kickoff', plays: 0, yards: 0, result: null },
+    };
+    envelope.liveState = { ...envelope.liveState, possession: 'V', driveId: 'DRV-0003', driveNumber: 3, yardLine: 'H35' };
+    const request = gameControlRequest('LOCAL-POSSESSION-Q3-1', 'setPossession', { possession: 'H' });
+    request.event.period = 3;
+    request.event.clock = '12:00';
+    const response = await submitFootballEventLocally(envelope, request);
+
+    expect(response.gameEnvelope.drives.completed).toHaveLength(1);
+    expect(response.gameEnvelope.drives.current).toMatchObject({
+      driveId: 'DRV-0003', team: 'H', startReason: 'manualPossessionCorrection', startYardLine: 'H35',
+    });
+  });
+
   it('initializes the third quarter as an awaiting-kickoff state from the second-half choice', async () => {
     const envelope = clone(getGameEnvelopeFixture('halftime'));
     envelope.pregame = {
@@ -816,6 +885,22 @@ describe('local football test-game projection', () => {
       kickoffTeam: 'H',
       nextPlayContext: 'awaitingKickoff',
       timeouts: { H: 3, V: 3 },
+    });
+  });
+
+  it('closes the current drive at halftime so it cannot span the half', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '00:00' };
+    envelope.game = { ...envelope.game, period: 2 };
+    const response = await submitFootballEventLocally(
+      envelope,
+      gameControlRequest('LOCAL-END-HALF-1', 'endQuarter', { period: 2 }),
+    );
+
+    expect(response.gameEnvelope.game.status).toBe('halftime');
+    expect(response.gameEnvelope.drives.current).toBeNull();
+    expect(response.gameEnvelope.drives.completed.at(-1)).toMatchObject({
+      driveId: 'DRV-0002', team: 'H', result: 'endOfHalf', endPeriod: 2, endClock: '00:00',
     });
   });
 
@@ -2146,5 +2231,34 @@ describe('local football test-game projection', () => {
       startClock: '12:00',
       endClock: '07:30',
     });
+  });
+
+  it('does not create possession time or rewrite a drive for a manual possession correction event', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events.push({
+      clientEventId: 'manual-possession-correction', sequence: 13, status: 'accepted', type: 'gameControl', period: 1, clock: '08:42',
+      result: { code: 'noPlay', gameControl: { action: 'setPossession', possession: 'V' } },
+    });
+    const before = clone(envelope);
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: 'H', nextPossession: 'V', period: 1, clock: '08:42', endedDriveId: 'DRV-0002',
+    });
+
+    expect(recorded).toEqual(before);
+  });
+
+  it('updates only the exact ended drive supplied by the possession transition', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.drives.completed = [
+      { driveId: 'DRV-0001', driveNumber: 1, team: 'H', startPeriod: 1, startClock: '15:00', endPeriod: 1, endClock: '12:00' },
+      { driveId: 'DRV-0002', driveNumber: 2, team: 'H', startPeriod: 1, startClock: '10:00', endPeriod: 1, endClock: '08:42' },
+    ];
+    envelope.drives.current = { driveId: 'DRV-0003', driveNumber: 3, team: 'V', startPeriod: 1, startClock: '08:42' };
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: 'H', nextPossession: 'V', period: 1, clock: '08:30', endedDriveId: 'DRV-0001',
+    });
+
+    expect(recorded.drives.completed[0].endClock).toBe('08:30');
+    expect(recorded.drives.completed[1].endClock).toBe('08:42');
   });
 });

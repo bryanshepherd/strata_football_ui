@@ -97,6 +97,7 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     ...(intent.result.teamCharged ? { teamCharged: true } : {}),
     ...(intent.result.endYardLine && intent.result.endYardLine !== 'goal' ? { endYardLine: intent.result.endYardLine } : {}),
     ...(typeof intent.result.firstDown === 'boolean' ? { firstDown: intent.result.firstDown } : {}),
+    ...(intent.result.officialOutcome ? { officialOutcome: intent.result.officialOutcome } : {}),
   };
   if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
   if (intent.result.return) result.return = { ...intent.result.return };

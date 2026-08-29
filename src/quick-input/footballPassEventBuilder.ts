@@ -29,7 +29,12 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     ? { playerId: target.playerId, team: target.team, role: 'intendedReceiver' }
     : null;
   const pass: Record<string, unknown> = { outcome, startYardLine: intent.prePlay.yardLine ?? undefined };
-  const result: Record<string, unknown> = { code: outcome, pass, ...(isSpike ? { teamCharged: true } : {}) };
+  const result: Record<string, unknown> = {
+    code: outcome,
+    pass,
+    ...(isSpike ? { teamCharged: true } : {}),
+    ...(intent.result.officialOutcome ? { officialOutcome: intent.result.officialOutcome } : {}),
+  };
   const participants: DraftScoringEvent['participants'] = { primary: base, secondary: targetParticipant, target: targetParticipant, receiver: null, interceptor: null, defenders: [] };
   if (outcome === 'complete') {
     const receiver = intent.participants.secondary;

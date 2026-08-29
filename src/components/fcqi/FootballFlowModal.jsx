@@ -489,6 +489,12 @@ const stepCopy = {
     helper: 'Choose the team charged with the penalty.',
     placeholder: 'H',
   },
+  penaltyTiming: {
+    title: 'Foul timing',
+    label: 'Timing',
+    helper: 'Choose whether the foul occurred while the ball was live or after the play ended.',
+    placeholder: 'L',
+  },
   penaltyResolution: {
     title: 'Penalty resolution',
     label: 'Resolution',
@@ -733,6 +739,11 @@ const penaltyResolutionButtons = [
   { label: 'Accepted', hotkey: 'A', value: 'A' },
   { label: 'Declined', hotkey: 'D', value: 'D' },
   { label: 'Offsetting', hotkey: 'O', value: 'O' },
+];
+
+const penaltyTimingButtons = [
+  { label: 'Live Ball', hotkey: 'L', value: 'L' },
+  { label: 'Dead Ball', hotkey: 'D', value: 'D' },
 ];
 
 const penaltyEjectedButtons = [
@@ -1084,12 +1095,13 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'patPassResult') return patPassResultButtons;
   if (step === 'patPassReturnAttempted') return returnAttemptedButtons;
   if (step === 'penaltyTeam' || step === 'offsettingSecondTeam') return teamButtonsForAliases(aliases, teamNames);
+  if (step === 'penaltyTiming') return penaltyTimingButtons;
   if (step === 'penaltyResolution') return penaltyResolutionButtons;
   if (step === 'penaltyEjected') return penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
   if (step === 'penaltyDown') return (
     state?.tokens?.penaltyEnforcedFrom === 'END'
-    && state?.tokens?.penaltyTeam === actionTeam
+    && (state?.tokens?.penaltyTiming === 'deadBall' || state?.tokens?.penaltyTeam === actionTeam)
       ? [...penaltyDownButtons, downCountsButton]
       : penaltyDownButtons
   );

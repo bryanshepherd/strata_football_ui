@@ -207,6 +207,7 @@ export type DraftResult = {
   clockTenths?: number;
   isRunning?: boolean;
   period?: number;
+  officialOutcome?: import('../utils/footballPenaltyOutcome').FootballPenaltyEnforcementReview;
 };
 
 export type DraftResultCode =
@@ -1082,10 +1083,10 @@ function validatePenalties(
 
     if (penalty.downConsequence === 'DOWN_COUNTS') {
       const actionTeam = isRecord(play) && isTeamCode(play.actionTeam) ? play.actionTeam : null;
-      if (penalty.enforcedFrom !== 'END' || penalty.team !== actionTeam) {
+      if (penalty.enforcedFrom !== 'END' || (penalty.deadBall !== true && penalty.team !== actionTeam)) {
         errors.push(error(
           'INVALID_PENALTY',
-          `${field}.downConsequence DOWN_COUNTS requires a succeeding-spot foul by the offensive team`,
+          `${field}.downConsequence DOWN_COUNTS requires a dead-ball foul or a succeeding-spot foul by the offensive team`,
           `${field}.downConsequence`,
         ));
       }

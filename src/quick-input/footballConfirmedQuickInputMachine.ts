@@ -29,6 +29,7 @@ import {
 } from './penaltyTable';
 import { isPlayFamilyAvailable, type FootballGamePhase } from '../pregame/footballPregame';
 import { calculateFootballPenaltyFinalSpot } from '../utils/footballPenaltyEnforcement';
+import { resolveFootballDraftPenaltyOutcome } from '../utils/footballPenaltyOutcome';
 import { normalizeFootballClock } from '../utils/footballClock';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
 
@@ -63,6 +64,7 @@ export type PatRushResultSelection = 'good' | 'missed' | 'fumbled';
 export type PatPassResultSelection = 'good' | 'missed' | 'incomplete' | 'intercepted' | 'fumbled';
 export type PenaltySourceSelection = 'immediate' | 'queued';
 export type PenaltyResolutionSelection = 'accepted' | 'declined' | 'offsetting';
+export type PenaltyTimingSelection = 'liveBall' | 'deadBall';
 export type PenaltyEnforcedFromSelection = 'PREVIOUS' | 'SPOT' | 'END';
 export type PenaltyDownConsequenceSelection = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS';
 export type GameControlMenuSelection = 'emergency' | 'quarter' | 'clock' | 'timeout' | 'challenge' | 'ballContext' | 'driveStart' | 'setPossession' | 'editPenalties' | 'coinToss' | 'roster';
@@ -162,6 +164,7 @@ export type PatTokenStep =
 export type PenaltyTokenStep =
   | 'penaltyName'
   | 'penaltyTeam'
+  | 'penaltyTiming'
   | 'penaltyResolution'
   | 'penaltyPlayerJersey'
   | 'penaltyEjected'
@@ -290,6 +293,7 @@ export type PenaltyFlowTokens = KickFlowTokens & {
   penaltyCode?: string;
   penaltyDefinition?: FootballPenaltyTableEntry;
   penaltyTeam?: TeamCode;
+  penaltyTiming?: PenaltyTimingSelection;
   penaltyResolution?: PenaltyResolutionSelection;
   penaltyPlayer?: DraftParticipant;
   penaltyEjected?: boolean;
@@ -450,6 +454,14 @@ export type FootballQuickInputEvent =
   | { type: 'CANCEL_DUPLICATE' }
   | { type: 'ADD_TACKLER' }
   | { type: 'QUEUE_PENALTY_REQUEST' }
+  | {
+      type: 'VERIFY_PENALTY_ENFORCEMENT';
+      enforcementOrder: string[];
+      down: number;
+      distance: number;
+      yardLine: Spot;
+      firstDownAwarded: boolean;
+    }
   | { type: 'GENERATE_SUMMARY' }
   | { type: 'EDIT_PLAY' }
   | { type: 'JUMP_TO_STEP'; stepId: string }
@@ -563,6 +575,7 @@ export function transitionFootballQuickInput(
         tokens: {
           ...initialTokens(),
           penaltySource: source,
+          penaltyTiming: source === 'queued' ? 'liveBall' : 'deadBall',
         },
       },
     };
@@ -636,6 +649,35 @@ export function transitionFootballQuickInput(
         error: state.queuedPenaltyRequested && state.error?.code === 'UNRESOLVED_QUEUED_PENALTY'
           ? undefined
           : state.error,
+      },
+    };
+  }
+
+  if (event.type === 'VERIFY_PENALTY_ENFORCEMENT') {
+    if (state.status !== 'summary.reviewing' || !state.draft) return { state: cloneState(state) };
+    const reviewedDraft = resolveFootballDraftPenaltyOutcome(state.draft, {
+      enforcementOrder: event.enforcementOrder,
+      verified: {
+        down: event.down,
+        distance: event.distance,
+        yardLine: event.yardLine,
+        firstDownAwarded: event.firstDownAwarded,
+      },
+    });
+    reviewedDraft.revision += 1;
+    reviewedDraft.status = 'summaryGenerated';
+    reviewedDraft.updatedAt = context.now ?? reviewedDraft.updatedAt;
+    reviewedDraft.confirmation = undefined;
+    const summary = generateFootballPlaySummary(reviewedDraft);
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'summary.reviewing',
+        currentStep: undefined,
+        currentToken: '',
+        draft: reviewedDraft,
+        summary,
+        error: undefined,
       },
     };
   }
@@ -1956,13 +1998,36 @@ function commitPenaltyToken(
       state: {
         ...baseActiveState(state),
         status: 'token.awaiting',
-        currentStep: 'penaltyResolution',
-        currentToken: '',
+        currentStep: state.tokens.penaltySource === 'queued' && (state.draft?.penalties.length ?? 0) > 0
+          ? 'penaltyTiming'
+          : 'penaltyResolution',
+        currentToken: state.tokens.penaltySource === 'queued' && (state.draft?.penalties.length ?? 0) > 0
+          ? state.tokens.penaltyTiming === 'deadBall' ? 'D' : 'L'
+          : '',
         tokens: {
           ...cloneTokens(state.tokens),
           penaltyTeam: team,
           penaltyDefinition,
           penaltyCode: penaltyDefinition?.code || state.tokens.penaltyCode,
+        },
+      },
+    };
+  }
+
+  if (state.currentStep === 'penaltyTiming') {
+    const timing = parsePenaltyTiming(state.currentToken);
+    if (!timing) {
+      return { state: tokenError(state, 'INVALID_PENALTY_TIMING', 'Foul timing must be Live Ball (L) or Dead Ball (D).', 'penalties.timing') };
+    }
+    return {
+      state: {
+        ...baseActiveState(state),
+        status: 'token.awaiting',
+        currentStep: 'penaltyResolution',
+        currentToken: '',
+        tokens: {
+          ...cloneTokens(state.tokens),
+          penaltyTiming: timing,
         },
       },
     };
@@ -2004,12 +2069,17 @@ function commitPenaltyToken(
 
   if (state.currentStep === 'penaltyPlayerJersey') {
     const source = state.tokens.penaltySource ?? 'immediate';
+    const deadBall = state.tokens.penaltyTiming === 'deadBall';
     const defaultEnforcedFrom = source === 'immediate'
       ? 'PREVIOUS'
-      : defaultPenaltyEnforcement(state.tokens.penaltyDefinition);
+      : deadBall
+        ? 'END'
+        : defaultPenaltyEnforcement(state.tokens.penaltyDefinition);
     const defaultDownConsequence = source === 'immediate'
       ? 'REPEAT'
-      : defaultPenaltyDownConsequence(
+      : deadBall
+        ? 'DOWN_COUNTS'
+        : defaultPenaltyDownConsequence(
         state.tokens.penaltyDefinition,
         defaultEnforcedFrom,
         state.tokens.penaltyTeam,
@@ -2165,14 +2235,14 @@ function commitPenaltyToken(
       downConsequence === 'DOWN_COUNTS'
       && (
         state.tokens.penaltyEnforcedFrom !== 'END'
-        || state.tokens.penaltyTeam !== context.play.actionTeam
+        || (state.tokens.penaltyTiming !== 'deadBall' && state.tokens.penaltyTeam !== context.play.actionTeam)
       )
     ) {
       return {
         state: tokenError(
           state,
           'INVALID_DOWN_CONSEQUENCE',
-          'Down Counts is available only for an offensive foul enforced from the succeeding spot.',
+          'Down Counts is available for a dead-ball foul or an offensive foul enforced from the succeeding spot.',
           'penalties.downConsequence',
         ),
       };
@@ -4008,6 +4078,21 @@ function confirmSummary(
     };
   }
 
+  const enforceablePenalties = state.draft.penalties.filter((penalty) => penalty.status === 'accepted');
+  if (enforceablePenalties.length > 1 && state.draft.result.officialOutcome?.operatorVerified !== true) {
+    return {
+      state: {
+        ...cloneState(state),
+        status: 'summary.reviewing',
+        error: {
+          code: 'MULTIPLE_PENALTY_REVIEW_REQUIRED',
+          message: 'Review the enforcement order and verify the official down, distance, and spot before submitting.',
+          field: 'result.officialOutcome',
+        },
+      },
+    };
+  }
+
   const confirmedAt = event.confirmedAt ?? context.now ?? state.draft.updatedAt;
   const confirmedDraft: FootballDraftIntent = {
     ...cloneDraft(state.draft),
@@ -5238,7 +5323,7 @@ function buildPenaltyOnlyDraft(
   const penalties = buildDraftPenaltiesFromTokens(state.tokens, context);
   const resolution = state.tokens.penaltyResolution ?? 'accepted';
   const revision = 1;
-  return {
+  return resolveFootballDraftPenaltyOutcome({
     schemaVersion: 'football.draftIntent.v1',
     intentId: context.intentId ?? 'fcqi-penalty-draft-1',
     clientEventId: context.clientEventId ?? 'fcqi-penalty-client-1',
@@ -5269,7 +5354,7 @@ function buildPenaltyOnlyDraft(
     },
     penalties,
     warnings: [],
-  };
+  });
 }
 
 function buildGameControlDraft(
@@ -5406,7 +5491,7 @@ function attachPenaltiesToDraft(
       })
       .map(cloneParticipant),
   ];
-  return nextDraft;
+  return resolveFootballDraftPenaltyOutcome(nextDraft);
 }
 
 function stateParticipantByPlayerId(draft: FootballDraftIntent, playerId: string): DraftParticipant | undefined {
@@ -5437,8 +5522,9 @@ function buildDraftPenaltiesFromTokens(
 ): DraftPenalty[] {
   const source = tokens.penaltySource ?? 'immediate';
   const resolution = tokens.penaltyResolution ?? 'accepted';
+  const penaltyIndex = (baseDraft?.penalties.length ?? 0) + 1;
   const base = buildSingleDraftPenalty(tokens, context, baseDraft, {
-    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-1`,
+    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyIndex}`,
     name: tokens.penaltyName,
     code: tokens.penaltyCode,
     definition: tokens.penaltyDefinition,
@@ -5450,7 +5536,7 @@ function buildDraftPenaltiesFromTokens(
   if (resolution !== 'offsetting') return [base];
 
   const second = buildSingleDraftPenalty(tokens, context, baseDraft, {
-    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-2`,
+    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyIndex + 1}`,
     name: tokens.offsettingSecondName,
     code: tokens.offsettingSecondCode,
     definition: tokens.offsettingSecondDefinition,
@@ -5488,8 +5574,8 @@ function buildSingleDraftPenalty(
     requiresYards: input.definition?.requiresYards,
     requiresSpot: input.definition?.requiresSpot,
     defaultEnforcement: input.definition?.defaultEnforcement,
-    liveBall: input.source === 'queued',
-    deadBall: input.source === 'immediate',
+    liveBall: (tokens.penaltyTiming ?? (input.source === 'queued' ? 'liveBall' : 'deadBall')) === 'liveBall',
+    deadBall: (tokens.penaltyTiming ?? (input.source === 'queued' ? 'liveBall' : 'deadBall')) === 'deadBall',
     ejectionable: input.definition?.ejectionable,
     ejected: input.definition?.ejectionable ? tokens.penaltyEjected === true : undefined,
     ejectedPlayerId: tokens.penaltyEjected ? tokens.penaltyPlayer?.playerId : undefined,
@@ -6169,6 +6255,13 @@ function parsePenaltyResolution(value: string): PenaltyResolutionSelection | nul
   return null;
 }
 
+function parsePenaltyTiming(value: string): PenaltyTimingSelection | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'L' || normalized === 'LIVE' || normalized === 'LIVE BALL') return 'liveBall';
+  if (normalized === 'D' || normalized === 'DEAD' || normalized === 'DEAD BALL') return 'deadBall';
+  return null;
+}
+
 function parsePenaltyEnforcedFrom(value: string): PenaltyEnforcedFromSelection | null {
   const normalized = value.trim().toUpperCase();
   if (normalized === 'P' || normalized === 'PREVIOUS' || normalized === 'PREVIOUS SPOT') return 'PREVIOUS';
@@ -6744,6 +6837,7 @@ function isPenaltySpecificTokenStep(step: FootballTokenStep): step is PenaltyTok
   return [
     'penaltyName',
     'penaltyTeam',
+    'penaltyTiming',
     'penaltyResolution',
     'penaltyPlayerJersey',
     'penaltyEjected',
@@ -6892,6 +6986,7 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     penaltyCode: tokens.penaltyCode,
     penaltyDefinition: tokens.penaltyDefinition ? { ...tokens.penaltyDefinition } : undefined,
     penaltyTeam: tokens.penaltyTeam,
+    penaltyTiming: tokens.penaltyTiming,
     penaltyResolution: tokens.penaltyResolution,
     penaltyPlayer: tokens.penaltyPlayer ? cloneParticipant(tokens.penaltyPlayer) : undefined,
     penaltyEjected: tokens.penaltyEjected,
@@ -6982,6 +7077,14 @@ function cloneDraft(draft: FootballDraftIntent): FootballDraftIntent {
       fumble: draft.result.fumble ? { ...draft.result.fumble } : undefined,
       turnover: draft.result.turnover ? { ...draft.result.turnover } : undefined,
       scoring: draft.result.scoring ? { ...draft.result.scoring } : undefined,
+      officialOutcome: draft.result.officialOutcome
+        ? {
+            ...draft.result.officialOutcome,
+            enforcementOrder: [...draft.result.officialOutcome.enforcementOrder],
+            calculated: { ...draft.result.officialOutcome.calculated },
+            verified: draft.result.officialOutcome.verified ? { ...draft.result.officialOutcome.verified } : undefined,
+          }
+        : undefined,
     },
     penalties: draft.penalties.map(clonePenalty),
     warnings: draft.warnings.map((warning) => ({ ...warning })),
