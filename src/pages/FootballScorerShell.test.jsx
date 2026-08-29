@@ -1011,6 +1011,35 @@ describe('FootballScorerShell', () => {
     expect(within(progress).getByRole('button', { name: /^v49$/i })).toHaveClass('bg-emerald-100');
   });
 
+  it('treats a letter entered for the second rush tackler as the start of the final yardline', () => {
+    renderScorer();
+
+    fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+    submitTextToken(/rusher jersey/i, '22');
+    fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+    submitTextToken(/^tackler jersey/i, '44');
+
+    const secondTacklerInput = screen.getByLabelText(/second tackler jersey/i);
+    fireEvent.change(secondTacklerInput, { target: { value: 'v' } });
+
+    expect(screen.queryByLabelText(/second tackler jersey/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/final ball spot/i)).toHaveValue('V');
+  });
+
+  it('treats a letter entered for the second return tackler as the start of the return yardline', () => {
+    renderScorer();
+
+    startKickoffReturnTerminalSelection();
+    fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+    submitTextToken(/^tackler jersey/i, '22');
+
+    const secondTacklerInput = screen.getByLabelText(/second tackler jersey/i);
+    fireEvent.change(secondTacklerInput, { target: { value: 'v31' } });
+
+    expect(screen.queryByLabelText(/second tackler jersey/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^final spot$/i })).toHaveValue('V31');
+  });
+
   it('clicks completed rush progress steps to edit and clear dependent data', async () => {
     renderScorer();
 

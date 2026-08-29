@@ -397,6 +397,31 @@ export default function FootballConfirmedQuickInput({
     publishState(nextState);
   };
 
+  const startYardLineFromSecondTackler = (value) => {
+    setPenaltyMessage('');
+    clearSubmitStatus();
+    const skippedTacklerState = applyEvent({ type: 'INPUT_TOKEN', value: '' });
+    let nextState = transitionFootballQuickInput(
+      skippedTacklerState,
+      { type: 'COMMIT_TOKEN' },
+      context,
+    ).state;
+    if (nextState.status === 'token.error') {
+      publishState(nextState);
+      return;
+    }
+    nextState = transitionFootballQuickInput(
+      nextState,
+      { type: 'INPUT_TOKEN', value: String(value || '').toUpperCase() },
+      context,
+    ).state;
+    modalStepHistoryRef.current = [
+      ...modalStepHistoryRef.current.slice(-99),
+      skippedTacklerState,
+    ];
+    publishState(nextState);
+  };
+
   const goBackStep = () => {
     const previousState = modalStepHistoryRef.current[modalStepHistoryRef.current.length - 1];
     if (!previousState) return;
@@ -706,6 +731,7 @@ export default function FootballConfirmedQuickInput({
         onBackStep={goBackStep}
         onCancel={cancelFlow}
         onStepClick={jumpToStep}
+        onYardLineStartFromSecondTackler={startYardLineFromSecondTackler}
         onTokenCommit={commitToken}
         prePlaySpot={envelope.liveState.yardLine}
         penaltyRuleset={footballPenaltyRulesetFromRules(envelope.game.rules)}

@@ -27,6 +27,11 @@ const yardLineSteps = new Set([
   'gameControlDriveSpot',
 ]);
 
+const secondTacklerSteps = new Set([
+  'tackleBJersey',
+  'returnTackleBJersey',
+]);
+
 const normalizeVisibleInput = (step, value) => {
   if (step === 'gameControlClock') return formatFootballClockEntry(value);
   return yardLineSteps.has(step) || step === 'recoverTeam' ? value.toUpperCase() : value;
@@ -78,7 +83,7 @@ const stepCopy = {
   tackleBJersey: {
     title: 'Rush tackler',
     label: 'Second tackler jersey',
-    helper: 'Enter a second tackler jersey number, or press Enter to skip.',
+    helper: 'Enter a second tackler jersey, press Enter to skip, or begin typing the final yardline.',
     placeholder: '44',
   },
   tacklerJersey: {
@@ -264,7 +269,7 @@ const stepCopy = {
   returnTackleBJersey: {
     title: 'Return tackler',
     label: 'Second tackler jersey',
-    helper: 'Enter a second return tackler jersey number, or press Enter to skip.',
+    helper: 'Enter a second return tackler, press Enter to skip, or begin typing the final yardline.',
     placeholder: '44',
   },
   returnEndSpot: {
@@ -808,6 +813,7 @@ export default function FootballFlowModal({
   onBackStep,
   onCancel,
   onStepClick,
+  onYardLineStartFromSecondTackler,
   onTokenCommit,
   progressSteps = [],
   penaltyRuleset = 'NCAA',
@@ -891,6 +897,20 @@ export default function FootballFlowModal({
   const onSubmit = (event) => {
     event.preventDefault();
     onTokenCommit(value);
+  };
+
+  const onInputChange = (event) => {
+    const nextValue = normalizeVisibleInput(state.currentStep, event.target.value);
+    if (
+      secondTacklerSteps.has(state.currentStep)
+      && /^[a-z]/i.test(nextValue)
+      && typeof onYardLineStartFromSecondTackler === 'function'
+    ) {
+      setValue('');
+      onYardLineStartFromSecondTackler(nextValue.toUpperCase());
+      return;
+    }
+    setValue(nextValue);
   };
 
   if (state.currentStep === 'gameControlClock') {
@@ -980,7 +1000,7 @@ export default function FootballFlowModal({
                 className="mt-2 w-full rounded border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold tabular-nums outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
                 id={`fcqi-${state.currentStep}`}
                 inputMode={state.currentStep === 'gameControlClock' ? 'numeric' : undefined}
-                onChange={(event) => setValue(normalizeVisibleInput(state.currentStep, event.target.value))}
+                onChange={onInputChange}
                 placeholder={activeStep.placeholder}
                 spellCheck={yardLineSteps.has(state.currentStep) ? false : undefined}
                 value={value}
