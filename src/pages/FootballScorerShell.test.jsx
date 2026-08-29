@@ -822,6 +822,10 @@ describe('FootballScorerShell', () => {
         'href',
         '/index.html?report=play-by-play&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
+      expect(screen.getByRole('link', { name: 'MaxPreps Export' })).toHaveAttribute(
+        'href',
+        '/index.html?report=maxpreps-export&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
 
       fireEvent.click(screen.getByRole('button', { name: 'Fetch from server' }));
 

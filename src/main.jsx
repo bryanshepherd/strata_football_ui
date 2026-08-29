@@ -6,6 +6,7 @@ import FootballLayoutPreview from './pages/FootballLayoutPreview.jsx'
 import FootballPlayEditorSandbox from './pages/FootballPlayEditorSandbox.jsx'
 import FootballDriveChartReport from './pages/FootballDriveChartReport.jsx'
 import FootballIndividualOffenseReport from './pages/FootballIndividualOffenseReport.jsx'
+import FootballMaxPrepsExportReport from './pages/FootballMaxPrepsExportReport.jsx'
 import FootballPenaltyChartReport from './pages/FootballPenaltyChartReport.jsx'
 import FootballPlayByPlayReport from './pages/FootballPlayByPlayReport.jsx'
 import FootballQuickieStatsReport from './pages/FootballQuickieStatsReport.jsx'
@@ -31,6 +32,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/reports/scoring-summary" element={<FootballScoringSummaryReport />} />
           <Route path="/reports/drive-chart" element={<FootballDriveChartReport />} />
           <Route path="/reports/individual-offense" element={<FootballIndividualOffenseReport />} />
+          <Route path="/reports/maxpreps-export" element={<FootballMaxPrepsExportReport />} />
           <Route path="/reports/team-stats" element={<FootballTeamStatsReport />} />
           <Route path="/reports/penalty-chart" element={<FootballPenaltyChartReport />} />
           <Route path="/reports/play-by-play" element={<FootballPlayByPlayReport />} />
@@ -50,6 +52,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   ? <FootballPenaltyChartReport />
                 : requestedReport === 'play-by-play'
                   ? <FootballPlayByPlayReport />
+                : requestedReport === 'maxpreps-export'
+                  ? <FootballMaxPrepsExportReport />
                 : ['quickie', 'quickie-stats'].includes(requestedReport)
                   ? <FootballQuickieStatsReport />
                 : <FootballScorerShell />}
