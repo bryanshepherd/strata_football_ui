@@ -1,7 +1,4 @@
-import {
-  allocateCompletedPassReceivingYards,
-  projectFootballStatsForEvents,
-} from '../services/footballDashboardService';
+import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import {
   acceptedFootballEvents,
   buildFootballPlayerStats,
@@ -154,13 +151,13 @@ const kickoffTeam = (event) => event?.participants?.kicker?.team
   || event?.possession;
 
 const touchdownReceiver = (event) => {
-  const passingYards = finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards);
-  const terminalAllocation = allocateCompletedPassReceivingYards(event, passingYards)
-    .find((allocation) => allocation.terminal);
-  if (terminalAllocation?.playerId) {
+  const terminalLateral = Array.isArray(event?.result?.laterals)
+    ? event.result.laterals.at(-1)
+    : null;
+  if (terminalLateral?.toPlayerId) {
     return {
-      playerId: terminalAllocation.playerId,
-      team: terminalAllocation.team || event.possession,
+      playerId: terminalLateral.toPlayerId,
+      team: event.possession,
       role: 'receiver',
     };
   }
