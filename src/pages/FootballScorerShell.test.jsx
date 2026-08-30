@@ -6,6 +6,7 @@ import { gameEnvelopeFixtures } from '../data/footballGameEnvelopeFixtures';
 import { createCoinTossRecord } from '../pregame/footballPregame';
 import {
   createFootballDashboardGame,
+  enqueueFootballEnvelopeMirror,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
   FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
@@ -659,9 +660,51 @@ describe('FootballScorerShell', () => {
       expect(mirrorRequest.gameId).toBe('FB-DASH-FCQI');
       expect(mirrorRequest.envelope.events.at(-1).type).toBe('rush');
       expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FCQI/mirror');
-      expect(screen.getByText('Server mirror current')).toBeInTheDocument();
+      expect(screen.getByText('No server sync pending')).toBeInTheDocument();
     } finally {
       submitMock.restore();
+    }
+  });
+
+  it('shows a blocking server-sync conflict instead of claiming the mirror is current', async () => {
+    const originalFetch = globalThis.fetch;
+    createFootballDashboardGame({
+      gameId: 'FB-DASH-SYNC-BLOCKED',
+      gameDate: '2026-09-12',
+      startTime: '19:30',
+      venue: 'Dashboard Field',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+    const localEnvelope = getDashboardSeededFootballEnvelopeRecord('FB-DASH-SYNC-BLOCKED').envelope;
+    enqueueFootballEnvelopeMirror({
+      gameId: localEnvelope.gameId,
+      dashboardGameId: 'DASH-SYNC-BLOCKED',
+      envelope: localEnvelope,
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        schemaVersion: 'football.localEnvelopeMirrorError.v1',
+        code: 'MIRROR_CONFLICT',
+        error: 'A different scorer source already owns this server mirror.',
+        current: {
+          gameId: localEnvelope.gameId,
+          mirrorSourceId: 'repair-source',
+          mirrorRevision: 1,
+        },
+      }),
+    });
+
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-SYNC-BLOCKED&envelopeGameId=FB-DASH-SYNC-BLOCKED');
+
+      expect(await screen.findByText('Server sync blocked')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('A different scorer source already owns this server mirror.');
+      expect(screen.queryByText('No server sync pending')).not.toBeInTheDocument();
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   });
 
@@ -2810,6 +2853,13 @@ describe('FootballScorerShell', () => {
     expect(checkNames).toContain('backend accepted envelope response');
     expect(checkNames).toContain('duplicate clientEventId handling');
     expect(checkNames).toContain('stale sequence/conflict handling');
+
+    const acceptanceEvidence = entries.find((entry) => entry.checkName === 'backend accepted envelope response');
+    expect(acceptanceEvidence).toMatchObject({
+      result: 'not represented',
+      severity: 'info',
+    });
+    expect(acceptanceEvidence.reason).toContain('matching football.localEnvelopeMirrorAck.v1');
 
     expect(entries[0]).toEqual(
       expect.objectContaining({

@@ -524,10 +524,10 @@ function traceSubmitEnvelopeChecks(collector, envelope) {
   collector.add({
     category: 'submit',
     checkName: 'backend submit request creation',
-    inputSummary: 'No submit request was created for fixture preview.',
-    calculationDetails: `A future SubmitEventRequest would use gameId=${envelope.gameId}, baseEventSequence=${envelope.stats.sourceEventSequence}, and a clientEventId.`,
-    result: 'not submitted',
-    reason: 'STR-58/STR-65 shell intentionally does not implement scoring submit behavior.',
+    inputSummary: 'The debug export contains envelope state, not browser network history.',
+    calculationDetails: `This snapshot identifies gameId=${envelope.gameId} and sourceEventSequence=${envelope.stats.sourceEventSequence}, but it cannot prove that a mirror request was sent.`,
+    result: 'not represented',
+    reason: 'Submission evidence must come from the sync queue, a matching server acknowledgment, or server request logs.',
     severity: 'info',
     rawData: {
       gameId: envelope.gameId,
@@ -538,10 +538,10 @@ function traceSubmitEnvelopeChecks(collector, envelope) {
   collector.add({
     category: 'submit',
     checkName: 'backend accepted envelope response',
-    inputSummary: 'No backend response exists in fixture mode.',
-    calculationDetails: 'The fixture GameEnvelope is already treated as accepted state for rendering.',
-    result: 'fixture envelope accepted',
-    reason: 'Backend accepted envelope response tracing will attach here when STR-59 submit skeleton exists.',
+    inputSummary: 'The debug export does not contain a server acknowledgment.',
+    calculationDetails: 'The envelope is accepted by the local scorer for rendering; that is not proof that the server mirror accepted the same checksum.',
+    result: 'not represented',
+    reason: 'Only a matching football.localEnvelopeMirrorAck.v1 response proves server mirror acceptance.',
     severity: 'info',
     rawData: {
       schemaVersion: envelope.schemaVersion,
@@ -552,10 +552,10 @@ function traceSubmitEnvelopeChecks(collector, envelope) {
   collector.add({
     category: 'submit',
     checkName: 'duplicate clientEventId handling',
-    inputSummary: 'No clientEventId was submitted.',
-    calculationDetails: 'No duplicate lookup is needed because fixture preview does not submit events.',
-    result: 'not checked',
-    reason: 'Duplicate handling belongs to the backend submit path and will emit trace entries when submit exists.',
+    inputSummary: 'The envelope contains recorded clientEventId values only.',
+    calculationDetails: 'The debug export can detect duplicate IDs in the envelope, but it cannot show how a server handled a submitted duplicate.',
+    result: 'not represented',
+    reason: 'Duplicate submission handling requires actual request and acknowledgment evidence.',
     severity: 'info',
     rawData: {
       eventClientIds: envelope.events.map((event) => event.clientEventId),
@@ -566,9 +566,9 @@ function traceSubmitEnvelopeChecks(collector, envelope) {
     category: 'submit',
     checkName: 'stale sequence/conflict handling',
     inputSummary: `Current sourceEventSequence=${envelope.stats.sourceEventSequence}.`,
-    calculationDetails: 'No base sequence was submitted, so no stale sequence conflict can be detected.',
-    result: 'not checked',
-    reason: 'Conflict tracing will compare submitted baseEventSequence against the accepted envelope sequence.',
+    calculationDetails: 'Mirror source and revision conflicts are not encoded in this envelope-only debug export.',
+    result: 'not represented',
+    reason: 'Conflict evidence requires the sync queue, server acknowledgment, or server mirror metadata.',
     severity: 'info',
     rawData: {
       sourceEventSequence: envelope.stats.sourceEventSequence,

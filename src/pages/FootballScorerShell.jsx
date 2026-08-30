@@ -1068,12 +1068,23 @@ const ScorerHeader = ({
                 Game {gameId} · Local envelope
               </span>
               <span className={`rounded border px-3 py-2 text-sm font-semibold ${
-                syncState?.pending
+                syncState?.error
+                  ? 'border-red-300 bg-red-50 text-red-900'
+                  : syncState?.pending
                   ? 'border-amber-300 bg-amber-50 text-amber-900'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : 'border-zinc-300 bg-zinc-50 text-zinc-700'
               }`} title={syncState?.error || loadSource || 'loaded'}>
-                {syncState?.pending ? `Server sync pending: ${syncState.pending}` : 'Server mirror current'}
+                {syncState?.error
+                  ? 'Server sync blocked'
+                  : syncState?.pending
+                    ? `Server sync pending: ${syncState.pending}`
+                    : 'No server sync pending'}
               </span>
+              {syncState?.error && (
+                <span className="max-w-md rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800" role="alert">
+                  {syncState.error}
+                </span>
+              )}
               {recoveryState?.error && (
                 <span className="max-w-md rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800" role="alert">
                   {recoveryState.error}
