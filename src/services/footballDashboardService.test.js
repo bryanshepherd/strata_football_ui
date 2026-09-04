@@ -327,6 +327,49 @@ describe('local-first football persistence', () => {
     expect(getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope.liveState.yardLine).toBe(envelope.liveState.yardLine);
   });
 
+  it('does not surface another game mirror conflict while syncing a fresh game', async () => {
+    const ownedEnvelope = clone(getGameEnvelopeFixture('normal'));
+    ownedEnvelope.gameId = 'FB-OWNED-BY-OTHER-SOURCE';
+    enqueueFootballEnvelopeMirror({
+      gameId: ownedEnvelope.gameId,
+      dashboardGameId: 'DASH-OWNED-BY-OTHER-SOURCE',
+      envelope: ownedEnvelope,
+    });
+    const freshEnvelope = clone(getGameEnvelopeFixture('pregame'));
+    freshEnvelope.gameId = 'FB-FRESH-GAME';
+    enqueueFootballEnvelopeMirror({
+      gameId: freshEnvelope.gameId,
+      dashboardGameId: 'DASH-FRESH-GAME',
+      envelope: freshEnvelope,
+    });
+    const fetchImpl = vi.fn().mockImplementation(async (url, init) => {
+      const request = JSON.parse(init.body);
+      if (url.includes('DASH-OWNED-BY-OTHER-SOURCE')) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            schemaVersion: 'football.localEnvelopeMirrorError.v1',
+            code: 'MIRROR_CONFLICT',
+            error: 'A different scorer source already owns this server mirror.',
+          }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => mirrorAck(request) };
+    });
+
+    const result = await flushFootballServerSync({
+      gameId: freshEnvelope.gameId,
+      fetchImpl,
+    });
+
+    expect(result).toEqual({ pendingCount: 0, syncedCount: 1, error: '' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe('/api/football/games/DASH-FRESH-GAME/mirror');
+    expect(getPendingFootballSyncCount(freshEnvelope.gameId)).toBe(0);
+    expect(getPendingFootballSyncCount(ownedEnvelope.gameId)).toBe(1);
+  });
+
   it('retries one same-source stale mirror conflict with newer metadata and the exact local envelope', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-STALE-MIRROR-001';

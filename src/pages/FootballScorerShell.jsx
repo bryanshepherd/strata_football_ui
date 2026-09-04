@@ -272,7 +272,7 @@ export default function FootballScorerShell() {
 
   const flushServerSync = useCallback(async () => {
     if (!requestedGameId || !dashboardGameId) return;
-    const result = await flushFootballServerSync();
+    const result = await flushFootballServerSync({ gameId: requestedGameId });
     setSyncState({
       pending: getPendingFootballSyncCount(requestedGameId),
       error: result.error || '',

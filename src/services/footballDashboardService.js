@@ -489,17 +489,27 @@ const mirrorAckError = (item, payload) => {
 };
 
 let activeFootballSync = null;
+let activeFootballSyncGameId = null;
 
-export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } = {}) {
-  if (activeFootballSync) return activeFootballSync;
+export async function flushFootballServerSync({ fetchImpl = globalThis.fetch, gameId = '' } = {}) {
+  const targetGameId = gameId ? String(gameId) : '';
+  if (activeFootballSync) {
+    if (activeFootballSyncGameId === targetGameId) return activeFootballSync;
+    await activeFootballSync;
+    return flushFootballServerSync({ fetchImpl, gameId: targetGameId });
+  }
+  const pendingItems = () => readSyncQueue().filter((item) => (
+    !targetGameId || item.gameId === targetGameId
+  ));
+  activeFootballSyncGameId = targetGameId;
   activeFootballSync = (async () => {
     if (typeof fetchImpl !== 'function') {
-      return { pendingCount: readSyncQueue().length, syncedCount: 0, error: 'No network connection is available.' };
+      return { pendingCount: pendingItems().length, syncedCount: 0, error: 'No network connection is available.' };
     }
     let syncedCount = 0;
     let error = '';
-    while (readSyncQueue().length > 0) {
-      const item = readSyncQueue()[0];
+    while (pendingItems().length > 0) {
+      const item = pendingItems()[0];
       let response;
       let responsePayload = null;
       try {
@@ -534,12 +544,13 @@ export async function flushFootballServerSync({ fetchImpl = globalThis.fetch } =
       markSyncItemFailed(item.id, error);
       break;
     }
-    return { pendingCount: readSyncQueue().length, syncedCount, error };
+    return { pendingCount: pendingItems().length, syncedCount, error };
   })();
   try {
     return await activeFootballSync;
   } finally {
     activeFootballSync = null;
+    activeFootballSyncGameId = null;
   }
 }
 
