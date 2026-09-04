@@ -141,6 +141,32 @@ function submittedRequest(fetchSpy) {
   return JSON.parse(fetchSpy.mock.calls[0][1].body);
 }
 
+function submittedRequestAt(fetchSpy, index = -1) {
+  const call = index < 0 ? fetchSpy.mock.calls.at(index) : fetchSpy.mock.calls[index];
+  return JSON.parse(call[1].body);
+}
+
+function successfulMirrorResponse(request) {
+  const payload = {
+    schemaVersion: 'football.localEnvelopeMirrorAck.v1',
+    status: 'mirrored',
+    gameId: request.gameId,
+    mirrorSourceId: request.mirrorSourceId,
+    mirrorRevision: request.mirrorRevision,
+    sourceEventSequence: request.sourceEventSequence,
+    eventCount: request.eventCount,
+    envelopeUpdatedAt: request.envelopeUpdatedAt,
+    checksum: request.checksum,
+  };
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: async () => JSON.stringify(payload),
+    json: async () => payload,
+  };
+}
+
 function cloneNormalEnvelope() {
   return JSON.parse(JSON.stringify(gameEnvelopeFixtures.normal));
 }
@@ -650,16 +676,47 @@ describe('FootballScorerShell', () => {
     try {
       renderScorer('/scorer?dashboardGameId=DASH-FCQI&envelopeGameId=FB-DASH-FCQI');
       expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
 
       completeRushFlowInputs();
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
 
-      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
-      const mirrorRequest = submittedRequest(submitMock.fetchSpy);
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(2));
+      const mirrorRequest = submittedRequestAt(submitMock.fetchSpy);
       expect(mirrorRequest.gameId).toBe('FB-DASH-FCQI');
       expect(mirrorRequest.envelope.events.at(-1).type).toBe('rush');
-      expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FCQI/mirror');
+      expect(submitMock.fetchSpy.mock.calls[1][0]).toBe('/api/football/games/DASH-FCQI/mirror');
+      expect(screen.getByText('No server sync pending')).toBeInTheDocument();
+    } finally {
+      submitMock.restore();
+    }
+  });
+
+  it('mirrors a fresh dashboard envelope before the first scoring action', async () => {
+    const submitMock = mockSubmitSuccess();
+    createFootballDashboardGame({
+      gameId: 'FB-FRESH-XML',
+      gameDate: '2026-09-12',
+      startTime: '19:30',
+      venue: 'Dashboard Field',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-FRESH-XML&envelopeGameId=FB-FRESH-XML');
+
+      expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
+      const mirrorRequest = submittedRequest(submitMock.fetchSpy);
+      expect(submitMock.fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-FRESH-XML/mirror');
+      expect(mirrorRequest).toMatchObject({
+        schemaVersion: 'football.localEnvelopeMirrorRequest.v1',
+        gameId: 'FB-FRESH-XML',
+        eventCount: 0,
+      });
+      expect(mirrorRequest.envelope.gameId).toBe('FB-FRESH-XML');
       expect(screen.getByText('No server sync pending')).toBeInTheDocument();
     } finally {
       submitMock.restore();
@@ -777,23 +834,30 @@ describe('FootballScorerShell', () => {
     envelope.rosters.gameId = envelope.gameId;
     envelope.game.teams.H.name = 'Hydrated Home';
     envelope.game.teams.V.name = 'Hydrated Visitor';
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => envelope,
+    const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        return successfulMirrorResponse(JSON.parse(init.body));
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => envelope,
+      };
     });
     globalThis.fetch = fetchSpy;
 
     try {
       const first = renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
       expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-PROD/envelope');
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
+      expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(1);
+      expect(fetchSpy.mock.calls.find(([, init]) => init?.method === 'GET')[0]).toBe('/api/football/games/DASH-PROD/envelope');
 
       first.unmount();
       renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
       expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2));
+      expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(1);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -823,11 +887,16 @@ describe('FootballScorerShell', () => {
     serverEnvelope.stats.sourceEventSequence = 214;
 
     const originalFetch = globalThis.fetch;
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: async () => serverEnvelope,
+    const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        return successfulMirrorResponse(JSON.parse(init.body));
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => serverEnvelope,
+      };
     });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     globalThis.fetch = fetchSpy;
@@ -835,7 +904,8 @@ describe('FootballScorerShell', () => {
     try {
       renderScorer('/scorer?dashboardGameId=DASH-SERVER-RECOVERY-UI&envelopeGameId=FB-SERVER-RECOVERY-UI');
       expect(screen.getByRole('heading', { name: /local visitor at local home/i })).toBeInTheDocument();
-      expect(fetchSpy).not.toHaveBeenCalled();
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
+      expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(0);
       expect(screen.getByText('Reports')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Scoring Summary' })).toHaveAttribute(
         'href',
@@ -912,10 +982,15 @@ describe('FootballScorerShell', () => {
     serverEnvelope.rosters.gameId = serverEnvelope.gameId;
     serverEnvelope.game.teams.H.name = 'Server Home';
     serverEnvelope.game.teams.V.name = 'Server Visitor';
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => serverEnvelope,
+    const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        return successfulMirrorResponse(JSON.parse(init.body));
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => serverEnvelope,
+      };
     });
     globalThis.fetch = fetchSpy;
 
@@ -923,8 +998,10 @@ describe('FootballScorerShell', () => {
       renderScorer('/scorer?dashboardGameId=DASH-PREGAME&envelopeGameId=FB-INCOMPLETE-PREGAME');
 
       expect(await screen.findByRole('heading', { name: /server visitor at server home/i })).toBeInTheDocument();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(fetchSpy.mock.calls[0][0]).toBe('/api/football/games/DASH-PREGAME/envelope');
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
+      const getCalls = fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET');
+      expect(getCalls).toHaveLength(1);
+      expect(getCalls[0][0]).toBe('/api/football/games/DASH-PREGAME/envelope');
     } finally {
       globalThis.fetch = originalFetch;
     }

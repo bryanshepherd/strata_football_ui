@@ -321,11 +321,18 @@ export default function FootballScorerShell() {
     if (!requestedGameId || !dashboardGameId || !baseEnvelope) return undefined;
     const authoritativeEnvelope = getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope
       || baseEnvelope;
-    migratePendingFootballSyncToEnvelopeMirror({
+    const migratedSync = migratePendingFootballSyncToEnvelopeMirror({
       gameId: requestedGameId,
       dashboardGameId,
       envelope: authoritativeEnvelope,
     });
+    if (!migratedSync && getPendingFootballSyncCount(requestedGameId) === 0) {
+      enqueueFootballEnvelopeMirror({
+        gameId: requestedGameId,
+        dashboardGameId,
+        envelope: authoritativeEnvelope,
+      });
+    }
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
     void flushServerSync();
     const retry = window.setInterval(() => void flushServerSync(), 15_000);
