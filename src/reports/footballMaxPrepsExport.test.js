@@ -327,6 +327,30 @@ describe('football MaxPreps export', () => {
     expect(rowFor(home, receiver.playerId).values).toMatchObject({ PATReceivingNum: 1, TotalConversionPoints: 2, TotalPoints: 2 });
   });
 
+  it('includes a zero-yard sack in tackles and tackles for loss', () => {
+    const quarterback = player('H-QB-ZERO-SACK', 'H', '10');
+    const defender = player('V-ZERO-SACK', 'V', '44');
+    const envelope = envelopeWithEvents([{
+      type: 'pass',
+      subtype: 'sack',
+      possession: 'H',
+      participants: {
+        primary: participant(quarterback, 'sackVictim'),
+        defenders: [participant(defender, 'sack')],
+      },
+      result: { code: 'sack', yards: 0, endYardLine: 'H20', pass: { outcome: 'sack' } },
+    }], { quarterback, defender });
+
+    expect(rowFor(buildFootballMaxPrepsExports(envelope).exports.V, defender.playerId).values).toMatchObject({
+      Tackles: 1,
+      Assists: 0,
+      TotalTackles: 1,
+      TacklesForLoss: 1,
+      Sacks: 1,
+      SacksYardsLost: 0,
+    });
+  });
+
   it('omits stat participants without a valid MaxPreps jersey instead of writing an invalid row', () => {
     const rusher = player('H-NO-JERSEY', 'H', '', 'No Jersey');
     const envelope = envelopeWithEvents([{

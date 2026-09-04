@@ -68,9 +68,10 @@ export function resolveFootballDraftPenaltyOutcome(
 
   if (!observedEnd) return draft;
 
-  const retainedByEnforcement = accepted.some((penalty) => (
-    penalty.liveBall !== false
-    && (penalty.automaticFirstDown || penalty.replayDown)
+  const immediateNoPlay = draft.play.family === 'penalty'
+    || accepted.some((penalty) => penalty.source === 'immediate');
+  const retainedByEnforcement = immediateNoPlay || accepted.some((penalty) => (
+    penalty.automaticFirstDown || penalty.replayDown
   ));
   let possession = retainedByEnforcement ? prePossession : observedPossession;
   let currentSpot = observedEnd;
@@ -116,7 +117,10 @@ export function resolveFootballDraftPenaltyOutcome(
     && reachedLineToGain(currentSpot, originalLineToGain, prePossession);
   let firstDownAwarded = possession === prePossession
     && (automaticFirstDown || playEarnedFirstDown || enforcementEarnedFirstDown);
-  const replayDown = liveAccepted.some((penalty) => penalty.replayDown);
+  // An immediate penalty is its own no-play entry, so it cannot advance the
+  // down. Explicit replay flags remain authoritative for penalties attached
+  // to a play.
+  const replayDown = immediateNoPlay || accepted.some((penalty) => penalty.replayDown);
   let down = possession !== prePossession
     ? 1
     : firstDownAwarded

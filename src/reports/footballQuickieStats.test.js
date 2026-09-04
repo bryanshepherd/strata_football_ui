@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
 import {
+  buildFootballPlayerStats,
   buildFootballQuickieStatsReport,
   resolveFootballQuickieScope,
 } from './footballQuickieStats';
@@ -52,6 +53,28 @@ describe('football Quickie Stats projection', () => {
       name: 'Amare Ary',
       yac: 112,
       yacStated: true,
+    });
+  });
+
+  it('counts every sack as both a tackle and a tackle for loss even with zero recorded yards', () => {
+    const [defender] = buildFootballPlayerStats(
+      { rosters: { teams: { V: { players: {} }, H: { players: {} } } } },
+      [{
+        type: 'pass',
+        subtype: 'sack',
+        possession: 'H',
+        participants: { defenders: [{ playerId: 'V-SACKER', team: 'V', role: 'sack' }] },
+        result: { code: 'sack', yards: 0, pass: { outcome: 'sack' } },
+        penalties: [],
+      }],
+      { players: {} },
+    );
+
+    expect(defender).toMatchObject({
+      soloTackles: 1,
+      assistedTackles: 0,
+      tacklesForLoss: 1,
+      sacks: 1,
     });
   });
 

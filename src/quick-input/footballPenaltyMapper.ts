@@ -13,7 +13,7 @@ const ENFORCEMENT_SPOTS: Record<DraftPenaltyEnforcementSpot, NonNullable<Canonic
 /** Converts FCQI penalty detail into the public submit-event contract. */
 export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): CanonicalPenalty {
   const playerId = penalty.playerId ?? penalty.penalizedPlayerId;
-  const replayDown = penalty.replayDown || penalty.downConsequence === 'REPEAT' ||
+  const replayDown = penalty.source === 'immediate' || penalty.replayDown || penalty.downConsequence === 'REPEAT' ||
     (penalty.status === 'offsetting' && penalty.offsetting?.previousPlayCounts === false);
 
   const ejectionNote = penalty.ejected

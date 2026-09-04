@@ -717,6 +717,87 @@ describe('local football test-game projection', () => {
     ).toBe(262);
   });
 
+  it('repairs a halftime drive boundary and credits a timed kickoff-return touchdown', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules = { ...envelope.game.rules, periods: 4, minutesPerPeriod: 12 };
+    envelope.clock = { ...envelope.clock, period: 3, clock: '08:06' };
+    envelope.events = [
+      {
+        eventId: 'KICKOFF-RETURN-TD-1',
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        period: 3,
+        clock: '08:20',
+        participants: {
+          kicker: { playerId: 'H-22', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-31', team: 'V', role: 'returner' },
+        },
+        result: {
+          code: 'touchdown',
+          nextPossession: 'V',
+          return: {
+            type: 'Kickoff',
+            returnerPlayerId: 'V-31',
+            returnStartYardLine: 'V05',
+            returnEndYardLine: 'H00',
+          },
+          scoring: { team: 'V', points: 6, type: 'touchdown' },
+        },
+      },
+      {
+        eventId: 'CLOCK-AFTER-KICKOFF-TD-1',
+        status: 'accepted',
+        type: 'gameControl',
+        period: 3,
+        clock: '08:20',
+        result: {
+          code: 'clockUpdate',
+          gameControl: { action: 'setClock', clock: '08:06' },
+        },
+      },
+    ];
+    envelope.drives = {
+      current: null,
+      completed: [{
+        driveId: 'END-HALF-DRIVE-1',
+        team: 'V',
+        startPeriod: 2,
+        startClock: '01:12',
+        endPeriod: 3,
+        endClock: '12:00',
+        result: 'endOfHalf',
+      }],
+    };
+    envelope.stats.teams = {
+      H: { timeOfPossession: 0 },
+      V: { timeOfPossession: 0 },
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.drives.completed[0]).toMatchObject({
+      endPeriod: 2,
+      endClock: '00:00',
+    });
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(86);
+    expect(normalized.stats.teams.V.possessionSegments).toEqual([
+      {
+        startPeriod: 2,
+        startClock: '01:12',
+        endPeriod: 2,
+        endClock: '00:00',
+      },
+      {
+        startPeriod: 3,
+        startClock: '08:20',
+        endPeriod: 3,
+        endClock: '08:06',
+      },
+    ]);
+    expect(normalized.stats.teams.H.timeOfPossession).toBe(0);
+  });
+
   it('accepts an exact retry but rejects a reused client event ID for a different play', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const firstRequest = playRequest(envelope, 'fcqi-rush-10-client', {

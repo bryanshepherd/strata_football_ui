@@ -866,7 +866,10 @@ function hasAutomaticFirstDown(event) {
 }
 
 function hasReplayDown(event) {
-  return Boolean(event.penalties?.some((penalty) => penalty.status === 'accepted' && penalty.replayDown));
+  return Boolean(event.penalties?.some((penalty) => (
+    penalty.replayDown
+    && (penalty.status === 'accepted' || event.type === 'penalty')
+  )));
 }
 
 function hasAcceptedPenaltyFinalSpot(event) {

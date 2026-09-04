@@ -87,6 +87,12 @@ const formatDownDistance = (liveState) => {
 
 const formatSpot = (liveState) => liveState.yardLine || 'Not set';
 
+const isKickoffReturnTouchdown = (event) => Boolean(
+  event?.type === 'kickoff'
+  && (event?.result?.scoring?.type === 'touchdown' || event?.result?.code === 'touchdown')
+  && (event?.subtype === 'returned' || event?.result?.return),
+);
+
 const rosterPlayersForEnvelope = (envelope) => ['V', 'H'].flatMap((team) => (
   Object.values(envelope?.rosters?.teams?.[team]?.players || {})
 ));
@@ -347,28 +353,35 @@ export default function FootballScorerShell() {
     )) || acceptedEnvelope?.events?.[acceptedEnvelope.events.length - 1] || responseEvent;
     const isPossessionCorrection = acceptedEvent?.type === 'gameControl'
       && acceptedEvent?.result?.gameControl?.action === 'setPossession';
+    const isPeriodInitialization = acceptedEvent?.type === 'gameControl'
+      && acceptedEvent?.result?.gameControl?.action === 'startQuarter';
     const driveSummaryEvent = result?.status !== 'duplicateAccepted'
       && isFootballDriveSummaryTerminalEvent(acceptedEvent)
       ? acceptedEvent
       : null;
+    const kickoffReturnTouchdown = result?.status !== 'duplicateAccepted'
+      && isKickoffReturnTouchdown(acceptedEvent);
     if (acceptedEnvelope?.game?.status === 'final' && !acceptedEnvelope.game.wrapUp?.completedAt) {
       setWrapUpSaveState({ saving: false, error: '' });
       setWrapUpOpen(true);
     }
-    if (
-      acceptedEnvelope
-      && !isPossessionCorrection
+    if (acceptedEnvelope && (kickoffReturnTouchdown || (
+      !isPossessionCorrection
+      && !isPeriodInitialization
       && previousPossession !== nextPossession
       && (previousPossession || nextPossession)
-    ) {
+    ))) {
       setPossessionClockChange({
-        previousPossession,
-        nextPossession,
+        previousPossession: kickoffReturnTouchdown ? null : previousPossession,
+        nextPossession: kickoffReturnTouchdown ? null : nextPossession,
         period: acceptedEnvelope.clock?.period || acceptedEnvelope.game?.period || 1,
         defaultClock: acceptedEnvelope.clock?.clock || envelope.clock?.clock || '',
         envelope: acceptedEnvelope,
-        endedDriveId: result?.projection?.driveTransition?.endedDriveId || acceptedEvent?.preState?.driveId || null,
+        endedDriveId: kickoffReturnTouchdown
+          ? null
+          : result?.projection?.driveTransition?.endedDriveId || acceptedEvent?.preState?.driveId || null,
         driveSummaryEvent,
+        clockOnly: kickoffReturnTouchdown,
       });
     } else if (acceptedEnvelope && driveSummaryEvent) {
       setDriveSummary(buildFootballDriveSummary(acceptedEnvelope, driveSummaryEvent));

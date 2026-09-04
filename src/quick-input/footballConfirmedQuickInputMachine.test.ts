@@ -650,6 +650,7 @@ describe('footballConfirmedQuickInputMachine', () => {
           enforcedFrom: 'PREVIOUS',
           finalSpot: 'H49',
           downConsequence: 'REPEAT',
+          replayDown: true,
         },
       ],
     });
@@ -759,27 +760,41 @@ describe('footballConfirmedQuickInputMachine', () => {
       status: 'declined',
       accepted: false,
       source: 'immediate',
+      downConsequence: 'REPEAT',
+      replayDown: true,
     });
     expect(state.draft?.penalties[0].yards).toBeUndefined();
     expect(state.draft?.penalties[0].finalSpot).toBeUndefined();
     expect(state.draft?.penalties[0].enforcedFrom).toBeUndefined();
   });
 
-  it('offsetting immediate penalty requires both teams and previousPlayCounts', () => {
-    const sameTeam = commitPenaltyTokens(startPenalty('immediate'), ['Holding', 'H', 'O', 'Offside', 'H', 'Y']);
-    const missingPlayCounts = commitPenaltyTokens(startPenalty('immediate'), ['Holding', 'H', 'O', 'Offside', 'V', '']);
-    const state = commitPenaltyTokens(startPenalty('immediate'), ['Holding', 'H', 'O', 'Offside', 'V', 'N']);
+  it('records offsetting immediate penalties as no-play repeat-down fouls', () => {
+    const sameTeam = commitPenaltyTokens(startPenalty('immediate'), ['Holding', 'H', 'O', 'Offside', 'H']);
+    const state = commitPenaltyTokens(startPenalty('immediate'), ['Holding', 'H', 'O', 'Offside', 'V']);
 
     expect(sameTeam.status).toBe('token.error');
     expect(sameTeam.error).toMatchObject({ code: 'INVALID_OFFSETTING_TEAMS' });
-    expect(missingPlayCounts.status).toBe('token.error');
-    expect(missingPlayCounts.error).toMatchObject({ code: 'MISSING_OFFSETTING_PLAY_COUNTS' });
     expect(state.status).toBe('draft.ready');
     expect(state.draft?.penalties).toHaveLength(2);
     expect(state.draft?.penalties.every((penalty) => penalty.status === 'offsetting')).toBe(true);
     expect(state.draft?.penalties.every((penalty) => penalty.offsetting?.previousPlayCounts === false)).toBe(true);
+    expect(state.draft?.penalties.every((penalty) => penalty.replayDown === true)).toBe(true);
+    expect(state.draft?.penalties.every((penalty) => penalty.downConsequence === 'REPEAT')).toBe(true);
     expect(state.draft?.penalties.map((penalty) => penalty.code)).toEqual(['HOLD', 'OFF']);
     expect(state.draft?.penalties.map((penalty) => penalty.tableYards)).toEqual([10, 5]);
+  });
+
+  it('still asks whether a queued offsetting play counts', () => {
+    const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
+    const awaitingDecision = commitPenaltyTokens(
+      startQueuedPenalty(queued),
+      ['Holding', 'H', 'O', 'Offside', 'V'],
+    );
+
+    expect(awaitingDecision.currentStep).toBe('offsettingPlayCounts');
+    const missingPlayCounts = commitToken(inputToken(awaitingDecision, ''));
+    expect(missingPlayCounts.status).toBe('token.error');
+    expect(missingPlayCounts.error).toMatchObject({ code: 'MISSING_OFFSETTING_PLAY_COUNTS' });
   });
 
   it('accepted queued penalty asks enforced-from and down, attaches to play, and clears marker', () => {

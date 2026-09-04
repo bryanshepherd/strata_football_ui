@@ -811,7 +811,8 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const normalizedRuleEnvelope = normalizeFootballEnvelopeRuleSpots(envelope);
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
-  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedSeriesEnvelope);
+  const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
+  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedHalftimeEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
   const normalizedEnvelope = repairedStats === repairedDriveEnvelope?.stats
@@ -859,6 +860,25 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
     },
   };
 }
+
+const repairHalfEndedDriveBoundaries = (envelope) => {
+  const halftimePeriod = Math.floor(finiteNumber(envelope?.game?.rules?.periods, 4) / 2);
+  let changed = false;
+  const completed = (envelope?.drives?.completed || []).map((drive) => {
+    const startPeriod = finiteNumber(drive?.startPeriod, 1);
+    const endPeriod = finiteNumber(drive?.endPeriod, startPeriod);
+    if (
+      String(drive?.result || '').toLowerCase() !== 'endofhalf'
+      || startPeriod > halftimePeriod
+      || endPeriod <= halftimePeriod
+    ) return drive;
+    changed = true;
+    return { ...drive, endPeriod: halftimePeriod, endClock: '00:00' };
+  });
+  return changed
+    ? { ...envelope, drives: { ...envelope.drives, completed } }
+    : envelope;
+};
 
 const updateTeamStat = (teams, team, updater) => {
   if (!validTeamCode(team)) return teams;
@@ -1455,6 +1475,9 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
     && normalizeClockText(event.clock)
   ));
   const usedKickoffEvents = new Set();
+  const acceptedEvents = (envelope?.events || []).filter((event) => (
+    !event?.status || event.status === 'accepted'
+  ));
   const timedDrives = [
     ...(envelope?.drives?.completed || []),
     envelope?.drives?.current,
@@ -1509,6 +1532,47 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
       startClock: normalizeClockText(event.clock),
       endPeriod: finiteNumber(recoveryDrive.startPeriod, eventPeriod),
       endClock: recoveryClock,
+    });
+  });
+
+  kickoffEvents.forEach((event, kickoffIndex) => {
+    if (usedKickoffEvents.has(kickoffIndex)) return;
+    const receivingTeam = kickoffReceivingTeam(event);
+    const kickoffClock = normalizeClockText(event.clock);
+    const kickoffSeconds = clockSeconds(kickoffClock);
+    const eventPeriod = finiteNumber(event.period, 1);
+    const isReturnTouchdown = (
+      (event?.result?.scoring?.type === 'touchdown' || event?.result?.code === 'touchdown')
+      && (event?.subtype === 'returned' || Boolean(event?.result?.return))
+    );
+    if (!isReturnTouchdown || !validTeamCode(receivingTeam) || !kickoffClock || kickoffSeconds === null) return;
+
+    const acceptedIndex = acceptedEvents.indexOf(event);
+    const nextTimedEvent = acceptedIndex >= 0
+      ? acceptedEvents.slice(acceptedIndex + 1).find((candidate) => {
+          const candidateClock = clockSeconds(
+            candidate?.result?.gameControl?.clock || candidate?.clock,
+          );
+          return finiteNumber(candidate?.period, eventPeriod) === eventPeriod
+            && candidateClock !== null
+            && candidateClock <= kickoffSeconds;
+        })
+      : null;
+    const envelopeEndClock = finiteNumber(envelope?.clock?.period, eventPeriod) === eventPeriod
+      ? normalizeClockText(envelope?.clock?.clock)
+      : null;
+    const endClock = normalizeClockText(
+      nextTimedEvent?.result?.gameControl?.clock || nextTimedEvent?.clock,
+    ) || envelopeEndClock;
+    const endSeconds = clockSeconds(endClock);
+    if (!endClock || endSeconds === null || endSeconds > kickoffSeconds) return;
+
+    usedKickoffEvents.add(kickoffIndex);
+    segments[receivingTeam].push({
+      startPeriod: eventPeriod,
+      startClock: kickoffClock,
+      endPeriod: eventPeriod,
+      endClock,
     });
   });
 

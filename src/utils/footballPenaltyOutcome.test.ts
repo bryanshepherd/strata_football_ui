@@ -3,6 +3,39 @@ import type { FootballDraftIntent } from '../quick-input/footballIntentSchema';
 import { activeFootballPenaltyOfficialState, resolveFootballDraftPenaltyOutcome } from './footballPenaltyOutcome';
 
 describe('football penalty outcome authority', () => {
+  it('replays the down for an accepted dead-ball Delay of Game foul', () => {
+    const resolved = resolveFootballDraftPenaltyOutcome(makeDraft({
+      family: 'penalty',
+      prePlay: { down: 3, distance: 4, yardLine: 'H42', lineToGain: 'H46' },
+      result: { code: 'accepted', endYardLine: 'H37' },
+      penalties: [{
+        penaltyId: 'dog-1',
+        team: 'H',
+        name: 'Delay of Game',
+        code: 'DOG',
+        status: 'accepted',
+        resolution: 'accepted',
+        accepted: true,
+        liveBall: false,
+        deadBall: true,
+        enforcedFrom: 'PREVIOUS',
+        tableYards: 5,
+        yards: -5,
+        finalSpot: 'H37',
+        source: 'immediate',
+      }],
+    }));
+
+    expect(activeFootballPenaltyOfficialState(resolved.result)).toMatchObject({
+      possession: 'H',
+      down: 3,
+      distance: 9,
+      yardLine: 'H37',
+      lineToGain: 'H46',
+      firstDownAwarded: false,
+    });
+  });
+
   it('keeps a roughing-the-kicker punt with the kicking team and awards the enforced first down', () => {
     const resolved = resolveFootballDraftPenaltyOutcome(makeDraft({
       family: 'punt',

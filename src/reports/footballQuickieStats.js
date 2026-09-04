@@ -490,7 +490,8 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
       else player.assistedTackles += 1;
       const isSack = defender.role === 'sack';
       if (isSack) player.sacks += defenders.length === 1 ? 1 : 0.5;
-      const loss = ['rush', 'pass'].includes(event.type) && finiteNumber(event?.result?.yards) < 0;
+      const loss = isSack
+        || (['rush', 'pass'].includes(event.type) && finiteNumber(event?.result?.yards) < 0);
       if (loss) player.tacklesForLoss += defenders.length === 1 ? 1 : 0.5;
     });
   });

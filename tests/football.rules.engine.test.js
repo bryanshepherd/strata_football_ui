@@ -842,6 +842,29 @@ describe('footballRulesEngine event application', () => {
       lineToGain: '50',
     });
 
+    const declinedImmediate = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-declined-immediate',
+      type: 'penalty',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 3,
+        distance: 4,
+        yardLine: 'H42',
+        lineToGain: 'H46',
+        driveId: 'DRV-0006',
+        driveNumber: 6,
+      },
+      result: { code: 'declined', endYardLine: 'H42' },
+      penalties: [{ penaltyId: 'pen-declined', status: 'declined', replayDown: true }],
+    });
+    expect(declinedImmediate.liveState).toMatchObject({
+      down: 3,
+      distance: 4,
+      yardLine: 'H42',
+      lineToGain: 'H46',
+    });
+
     const lossOfDown = applyFootballEventToEnvelope(normalEnvelope, {
       clientEventId: 'test-loss-of-down',
       type: 'penalty',

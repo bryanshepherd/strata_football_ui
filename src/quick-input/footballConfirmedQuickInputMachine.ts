@@ -2338,18 +2338,25 @@ function commitPenaltyToken(
       possession: context.play.possession ?? context.prePlay.possession ?? context.play.actionTeam,
       ruleset: footballPenaltyRulesetFromRules(context.game.rules),
     });
+    const tokens = {
+      ...cloneTokens(state.tokens),
+      offsettingSecondTeam: team,
+      offsettingSecondDefinition,
+      offsettingSecondCode: offsettingSecondDefinition?.code || state.tokens.offsettingSecondCode,
+    };
+    if ((state.tokens.penaltySource ?? 'immediate') === 'immediate') {
+      return finalizePenaltyEntry({
+        ...baseActiveState(state),
+        tokens: { ...tokens, offsettingPreviousPlayCounts: false },
+      }, context);
+    }
     return {
       state: {
         ...baseActiveState(state),
         status: 'token.awaiting',
         currentStep: 'offsettingPlayCounts',
         currentToken: '',
-        tokens: {
-          ...cloneTokens(state.tokens),
-          offsettingSecondTeam: team,
-          offsettingSecondDefinition,
-          offsettingSecondCode: offsettingSecondDefinition?.code || state.tokens.offsettingSecondCode,
-        },
+        tokens,
       },
     };
   }
@@ -5638,6 +5645,7 @@ function buildSingleDraftPenalty(
     ejectedPlayerId: tokens.penaltyEjected ? tokens.penaltyPlayer?.playerId : undefined,
     automaticFirstDown: input.definition?.automaticFirstDown,
     lossOfDown: input.definition?.lossOfDown,
+    ...(input.source === 'immediate' ? { downConsequence: 'REPEAT', replayDown: true } : {}),
   };
 
   if (tokens.penaltyPlayer) {
@@ -5654,7 +5662,9 @@ function buildSingleDraftPenalty(
     penalty.spot = tokens.penaltySpotOfFoul;
     penalty.finalSpot = tokens.penaltyFinalSpot;
     penalty.yards = derivePenaltyYards(context, tokens, baseDraft, penalty.enforcedFrom, penalty.finalSpot);
-    penalty.downConsequence = tokens.penaltyDownConsequence ?? (input.source === 'immediate' ? 'REPEAT' : undefined);
+    penalty.downConsequence = input.source === 'immediate'
+      ? 'REPEAT'
+      : tokens.penaltyDownConsequence;
     penalty.automaticFirstDown = penalty.downConsequence === 'AUTO_FIRST';
     penalty.lossOfDown = penalty.downConsequence === 'LOSS_OF_DOWN';
     penalty.replayDown = penalty.downConsequence === 'REPEAT';
@@ -5666,10 +5676,13 @@ function buildSingleDraftPenalty(
   }
 
   if (input.resolution === 'offsetting') {
-    penalty.offsetting = typeof tokens.offsettingPreviousPlayCounts === 'boolean'
-      ? { previousPlayCounts: tokens.offsettingPreviousPlayCounts }
+    const previousPlayCounts = input.source === 'immediate'
+      ? false
+      : tokens.offsettingPreviousPlayCounts;
+    penalty.offsetting = typeof previousPlayCounts === 'boolean'
+      ? { previousPlayCounts }
       : undefined;
-    penalty.replayDown = tokens.offsettingPreviousPlayCounts === false;
+    penalty.replayDown = input.source === 'immediate' || previousPlayCounts === false;
   }
 
   return penalty;

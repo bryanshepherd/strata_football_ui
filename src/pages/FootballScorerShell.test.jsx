@@ -1530,6 +1530,7 @@ describe('FootballScorerShell', () => {
       expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
       expect(screen.getByRole('button', { name: /^kick k$/i })).toBeEnabled();
       expect(screen.getByText(/home state will kick to visitor tech; home state chose north/i)).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
     } finally {
       fixture.pregame = originalPregame;
     }
@@ -2005,6 +2006,26 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('asks for the end-of-play clock after a local kickoff-return touchdown', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    completeKickoffReturnFlowInputs('E', 'H00');
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    expect(summaryDialog).toHaveTextContent(/for a touchdown/i);
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const clockDialog = await screen.findByRole('dialog', { name: /end of play clock/i });
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    fireEvent.change(clockInput, { target: { value: '0830' } });
+    expect(clockInput).toHaveValue('8:30');
+    fireEvent.submit(clockInput.closest('form'));
+
+    const shell = screen.getByTestId('scorer-layout-shell');
+    const scoreboardSlot = shell.querySelector('[data-scorer-slot="scoreboard"]');
+    await waitFor(() => expect(within(scoreboardSlot).getByText('8:30')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: /end of play clock/i })).not.toBeInTheDocument();
+  });
+
   it('kickoff receive branches use kick receive meanings for T and C', async () => {
     const { unmount } = renderScorer();
 
@@ -2261,6 +2282,7 @@ describe('FootballScorerShell', () => {
       expect(request.event.penalties[0]).toMatchObject({
         finalSpot: 'H48',
         yards: 4,
+        replayDown: true,
       });
       expect(within(eventLogSlot).getAllByRole('listitem')).toHaveLength(initialEvents);
     } finally {
@@ -3067,7 +3089,7 @@ function startKickoffReturnTerminalSelection() {
   expect(screen.getByRole('dialog', { name: /return result/i })).toBeInTheDocument();
 }
 
-function completeKickoffReturnFlowInputs(terminalResult) {
+function completeKickoffReturnFlowInputs(terminalResult, finalSpot = 'V31') {
   startKickoffReturnTerminalSelection();
   const buttonName = terminalResult === 'T' ? /^tackle/i : terminalResult === 'O' ? /^out of bounds/i : /^end of play/i;
   fireEvent.click(screen.getByRole('button', { name: buttonName }));
@@ -3088,7 +3110,7 @@ function completeKickoffReturnFlowInputs(terminalResult) {
 
   const finalSpotDialog = screen.getByRole('dialog', { name: /return final spot/i });
   const spotInput = within(finalSpotDialog).getByLabelText(/^final spot$/i);
-  fireEvent.change(spotInput, { target: { value: 'V31' } });
+  fireEvent.change(spotInput, { target: { value: finalSpot } });
   fireEvent.submit(spotInput.closest('form'));
 }
 

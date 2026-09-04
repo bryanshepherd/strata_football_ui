@@ -381,7 +381,9 @@ const creditDefense = (store, event) => {
     tackleParticipants.forEach((participant) => increment(store.get(participant.playerId, participant.team, participant), 'Assists'));
   }
 
-  const loss = ['rush', 'pass'].includes(event?.type) && finiteNumber(event?.result?.yards) < 0;
+  const sackers = defenders.filter((participant) => normalizedRole(participant) === 'sack');
+  const loss = sackers.length > 0
+    || (['rush', 'pass'].includes(event?.type) && finiteNumber(event?.result?.yards) < 0);
   if (loss && tackleParticipants.length > 0) {
     const credit = 1 / tackleParticipants.length;
     tackleParticipants.forEach((participant) => increment(
@@ -391,7 +393,6 @@ const creditDefense = (store, event) => {
     ));
   }
 
-  const sackers = defenders.filter((participant) => normalizedRole(participant) === 'sack');
   if (sackers.length > 0) {
     const sackCredit = 1 / sackers.length;
     const yardCredit = Math.abs(finiteNumber(event?.result?.yards)) / sackers.length;
