@@ -5,7 +5,10 @@ import {
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
 import { buildFootballTeamStatsReport } from '../reports/footballTeamStats';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
+import {
+  getDashboardSeededFootballEnvelopeRecord,
+  normalizeFootballScoringSetupEnvelope,
+} from '../services/footballDashboardService';
 import '../reports/footballReports.css';
 
 const reportSearchParams = () => (
@@ -13,9 +16,11 @@ const reportSearchParams = () => (
 );
 
 const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
   const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
+  const sourceEnvelope = explicitEnvelope
+    || getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope
+    || baselineRecord.envelope;
+  return normalizeFootballScoringSetupEnvelope(sourceEnvelope);
 };
 
 const scorerHref = (gameId) => {
