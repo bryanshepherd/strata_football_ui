@@ -741,6 +741,13 @@ describe('local football test-game projection', () => {
   it('repairs a zero-play drive created by a muffed punt recovery by the kicking team', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.clock = { ...envelope.clock, period: 2, clock: '03:22' };
+    envelope.stats = {
+      ...envelope.stats,
+      teams: {
+        H: { timeOfPossession: 0, possessionSegments: [] },
+        V: { timeOfPossession: 0, possessionSegments: [] },
+      },
+    };
     envelope.events = [{
       eventId: 'PUNT-MUFF-RECOVERY-1',
       sequence: 65,
@@ -803,6 +810,11 @@ describe('local football test-game projection', () => {
     });
     expect(envelope.drives.current).toMatchObject({ startReason: 'punt' });
     expect(envelope.drives.current.startClock).toBeUndefined();
+    expect(normalized.stats.teams.H.timeOfPossession).toBe(300);
+    expect(normalized.stats.teams.H.possessionSegments).toContainEqual({
+      startPeriod: 2,
+      startClock: '08:22',
+    });
   });
 
   it('does not double-count an opponent drive between two kickoffs to the same receiving team', () => {
