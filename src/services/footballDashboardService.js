@@ -833,6 +833,87 @@ const repairReturnFumbleDriveReasons = (envelope) => {
   return { ...envelope, drives: { ...envelope.drives, current, completed } };
 };
 
+const repairSameTeamMuffedPuntStoppedClock = (envelope) => {
+  const events = [...(envelope?.events || [])]
+    .filter((event) => !event.status || event.status === 'accepted')
+    .sort((left, right) => finiteNumber(left.sequence) - finiteNumber(right.sequence));
+  const repairedEventClocks = new Map();
+  const repairedDriveStarts = new Map();
+  const repairedDriveEnds = new Map();
+
+  events.forEach((event, index) => {
+    if (event?.type !== 'punt') return;
+    const kickingTeam = event?.participants?.punter?.team
+      || event?.participants?.kicker?.team
+      || event?.participants?.primary?.team
+      || event?.possession;
+    const recoveryTeam = event?.result?.turnover?.recoveredBy
+      || event?.result?.turnover?.team
+      || event?.result?.fumble?.recoveredByTeam
+      || event?.result?.nextPossession;
+    const isMuffedRecovery = (
+      event?.subtype === 'muffed'
+      || event?.result?.code === 'muffed'
+      || event?.result?.turnover?.type === 'muffedKick'
+    ) && validTeamCode(kickingTeam) && recoveryTeam === kickingTeam;
+    if (!isMuffedRecovery) return;
+
+    const nextEvent = events[index + 1];
+    const isImmediateTimeout = nextEvent?.type === 'gameControl'
+      && (
+        nextEvent?.subtype === 'timeout'
+        || nextEvent?.result?.gameControl?.action === 'timeout'
+      );
+    if (!isImmediateTimeout || nextEvent?.period !== event.period) return;
+    if (nextEvent?.preState?.possession !== recoveryTeam) return;
+
+    const puntClock = normalizeClockText(event.clock);
+    const timeoutClock = normalizeClockText(nextEvent?.result?.gameControl?.clock || nextEvent?.clock);
+    const puntSeconds = clockSeconds(puntClock);
+    const timeoutSeconds = clockSeconds(timeoutClock);
+    if (!timeoutClock || puntSeconds === null || timeoutSeconds === null || timeoutSeconds > puntSeconds) return;
+
+    const puntDriveId = event?.preState?.driveId;
+    const recoveryDriveId = nextEvent?.preState?.driveId;
+    if (!puntDriveId || !recoveryDriveId || puntDriveId === recoveryDriveId) return;
+
+    repairedEventClocks.set(event.eventId || event.clientEventId || event.sequence, timeoutClock);
+    repairedDriveEnds.set(puntDriveId, { period: event.period, clock: timeoutClock });
+    repairedDriveStarts.set(recoveryDriveId, { period: event.period, clock: timeoutClock });
+  });
+
+  if (repairedEventClocks.size === 0) return envelope;
+  const repairedEvents = (envelope?.events || []).map((event) => {
+    const clock = repairedEventClocks.get(event.eventId || event.clientEventId || event.sequence);
+    return clock ? { ...event, clock } : event;
+  });
+  const repairDrive = (drive) => {
+    if (!drive) return drive;
+    const start = repairedDriveStarts.get(drive.driveId);
+    const end = repairedDriveEnds.get(drive.driveId);
+    if (!start && !end) return drive;
+    return {
+      ...drive,
+      ...(start ? {
+        startPeriod: start.period,
+        startClock: start.clock,
+        startReason: 'fumbleRecovery',
+      } : {}),
+      ...(end ? { endPeriod: end.period, endClock: end.clock } : {}),
+    };
+  };
+
+  return {
+    ...envelope,
+    events: repairedEvents,
+    drives: {
+      ...envelope.drives,
+      current: repairDrive(envelope?.drives?.current || null),
+      completed: (envelope?.drives?.completed || []).map(repairDrive),
+    },
+  };
+};
+
 const ownTeamRuleSpot = (spot, team) => {
   if (!validTeamCode(team) || !spot) return spot || null;
   if (spot === '50' || spot === 'H50' || spot === 'V50') return '50';
@@ -918,11 +999,12 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
   const repairedReturnDriveEnvelope = repairSpecialTeamsReturnTouchdownDrives(repairedHalftimeEnvelope);
   const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedReturnDriveEnvelope);
-  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
-  const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
-  const statsEnvelope = repairedStats === repairedDriveEnvelope?.stats
-    ? repairedDriveEnvelope
-    : { ...repairedDriveEnvelope, stats: repairedStats };
+  const repairedMuffClockEnvelope = repairSameTeamMuffedPuntStoppedClock(repairedDriveEnvelope);
+  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedMuffClockEnvelope);
+  const repairedStats = repairFootballPossessionTimeFromDrives(repairedMuffClockEnvelope, replayedStats);
+  const statsEnvelope = repairedStats === repairedMuffClockEnvelope?.stats
+    ? repairedMuffClockEnvelope
+    : { ...repairedMuffClockEnvelope, stats: repairedStats };
   const normalizedEnvelope = repairFirstHalfTouchdownClockSeries(statsEnvelope);
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()

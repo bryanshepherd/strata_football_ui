@@ -848,6 +848,108 @@ describe('local football test-game projection', () => {
     });
   });
 
+  it('uses an immediately following timeout as the stopped-clock muffed-punt drive boundary', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '01:48' };
+    envelope.stats = {
+      ...envelope.stats,
+      teams: {
+        H: { timeOfPossession: 0, possessionSegments: [] },
+        V: { timeOfPossession: 0, possessionSegments: [] },
+      },
+    };
+    envelope.events = [
+      {
+        eventId: 'PUNT-MUFF-RECOVERY-TIMED-1',
+        sequence: 65,
+        status: 'accepted',
+        type: 'punt',
+        subtype: 'muffed',
+        period: 2,
+        clock: '08:22',
+        possession: 'H',
+        participants: {
+          punter: { playerId: 'H-22', team: 'H', role: 'punter' },
+          returner: { playerId: 'V-31', team: 'V', role: 'returner' },
+          recoveredBy: { playerId: 'H-22', team: 'H', role: 'recoverer' },
+        },
+        preState: {
+          possession: 'H',
+          down: 4,
+          distance: 8,
+          yardLine: 'H32',
+          lineToGain: 'H40',
+          driveId: 'DRV-0009',
+          driveNumber: 9,
+        },
+        result: {
+          code: 'muffed',
+          endYardLine: 'V36',
+          nextPossession: 'H',
+          driveEnds: true,
+          fumble: { recoveredByTeam: 'H', recoverySpot: 'V36', turnover: true },
+          turnover: { type: 'muffedKick', team: 'H', recoveredBy: 'H', spot: 'V36' },
+        },
+        penalties: [],
+      },
+      {
+        eventId: 'TIMEOUT-AFTER-PUNT-MUFF-1',
+        sequence: 66,
+        status: 'accepted',
+        type: 'gameControl',
+        subtype: 'timeout',
+        period: 2,
+        clock: '03:22',
+        possession: 'H',
+        preState: {
+          possession: 'H',
+          down: 1,
+          distance: 10,
+          yardLine: 'V36',
+          lineToGain: 'V26',
+          driveId: 'DRV-0010',
+          driveNumber: 10,
+        },
+        result: {
+          code: 'noPlay',
+          gameControl: { action: 'timeout', clock: '03:22', possession: 'H' },
+        },
+        penalties: [],
+      },
+    ];
+    envelope.drives = {
+      current: null,
+      completed: [
+        {
+          driveId: 'DRV-0009', driveNumber: 9, team: 'H', startYardLine: 'H20', startReason: 'kickoff',
+          startPeriod: 2, startClock: '08:22', endPeriod: 2, endClock: '08:22', plays: 8, yards: 26, result: 'punt',
+        },
+        {
+          driveId: 'DRV-0010', driveNumber: 10, team: 'H', startYardLine: 'V36', startReason: 'punt',
+          startPeriod: 2, startClock: '08:22', endPeriod: 2, endClock: '01:48', plays: 4, yards: 3, result: 'turnoverOnDowns',
+        },
+      ],
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.events[0].clock).toBe('03:22');
+    expect(normalized.drives.completed[0]).toMatchObject({ endPeriod: 2, endClock: '03:22' });
+    expect(normalized.drives.completed[1]).toMatchObject({
+      startPeriod: 2,
+      startClock: '03:22',
+      startReason: 'fumbleRecovery',
+    });
+    expect(normalized.stats.teams.H).toMatchObject({ timeOfPossession: 394 });
+    expect(normalized.stats.teams.H.possessionSegments).toEqual([
+      { startPeriod: 2, startClock: '08:22', endPeriod: 2, endClock: '03:22' },
+      { startPeriod: 2, startClock: '03:22', endPeriod: 2, endClock: '01:48' },
+    ]);
+    expect(envelope.events[0].clock).toBe('08:22');
+    expect(envelope.drives.completed[0].endClock).toBe('08:22');
+    expect(envelope.drives.completed[1].startClock).toBe('08:22');
+  });
+
   it('does not double-count an opponent drive between two kickoffs to the same receiving team', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.clock = { ...envelope.clock, period: 2, clock: '02:24' };
