@@ -467,6 +467,52 @@ describe('footballRulesEngine event application', () => {
     });
   });
 
+  it('starts a same-team drive as a fumble recovery after a muffed punt', () => {
+    const result = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'test-muffed-punt-kicking-team-recovery',
+      type: 'punt',
+      subtype: 'muffed',
+      period: 2,
+      clock: '08:22',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: 4,
+        distance: 8,
+        yardLine: 'H32',
+        lineToGain: 'H40',
+        driveId: 'DRV-0003',
+        driveNumber: 3,
+      },
+      result: {
+        code: 'muffed',
+        endYardLine: 'V36',
+        nextPossession: 'H',
+        driveEnds: true,
+        fumble: {
+          recoveredByTeam: 'H',
+          recoverySpot: 'V36',
+          turnover: true,
+        },
+        turnover: { type: 'muffedKick', team: 'H', recoveredBy: 'H', spot: 'V36' },
+      },
+      penalties: [],
+    });
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: true,
+      endedDriveId: 'DRV-0003',
+      driveResult: 'punt',
+      startedDrive: {
+        team: 'H',
+        startYardLine: 'V36',
+        startReason: 'fumbleRecovery',
+      },
+    });
+    expect(result.liveState).toMatchObject({ possession: 'H', down: 1, yardLine: 'V36' });
+  });
+
   it('handles turnovers and turnover on downs', () => {
     const turnoverEvent = gameEnvelopeFixtures.possessionChange.events[0];
     const turnover = applyFootballEventToEnvelope(gameEnvelopeFixtures.normal, turnoverEvent);

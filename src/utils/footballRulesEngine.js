@@ -577,11 +577,19 @@ function applyPossessionChangeEndDrive(envelope, event, preState, endYardLine, d
   const nextPossession =
     normalizeTeamCode(event.result?.nextPossession || event.result?.turnover?.recoveredBy || event.postState?.possession) ||
     oppositeTeam(previousPossession);
-  const drive = createStartedDrive(envelope, nextPossession, endYardLine, driveResult, options);
+  const puntMuffRecoveredByKickingTeam = driveResult === 'punt'
+    && nextPossession === previousPossession
+    && (
+      event.subtype === 'muffed'
+      || event.result?.code === 'muffed'
+      || event.result?.turnover?.type === 'muffedKick'
+    );
+  const startReason = puntMuffRecoveredByKickingTeam ? 'fumbleRecovery' : driveResult;
+  const drive = createStartedDrive(envelope, nextPossession, endYardLine, startReason, options);
   const lineToGain = calculateLineToGain(endYardLine, nextPossession, rules.yardsToFirstDown);
 
   addTrace(trace, 'drive', 'drive start/end decisions', {
-    input: { previousDriveId: preState.driveId, previousPossession, nextPossession, driveResult },
+    input: { previousDriveId: preState.driveId, previousPossession, nextPossession, driveResult, startReason },
     result: `end ${preState.driveId || 'none'}, start ${drive.driveId}`,
     reason: `${driveResult} ends the current drive and creates an explicit next possession state.`,
   });

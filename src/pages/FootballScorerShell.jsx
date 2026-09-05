@@ -368,11 +368,16 @@ export default function FootballScorerShell() {
       : null;
     const kickoffReturnTouchdown = result?.status !== 'duplicateAccepted'
       && isKickoffReturnTouchdown(acceptedEvent);
+    const startsNewDrive = result?.status !== 'duplicateAccepted'
+      && Boolean(result?.projection?.driveTransition?.shouldStartNew);
+    const sameTeamDriveStart = startsNewDrive
+      && previousPossession === nextPossession
+      && Boolean(nextPossession);
     if (acceptedEnvelope?.game?.status === 'final' && !acceptedEnvelope.game.wrapUp?.completedAt) {
       setWrapUpSaveState({ saving: false, error: '' });
       setWrapUpOpen(true);
     }
-    if (acceptedEnvelope && (kickoffReturnTouchdown || (
+    if (acceptedEnvelope && (kickoffReturnTouchdown || sameTeamDriveStart || (
       !isPossessionCorrection
       && !isPeriodInitialization
       && previousPossession !== nextPossession
@@ -389,6 +394,7 @@ export default function FootballScorerShell() {
           : result?.projection?.driveTransition?.endedDriveId || acceptedEvent?.preState?.driveId || null,
         driveSummaryEvent,
         clockOnly: kickoffReturnTouchdown,
+        driveStartOnly: sameTeamDriveStart,
       });
     } else if (acceptedEnvelope && driveSummaryEvent) {
       setDriveSummary(buildFootballDriveSummary(acceptedEnvelope, driveSummaryEvent));

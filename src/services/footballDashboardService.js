@@ -702,7 +702,7 @@ const kickoffReceivingTeam = (event) => {
   return validTeamCode(nextPossession) ? nextPossession : null;
 };
 
-const repairKickoffReturnFumbleDriveReasons = (envelope) => {
+const repairReturnFumbleDriveReasons = (envelope) => {
   const events = [...(envelope?.events || [])]
     .filter((event) => !event.status || event.status === 'accepted')
     .sort((left, right) => finiteNumber(left.sequence) - finiteNumber(right.sequence));
@@ -713,10 +713,31 @@ const repairKickoffReturnFumbleDriveReasons = (envelope) => {
   });
 
   const repairDrive = (drive) => {
-    if (!drive || String(drive.startReason || '').toLowerCase() !== 'kickoff') return drive;
+    const startReason = String(drive?.startReason || '').toLowerCase();
+    if (!drive || !['kickoff', 'punt'].includes(startReason)) return drive;
     const firstDriveEventIndex = firstEventIndexByDrive.get(drive.driveId);
-    if (!Number.isInteger(firstDriveEventIndex) || firstDriveEventIndex < 1) return drive;
-    const acquisition = events[firstDriveEventIndex - 1];
+    let acquisition = Number.isInteger(firstDriveEventIndex) && firstDriveEventIndex >= 1
+      ? events[firstDriveEventIndex - 1]
+      : null;
+    if (!acquisition && finiteNumber(drive.driveNumber, 0) > 1) {
+      for (let index = events.length - 1; index >= 0; index -= 1) {
+        const candidate = events[index];
+        if (finiteNumber(candidate?.preState?.driveNumber, 0) !== finiteNumber(drive.driveNumber, 0) - 1) continue;
+        const candidateRecoveryTeam = candidate?.result?.turnover?.recoveredBy
+          || candidate?.result?.turnover?.team
+          || candidate?.result?.fumble?.recoveredByTeam
+          || candidate?.result?.nextPossession;
+        const candidateSpot = candidate?.result?.fumble?.recoverySpot
+          || candidate?.result?.turnover?.returnEndYardLine
+          || candidate?.result?.turnover?.spot
+          || candidate?.result?.endYardLine;
+        if (candidateRecoveryTeam !== drive.team) continue;
+        if (drive.startYardLine && candidateSpot && drive.startYardLine !== candidateSpot) continue;
+        acquisition = candidate;
+        break;
+      }
+    }
+    if (!acquisition) return drive;
     const recoveryTeam = acquisition?.result?.turnover?.recoveredBy
       || acquisition?.result?.turnover?.team
       || acquisition?.result?.fumble?.recoveredByTeam
@@ -724,12 +745,22 @@ const repairKickoffReturnFumbleDriveReasons = (envelope) => {
     const kickingTeam = acquisition?.participants?.kicker?.team
       || acquisition?.participants?.primary?.team
       || acquisition?.possession;
-    const isKickoffReturnFumble = acquisition?.type === 'kickoff' && Boolean(
+    const isReturnFumble = ['kickoff', 'punt'].includes(acquisition?.type) && Boolean(
       acquisition?.result?.fumble?.turnover
-      || acquisition?.result?.turnover?.type === 'fumble',
+      || ['fumble', 'muffedKick'].includes(acquisition?.result?.turnover?.type),
     );
-    if (!isKickoffReturnFumble || recoveryTeam !== kickingTeam || drive.team !== recoveryTeam) return drive;
-    return { ...drive, startReason: 'fumbleRecovery' };
+    if (!isReturnFumble || recoveryTeam !== kickingTeam || drive.team !== recoveryTeam) return drive;
+    const recoveredStart = acquisition.type === 'punt'
+      ? {
+          startPeriod: drive.startPeriod || acquisition.period,
+          startClock: drive.startClock || acquisition.clock,
+        }
+      : {};
+    return {
+      ...drive,
+      startReason: 'fumbleRecovery',
+      ...recoveredStart,
+    };
   };
 
   const current = repairDrive(envelope?.drives?.current || null);
@@ -823,7 +854,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
-  const repairedDriveEnvelope = repairKickoffReturnFumbleDriveReasons(repairedHalftimeEnvelope);
+  const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedHalftimeEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
   const normalizedEnvelope = repairedStats === repairedDriveEnvelope?.stats

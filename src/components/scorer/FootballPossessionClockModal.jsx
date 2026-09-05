@@ -32,8 +32,8 @@ export default function FootballPossessionClockModal({ change, onSave }) {
 
   return (
     <FootballClockEntryModal
-      ariaLabel={change.clockOnly ? 'End of play clock' : 'Change of possession clock'}
-      eyebrow={change.clockOnly ? 'End of Play' : 'Change of Possession'}
+      ariaLabel={change.clockOnly ? 'End of play clock' : change.driveStartOnly ? 'Drive start clock' : 'Change of possession clock'}
+      eyebrow={change.clockOnly ? 'End of Play' : change.driveStartOnly ? 'Drive Start' : 'Change of Possession'}
       error={error}
       inputId="possession-change-clock"
       inputRef={inputRef}

@@ -1974,6 +1974,32 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('dialog', { name: /change of possession clock/i })).not.toBeInTheDocument();
   });
 
+  it('asks for the drive start clock when the kicking team recovers a muffed punt', async () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    startPuntReceiveResultSelection();
+    fireEvent.click(screen.getByRole('button', { name: /^muffed/i }));
+    submitTextToken(/returner jersey/i, '31');
+    submitTextToken(/recovering team/i, 'H');
+    submitTextToken(/recovery player jersey/i, '22');
+    submitTextToken(/recovery spot/i, 'V24');
+    fireEvent.click(screen.getByRole('button', { name: /^no return/i }));
+
+    const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+    const clockDialog = await screen.findByRole('dialog', { name: /drive start clock/i });
+    const clockInput = within(clockDialog).getByLabelText('Game Clock');
+    fireEvent.change(clockInput, { target: { value: '0801' } });
+    fireEvent.submit(clockInput.closest('form'));
+
+    const eventLogSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="event-log"]');
+    const driveStarts = within(eventLogSlot).getAllByRole('separator', { name: 'Drive Start - Home State' });
+    await waitFor(() => expect(driveStarts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ textContent: expect.stringContaining('8:01 at V24 by Fumble Recovery') }),
+    ])));
+    expect(screen.queryByRole('dialog', { name: /drive start clock/i })).not.toBeInTheDocument();
+  });
+
   it('prompts for a preselected clock after a touchdown, then runs the PAT from the try spot and respots for kickoff', async () => {
     renderScorer('/scorer?fixture=goalToGo&local=1');
 

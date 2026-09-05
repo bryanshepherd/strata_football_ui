@@ -670,6 +670,73 @@ describe('local football test-game projection', () => {
     expect(envelope.drives.completed[0].startReason).toBe('kickoff');
   });
 
+  it('repairs a zero-play drive created by a muffed punt recovery by the kicking team', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '03:22' };
+    envelope.events = [{
+      eventId: 'PUNT-MUFF-RECOVERY-1',
+      sequence: 65,
+      status: 'accepted',
+      type: 'punt',
+      subtype: 'muffed',
+      period: 2,
+      clock: '08:22',
+      possession: 'H',
+      participants: {
+        kicker: { playerId: 'H-22', team: 'H', role: 'kicker' },
+        fumbler: { playerId: 'V-31', team: 'V', role: 'returner' },
+        recoveredBy: { playerId: 'H-22', team: 'H', role: 'recoverer' },
+      },
+      preState: {
+        possession: 'H',
+        down: 4,
+        distance: 8,
+        yardLine: 'H32',
+        lineToGain: 'H40',
+        driveId: 'DRV-0009',
+        driveNumber: 9,
+      },
+      result: {
+        code: 'muffed',
+        endYardLine: 'V36',
+        nextPossession: 'H',
+        driveEnds: true,
+        fumble: { recoveredByTeam: 'H', recoverySpot: 'V36', turnover: true },
+        turnover: { type: 'muffedKick', team: 'H', recoveredBy: 'H', spot: 'V36' },
+      },
+      penalties: [],
+    }];
+    envelope.drives = {
+      completed: [{
+        driveId: 'DRV-0009',
+        driveNumber: 9,
+        team: 'H',
+        startReason: 'kickoff',
+        result: 'punt',
+      }],
+      current: {
+        driveId: 'DRV-0010',
+        driveNumber: 10,
+        team: 'H',
+        startYardLine: 'V36',
+        startReason: 'punt',
+        plays: 0,
+        yards: 0,
+      },
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.drives.current).toMatchObject({
+      driveId: 'DRV-0010',
+      startReason: 'fumbleRecovery',
+      startPeriod: 2,
+      startClock: '08:22',
+    });
+    expect(envelope.drives.current).toMatchObject({ startReason: 'punt' });
+    expect(envelope.drives.current.startClock).toBeUndefined();
+  });
+
   it('does not double-count an opponent drive between two kickoffs to the same receiving team', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.clock = { ...envelope.clock, period: 2, clock: '02:24' };
