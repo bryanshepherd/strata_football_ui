@@ -1875,7 +1875,7 @@ const driveEndSpot = (current, projection, event) => {
       || event?.result?.endYardLine
       || event?.preState?.yardLine;
   }
-  if (['punt', 'fieldGoal', 'missedFieldGoal'].includes(driveResult)) {
+  if (['punt', 'fieldGoal', 'missedFieldGoal', 'freeKick'].includes(driveResult)) {
     return event?.preState?.yardLine;
   }
   if (driveResult === 'turnover') {

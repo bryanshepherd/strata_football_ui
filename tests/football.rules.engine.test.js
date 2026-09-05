@@ -634,6 +634,115 @@ describe('footballRulesEngine event application', () => {
     });
   });
 
+  it('starts a kicking-team drive by fumble recovery after a muffed free kick', () => {
+    const result = applyFootballEventToEnvelope(gameEnvelopeFixtures.pregame, {
+      clientEventId: 'test-muffed-free-kick-kicking-team-recovery',
+      type: 'kickoff',
+      subtype: 'muffed',
+      period: 2,
+      clock: '06:46',
+      possession: null,
+      preState: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'H35',
+        lineToGain: null,
+        driveId: null,
+        driveNumber: 9,
+      },
+      participants: {
+        primary: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-85', team: 'V', role: 'returner' },
+        recoveredBy: { playerId: 'H-31', team: 'H', role: 'recoverer' },
+      },
+      result: {
+        code: 'muffed',
+        endYardLine: 'V28',
+        nextPossession: 'H',
+        turnover: {
+          type: 'muffedKick',
+          team: 'H',
+          playerId: 'H-31',
+          spot: 'V28',
+          recoveredBy: 'H',
+        },
+      },
+      penalties: [],
+    });
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: true,
+      endedDriveId: null,
+      driveResult: null,
+      startedDrive: {
+        team: 'H',
+        startYardLine: 'V28',
+        startReason: 'fumbleRecovery',
+      },
+    });
+  });
+
+  it('closes an active drive before starting the drive after a free kick', () => {
+    const envelope = {
+      ...normalEnvelope,
+      drives: {
+        ...normalEnvelope.drives,
+        current: {
+          driveId: 'DRV-0003',
+          driveNumber: 3,
+          team: 'H',
+          startYardLine: 'H20',
+          startReason: 'possession',
+          plays: 3,
+          yards: 12,
+          result: null,
+        },
+      },
+    };
+    const result = applyFootballEventToEnvelope(envelope, {
+      clientEventId: 'test-free-kick-with-active-drive',
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 2,
+      clock: '06:46',
+      possession: 'H',
+      preState: {
+        possession: 'H',
+        down: null,
+        distance: null,
+        yardLine: 'H35',
+        lineToGain: null,
+        driveId: 'DRV-0003',
+        driveNumber: 3,
+      },
+      participants: {
+        primary: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V25',
+        nextPossession: 'V',
+      },
+      penalties: [],
+    });
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: true,
+      endedDriveId: 'DRV-0003',
+      driveResult: 'freeKick',
+      startedDrive: {
+        team: 'V',
+        startYardLine: 'V25',
+        startReason: 'kickoff',
+      },
+    });
+  });
+
   it('ends punts and starts the receiving team drive', () => {
     const event = {
       clientEventId: 'test-punt',

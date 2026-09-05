@@ -422,18 +422,21 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
   ) || oppositeTeam(kickingTeam);
   const kickoffReturnTurnover = Boolean(
     event.result?.fumble?.turnover
-    || event.result?.turnover?.type === 'fumble',
+    || ['fumble', 'muffedKick'].includes(event.result?.turnover?.type),
   ) && possessionTeam === kickingTeam;
   const startReason = kickoffReturnTurnover ? 'fumbleRecovery' : 'kickoff';
   const drive = createStartedDrive(envelope, possessionTeam, endYardLine, startReason, options);
   const lineToGain = calculateLineToGain(endYardLine, possessionTeam, rules.yardsToFirstDown);
+  const activeDriveId = envelope?.drives?.current?.driveId || null;
 
   addTrace(trace, 'drive', 'kickoff new-drive checks', {
-    input: { kickingTeam, possessionTeam, endYardLine, kickoffReturnTurnover },
-    result: `start ${drive.driveId}`,
+    input: { kickingTeam, possessionTeam, endYardLine, kickoffReturnTurnover, activeDriveId },
+    result: `${activeDriveId ? `end ${activeDriveId}, ` : ''}start ${drive.driveId}`,
     reason: kickoffReturnTurnover
       ? 'A fumble recovered by the kicking team starts its drive by fumble recovery.'
-      : 'Kickoffs create the receiving team drive and do not assign a kickoff return as the previous drive result.',
+      : activeDriveId
+        ? 'A free kick closes the active drive before creating the next possession drive.'
+        : 'A free kick creates the next possession drive when no drive is active.',
   });
 
   return finish({
@@ -449,11 +452,11 @@ function applyKickoff(envelope, event, preState, endYardLine, options, trace, ru
       driveNumber: drive.driveNumber,
     }),
     driveTransition: {
-      shouldEndCurrent: false,
+      shouldEndCurrent: Boolean(activeDriveId),
       shouldStartNew: true,
-      endedDriveId: null,
+      endedDriveId: activeDriveId,
       startedDrive: drive,
-      driveResult: null,
+      driveResult: activeDriveId ? 'freeKick' : null,
       reason: startReason,
     },
     yardsGained: null,

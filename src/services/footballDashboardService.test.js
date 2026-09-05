@@ -1226,6 +1226,64 @@ describe('local football test-game projection', () => {
     expect(response.gameEnvelope.stats.teams.V.penalties).toMatchObject({ num: 1, yds: 15 });
   });
 
+  it('closes an active drive at its pre-kick spot before starting the free-kick drive', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: 'H',
+      down: null,
+      distance: null,
+      yardLine: 'H35',
+      lineToGain: null,
+      driveId: 'DRV-0002',
+      driveNumber: 2,
+    };
+    envelope.drives.current = {
+      ...envelope.drives.current,
+      driveId: 'DRV-0002',
+      driveNumber: 2,
+      team: 'H',
+      startYardLine: 'H20',
+      plays: 3,
+      yards: 15,
+      result: null,
+    };
+
+    const response = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-FREE-KICK-DRIVE-1', {
+      type: 'kickoff',
+      subtype: 'returned',
+      participants: {
+        primary: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V25',
+        nextPossession: 'V',
+        driveEnds: true,
+      },
+    }));
+
+    expect(response.gameEnvelope.drives.completed).toEqual([
+      expect.objectContaining({
+        driveId: 'DRV-0002',
+        team: 'H',
+        plays: 3,
+        yards: 15,
+        result: 'freeKick',
+      }),
+    ]);
+    expect(response.gameEnvelope.drives.current).toMatchObject({
+      driveId: 'DRV-0003',
+      team: 'V',
+      startYardLine: 'V25',
+      startReason: 'kickoff',
+      plays: 0,
+      yards: 0,
+      result: null,
+    });
+  });
+
   it('repairs the active drive when set possession corrects an immediately-created empty drive', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.clock = { ...envelope.clock, period: 2, clock: '01:20' };
