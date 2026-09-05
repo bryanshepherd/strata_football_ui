@@ -480,19 +480,25 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
       }
     }
 
+    const defensiveRole = (defender) => String(defender?.role || '').replace(/[^a-z]/gi, '').toLowerCase();
     const defenders = suppressed ? [] : (event?.participants?.defenders || []).filter((defender) => (
-      ['tackler', 'sack'].includes(defender?.role)
+      ['tackler', 'assisttackler', 'sack'].includes(defensiveRole(defender))
     ));
+    const explicitAssists = defenders.filter((defender) => defensiveRole(defender) === 'assisttackler');
+    const sackers = defenders.filter((defender) => defensiveRole(defender) === 'sack');
     defenders.forEach((defender) => {
       const player = get(defender.playerId, defender.team);
       if (!player) return;
-      if (defenders.length === 1) player.soloTackles += 1;
-      else player.assistedTackles += 1;
-      const isSack = defender.role === 'sack';
-      if (isSack) player.sacks += defenders.length === 1 ? 1 : 0.5;
+      const assisted = explicitAssists.length > 0
+        ? defensiveRole(defender) === 'assisttackler'
+        : defenders.length > 1;
+      if (assisted) player.assistedTackles += 1;
+      else player.soloTackles += 1;
+      const isSack = defensiveRole(defender) === 'sack';
+      if (isSack) player.sacks += 1 / Math.max(1, sackers.length);
       const loss = isSack
         || (['rush', 'pass'].includes(event.type) && finiteNumber(event?.result?.yards) < 0);
-      if (loss) player.tacklesForLoss += defenders.length === 1 ? 1 : 0.5;
+      if (loss || sackers.length > 0) player.tacklesForLoss += 1 / Math.max(1, defenders.length);
     });
   });
 

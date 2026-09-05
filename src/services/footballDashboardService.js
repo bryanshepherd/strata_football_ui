@@ -916,12 +916,14 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
-  const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedHalftimeEnvelope);
+  const repairedReturnDriveEnvelope = repairSpecialTeamsReturnTouchdownDrives(repairedHalftimeEnvelope);
+  const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedReturnDriveEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedDriveEnvelope);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedDriveEnvelope, replayedStats);
-  const normalizedEnvelope = repairedStats === repairedDriveEnvelope?.stats
+  const statsEnvelope = repairedStats === repairedDriveEnvelope?.stats
     ? repairedDriveEnvelope
     : { ...repairedDriveEnvelope, stats: repairedStats };
+  const normalizedEnvelope = repairFirstHalfTouchdownClockSeries(statsEnvelope);
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');
@@ -978,6 +980,103 @@ const repairHalfEndedDriveBoundaries = (envelope) => {
     ) return drive;
     changed = true;
     return { ...drive, endPeriod: halftimePeriod, endClock: '00:00' };
+  });
+  return changed
+    ? { ...envelope, drives: { ...envelope.drives, completed } }
+    : envelope;
+};
+
+const repairFirstHalfTouchdownClockSeries = (envelope) => {
+  const events = Array.isArray(envelope?.events) ? envelope.events : [];
+  const halftimePeriod = Math.floor(finiteNumber(envelope?.game?.rules?.periods, 4) / 2);
+  const completedDrives = envelope?.drives?.completed || [];
+  const replacements = new Map();
+
+  events.forEach((event, touchdownIndex) => {
+    if (
+      event?.result?.scoring?.type !== 'touchdown'
+      || finiteNumber(event?.period, 0) < 1
+      || finiteNumber(event?.period, 0) > halftimePeriod
+    ) return;
+    const isSpecialTeamsReturnTouchdown = (
+      ['kickoff', 'punt'].includes(event?.type)
+      && Boolean(event?.participants?.returner || event?.result?.return?.returnerPlayerId)
+    );
+
+    const associatedTryIndexes = [];
+    let terminalTry = null;
+    for (let index = touchdownIndex + 1; index < events.length; index += 1) {
+      const candidate = events[index];
+      if (candidate?.status && candidate.status !== 'accepted') continue;
+      if (candidate?.type === 'try') {
+        if (finiteNumber(candidate.period, 0) !== finiteNumber(event.period, 0)) break;
+        associatedTryIndexes.push(index);
+        if (!hasReplayDownPenalty(candidate)) {
+          terminalTry = candidate;
+          break;
+        }
+        continue;
+      }
+      if (!['penalty', 'gameControl'].includes(candidate?.type)) break;
+    }
+
+    const drive = completedDrives.find((candidate) => (
+      (event?.preState?.driveId && candidate?.driveId === event.preState.driveId)
+      || (
+        !isSpecialTeamsReturnTouchdown
+        &&
+        Number.isFinite(Number(event?.preState?.driveNumber))
+        && Number(candidate?.driveNumber) === Number(event.preState.driveNumber)
+      )
+    ));
+    const canonicalClock = normalizeClockText(terminalTry?.clock)
+      || (
+        finiteNumber(drive?.endPeriod, event.period) === finiteNumber(event.period, 0)
+          ? normalizeClockText(drive?.endClock)
+          : null
+      );
+    if (!canonicalClock) return;
+
+    if (normalizeClockText(event.clock) !== canonicalClock) {
+      replacements.set(touchdownIndex, { ...event, clock: canonicalClock });
+    }
+    associatedTryIndexes.forEach((index) => {
+      if (normalizeClockText(events[index]?.clock) !== canonicalClock) {
+        replacements.set(index, { ...events[index], clock: canonicalClock });
+      }
+    });
+  });
+
+  if (replacements.size === 0) return envelope;
+  return {
+    ...envelope,
+    events: events.map((event, index) => replacements.get(index) || event),
+  };
+};
+
+const repairSpecialTeamsReturnTouchdownDrives = (envelope) => {
+  const events = Array.isArray(envelope?.events) ? envelope.events : [];
+  let changed = false;
+  const completed = (envelope?.drives?.completed || []).map((drive) => {
+    if (String(drive?.result || '').toLowerCase() !== 'touchdown' || !drive?.driveId) return drive;
+    const returnTouchdown = events.find((event) => (
+      (!event?.status || event.status === 'accepted')
+      && event?.type === 'punt'
+      && event?.preState?.driveId === drive.driveId
+      && event?.result?.scoring?.type === 'touchdown'
+      && event.result.scoring.team !== drive.team
+      && (event?.participants?.returner || event?.result?.return?.returnerPlayerId)
+    ));
+    if (!returnTouchdown) return drive;
+    const endYardLine = returnTouchdown?.preState?.yardLine || drive.endYardLine;
+    const yards = calculateYardsGained(drive.startYardLine, endYardLine, drive.team);
+    changed = true;
+    return {
+      ...drive,
+      result: 'punt',
+      endYardLine,
+      ...(Number.isFinite(yards) ? { yards } : {}),
+    };
   });
   return changed
     ? { ...envelope, drives: { ...envelope.drives, completed } }
@@ -1642,7 +1741,7 @@ function repairFootballPossessionTimeFromDrives(envelope, stats) {
   kickoffEvents.forEach((event, kickoffIndex) => {
     if (usedKickoffEvents.has(kickoffIndex)) return;
     const receivingTeam = kickoffReceivingTeam(event);
-    const kickoffClock = normalizeClockText(event.clock);
+    const kickoffClock = normalizeClockText(event?.result?.return?.startClock || event.clock);
     const kickoffSeconds = clockSeconds(kickoffClock);
     const eventPeriod = finiteNumber(event.period, 1);
     const isReturnTouchdown = (
@@ -1978,8 +2077,39 @@ export function recordFootballPossessionClock(envelope, {
     }
   }
 
+  const latestEventIsTouchdown = latestEvent?.result?.scoring?.type === 'touchdown'
+    && finiteNumber(latestEvent?.period, periodNumber) === periodNumber;
+  const latestEventIsKickoffReturnTouchdown = latestEventIsTouchdown
+    && latestEvent?.type === 'kickoff'
+    && Boolean(latestEvent?.participants?.returner || latestEvent?.result?.return?.returnerPlayerId);
+  const originalKickoffClock = normalizeClockText(latestEvent?.result?.return?.startClock || latestEvent?.clock);
+  const events = latestEventIsTouchdown
+    ? (envelope.events || []).map((event) => (
+        event === latestEvent
+        || (latestEvent.eventId && event?.eventId === latestEvent.eventId)
+        || (latestEvent.clientEventId && event?.clientEventId === latestEvent.clientEventId)
+          ? {
+              ...event,
+              clock: normalizedClock,
+              ...(latestEventIsKickoffReturnTouchdown && originalKickoffClock
+                ? {
+                    result: {
+                      ...event.result,
+                      return: {
+                        ...event.result?.return,
+                        startClock: originalKickoffClock,
+                      },
+                    },
+                  }
+                : {}),
+            }
+          : event
+      ))
+    : envelope.events;
+
   return {
     ...envelope,
+    events,
     clock: {
       ...envelope.clock,
       period: periodNumber,

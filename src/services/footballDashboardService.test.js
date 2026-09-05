@@ -1019,6 +1019,75 @@ describe('local football test-game projection', () => {
     expect(normalized.stats.teams.H.timeOfPossession).toBe(0);
   });
 
+  it('uses the entered touchdown clock for every first-half touchdown and try event', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules = { ...envelope.game.rules, periods: 4, minutesPerPeriod: 12 };
+    envelope.events = [
+      {
+        eventId: 'FIRST-HALF-TD-1', sequence: 1, status: 'accepted', type: 'rush', period: 2, clock: '05:37',
+        possession: 'H', preState: { possession: 'H', driveId: 'DRV-TD-1', driveNumber: 1 },
+        result: { code: 'touchdown', scoring: { team: 'H', points: 6, type: 'touchdown' } },
+      },
+      {
+        eventId: 'FIRST-HALF-TRY-REPLAY-1', sequence: 2, status: 'accepted', type: 'try', period: 2, clock: '05:11',
+        possession: 'H', result: { code: 'failed' },
+        penalties: [{ penaltyId: 'PAT-REPEAT-1', status: 'accepted', replayDown: true }],
+      },
+      {
+        eventId: 'FIRST-HALF-TRY-1', sequence: 3, status: 'accepted', type: 'try', period: 2, clock: '05:11',
+        possession: 'H', result: { code: 'made', scoring: { team: 'H', points: 1, type: 'try' } },
+      },
+      {
+        eventId: 'SECOND-HALF-TD-1', sequence: 4, status: 'accepted', type: 'rush', period: 3, clock: '08:20',
+        possession: 'V', preState: { possession: 'V', driveId: 'DRV-TD-2', driveNumber: 2 },
+        result: { code: 'touchdown', scoring: { team: 'V', points: 6, type: 'touchdown' } },
+      },
+      {
+        eventId: 'SECOND-HALF-TRY-1', sequence: 5, status: 'accepted', type: 'try', period: 3, clock: '08:06',
+        possession: 'V', result: { code: 'made', scoring: { team: 'V', points: 1, type: 'try' } },
+      },
+    ];
+    envelope.drives.completed = [
+      { driveId: 'DRV-TD-1', driveNumber: 1, team: 'H', endPeriod: 2, endClock: '05:11', result: 'touchdown' },
+      { driveId: 'DRV-TD-2', driveNumber: 2, team: 'V', endPeriod: 3, endClock: '08:06', result: 'touchdown' },
+    ];
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.events.slice(0, 3).map((event) => event.clock)).toEqual(['05:11', '05:11', '05:11']);
+    expect(normalized.events.slice(3).map((event) => event.clock)).toEqual(['08:20', '08:06']);
+    expect(envelope.events[0].clock).toBe('05:37');
+  });
+
+  it('repairs a punt-return touchdown that was attached to the kicking team drive', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events = [{
+      eventId: 'PUNT-RETURN-TD-1', sequence: 1, status: 'accepted', type: 'punt', subtype: 'returned',
+      period: 3, clock: '05:10', possession: 'H',
+      preState: { possession: 'H', down: 4, distance: 16, yardLine: 'H29', lineToGain: 'H45', driveId: 'DRV-RETURN-1', driveNumber: 1 },
+      participants: { returner: { playerId: 'V-10', team: 'V', role: 'returner' } },
+      result: {
+        code: 'touchdown', endYardLine: 'goal', nextPossession: 'V',
+        return: { type: 'Punt', returnerPlayerId: 'V-10', returnYards: 55 },
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+    }];
+    envelope.drives.completed = [{
+      driveId: 'DRV-RETURN-1', driveNumber: 1, team: 'H', startYardLine: 'H35', startReason: 'kickoff',
+      startPeriod: 3, startClock: '05:22', endPeriod: 3, endClock: '01:46', endYardLine: 'goal',
+      result: 'touchdown', plays: 4, yards: 65,
+    }];
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.drives.completed[0]).toMatchObject({
+      result: 'punt',
+      endYardLine: 'H29',
+      yards: -6,
+    });
+    expect(envelope.drives.completed[0]).toMatchObject({ result: 'touchdown', yards: 65 });
+  });
+
   it('accepts an exact retry but rejects a reused client event ID for a different play', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     const firstRequest = playRequest(envelope, 'fcqi-rush-10-client', {
@@ -2693,5 +2762,66 @@ describe('local football test-game projection', () => {
 
     expect(recorded.drives.completed[0].endClock).toBe('08:30');
     expect(recorded.drives.completed[1].endClock).toBe('08:42');
+  });
+
+  it('records the prompted touchdown clock on the accepted touchdown event', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events = [{
+      eventId: 'PROMPTED-TD-1', sequence: 13, status: 'accepted', type: 'rush', period: 1, clock: '08:42',
+      possession: 'H', preState: { possession: 'H', driveId: 'DRV-0001', driveNumber: 1 },
+      result: { code: 'touchdown', scoring: { team: 'H', points: 6, type: 'touchdown' } },
+    }];
+    envelope.drives.completed = [{
+      driveId: 'DRV-0001', driveNumber: 1, team: 'H', startPeriod: 1, startClock: '12:00',
+      endPeriod: 1, endClock: '08:42', result: 'touchdown',
+    }];
+    envelope.drives.current = null;
+
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: 'H', nextPossession: null, period: 1, clock: '08:15', endedDriveId: 'DRV-0001',
+    });
+
+    expect(recorded.events[0].clock).toBe('08:15');
+    expect(recorded.drives.completed[0].endClock).toBe('08:15');
+    expect(envelope.events[0].clock).toBe('08:42');
+  });
+
+  it('preserves kickoff-return possession time when the touchdown clock is entered', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules = { ...envelope.game.rules, periods: 4, minutesPerPeriod: 12 };
+    envelope.events = [{
+      eventId: 'PROMPTED-KICKOFF-RETURN-TD-1', sequence: 13, status: 'accepted',
+      type: 'kickoff', subtype: 'returned', period: 3, clock: '08:20', possession: null,
+      participants: {
+        kicker: { playerId: 'H-22', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-31', team: 'V', role: 'returner' },
+      },
+      result: {
+        code: 'touchdown', nextPossession: 'V',
+        return: { type: 'Kickoff', returnerPlayerId: 'V-31', returnYards: 73 },
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+    }];
+    envelope.drives = { current: null, completed: [] };
+    envelope.stats.teams = {};
+
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: null, nextPossession: null, period: 3, clock: '08:06',
+    });
+
+    expect(recorded.events[0]).toMatchObject({
+      clock: '08:06',
+      result: { return: { startClock: '08:20' } },
+    });
+    const normalized = normalizeFootballScoringSetupEnvelope(recorded);
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(14);
+    expect(normalized.stats.teams.V.possessionSegments).toEqual([{
+      startPeriod: 3,
+      startClock: '08:20',
+      endPeriod: 3,
+      endClock: '08:06',
+    }]);
+    expect(envelope.events[0].clock).toBe('08:20');
+    expect(envelope.events[0].result.return.startClock).toBeUndefined();
   });
 });

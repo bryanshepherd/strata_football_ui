@@ -78,6 +78,39 @@ describe('football Quickie Stats projection', () => {
     });
   });
 
+  it('keeps a shared sack inside the shared tackle and tackle-for-loss credits', () => {
+    const players = buildFootballPlayerStats(
+      { rosters: { teams: { V: { players: {} }, H: { players: {} } } } },
+      [{
+        type: 'pass',
+        subtype: 'sack',
+        possession: 'H',
+        participants: {
+          defenders: [
+            { playerId: 'V-SACKER', team: 'V', role: 'sack' },
+            { playerId: 'V-TACKLER', team: 'V', role: 'tackler' },
+          ],
+        },
+        result: { code: 'sack', yards: -4, pass: { outcome: 'sack' } },
+        penalties: [],
+      }],
+      { players: {} },
+    );
+
+    expect(players.find((player) => player.playerId === 'V-SACKER')).toMatchObject({
+      soloTackles: 0,
+      assistedTackles: 1,
+      tacklesForLoss: 0.5,
+      sacks: 1,
+    });
+    expect(players.find((player) => player.playerId === 'V-TACKLER')).toMatchObject({
+      soloTackles: 0,
+      assistedTackles: 1,
+      tacklesForLoss: 0.5,
+      sacks: 0,
+    });
+  });
+
   it('derives negative YAC from the entered catch and terminal spots', () => {
     const envelope = structuredClone(baselineRecord.envelope);
     const completion = envelope.events.find((event) => event.type === 'pass' && event.result?.pass?.outcome === 'complete');

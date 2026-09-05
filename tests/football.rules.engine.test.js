@@ -199,6 +199,74 @@ describe('footballRulesEngine event application', () => {
     expect(result.scoringUpdate).toBeNull();
   });
 
+  it('ends a punt drive as a punt when the return scores a touchdown', () => {
+    const result = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'punt-return-touchdown',
+      type: 'punt',
+      subtype: 'returned',
+      possession: 'H',
+      preState: {
+        possession: 'H', down: 4, distance: 16, yardLine: 'H29', lineToGain: 'H45',
+        driveId: 'DRV-0006', driveNumber: 6,
+      },
+      participants: {
+        punter: { playerId: 'H-36', team: 'H', role: 'punter' },
+        returner: { playerId: 'V-10', team: 'V', role: 'returner' },
+      },
+      result: {
+        code: 'touchdown', endYardLine: 'goal', nextPossession: 'V', driveEnds: true,
+        return: { type: 'Punt', returnerPlayerId: 'V-10', returnYards: 55 },
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+      penalties: [],
+    });
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: true,
+      shouldStartNew: false,
+      endedDriveId: 'DRV-0006',
+      driveResult: 'punt',
+    });
+    expect(result.yardsGained).toBe(0);
+    expect(result.scoringUpdate).toEqual({ team: 'V', points: 6, type: 'touchdown' });
+    expect(result.liveState).toMatchObject({
+      possession: null,
+      pendingTryTeam: 'V',
+      nextPlayContext: 'awaitingTry',
+    });
+  });
+
+  it('does not create an offensive drive for a kickoff-return touchdown', () => {
+    const result = applyFootballEventToEnvelope(normalEnvelope, {
+      clientEventId: 'kickoff-return-touchdown',
+      type: 'kickoff',
+      subtype: 'returned',
+      possession: null,
+      preState: { possession: null, driveId: null, driveNumber: 6, yardLine: 'H40' },
+      participants: {
+        kicker: { playerId: 'H-36', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-10', team: 'V', role: 'returner' },
+      },
+      result: {
+        code: 'touchdown', endYardLine: 'goal', nextPossession: 'V',
+        return: { type: 'Kickoff', returnerPlayerId: 'V-10', returnYards: 73 },
+        scoring: { team: 'V', points: 6, type: 'touchdown' },
+      },
+      penalties: [],
+    });
+
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: false,
+      driveResult: 'returnTouchdown',
+    });
+    expect(result.liveState).toMatchObject({
+      possession: null,
+      pendingTryTeam: 'V',
+      nextPlayContext: 'awaitingTry',
+    });
+  });
+
   it('calculates a normal first down without mutating the envelope', () => {
     const event = {
       clientEventId: 'test-first-down',

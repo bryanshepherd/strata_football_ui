@@ -239,6 +239,36 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     return applyKickoffRekick(envelope, event, preState, endYardLine, trace);
   }
 
+  if (isSpecialTeamsReturnTouchdown(event, explicitScoringCounts)) {
+    const scoring = event.result.scoring;
+    const scoringTeam = normalizeTeamCode(scoring.team) || oppositeTeam(possession);
+    const patSpot = ruleSpotForTeam(rules.patSpot || 'V03', scoringTeam, 'opponent');
+    const setup = { pendingTryTeam: scoringTeam, nextPlayContext: 'awaitingTry' };
+    if (eventType === 'punt' && preState.driveId) {
+      return endDriveOnly(
+        envelope,
+        event,
+        preState,
+        preState.yardLine,
+        'punt',
+        trace,
+        patSpot,
+        scoring,
+        setup,
+      );
+    }
+    return endPossessionFreeContext(
+      envelope,
+      event,
+      preState,
+      'returnTouchdown',
+      trace,
+      patSpot,
+      setup,
+      scoring,
+    );
+  }
+
   const officialPenaltyState = penaltyOfficialState(event)
     || legacyPenaltyOfficialState(event, preState, endYardLine, rules);
   if (officialPenaltyState) {
@@ -941,6 +971,13 @@ function isTouchdownEvent(event, endYardLine, possession, explicitScoringCounts 
   if (event.result?.code === 'safety' || event.result?.code === 'touchback') return false;
 
   return spotToPossessionRelative(endYardLine, possession) >= 100;
+}
+
+function isSpecialTeamsReturnTouchdown(event, explicitScoringCounts = true) {
+  return explicitScoringCounts
+    && ['kickoff', 'punt'].includes(event?.type)
+    && event?.result?.scoring?.type === 'touchdown'
+    && Boolean(event?.participants?.returner || event?.result?.return?.returnerPlayerId);
 }
 
 function isSafetyEvent(event, endYardLine, possession, explicitScoringCounts = true) {

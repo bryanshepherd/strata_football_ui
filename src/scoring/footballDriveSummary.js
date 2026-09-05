@@ -104,6 +104,11 @@ const scoringEventForTerminal = (events, terminalEvent) => {
 };
 
 const completedDriveForScore = (envelope, scoringEvent) => {
+  if (
+    ['kickoff', 'punt'].includes(scoringEvent?.type)
+    && scoringType(scoringEvent) === 'touchdown'
+    && (scoringEvent?.participants?.returner || scoringEvent?.result?.return?.returnerPlayerId)
+  ) return null;
   const completed = envelope?.drives?.completed || [];
   const driveId = scoringEvent?.preState?.driveId;
   if (driveId) {
