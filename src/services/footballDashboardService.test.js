@@ -670,6 +670,74 @@ describe('local football test-game projection', () => {
     expect(envelope.drives.completed[0].startReason).toBe('kickoff');
   });
 
+  it('repairs a stored penalty-enforcement drive source from the preceding kickoff', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.events = [
+      {
+        eventId: 'KO-WITH-PENALTY-1',
+        sequence: 1,
+        status: 'accepted',
+        type: 'kickoff',
+        subtype: 'returned',
+        period: 2,
+        clock: '01:28',
+        possession: 'H',
+        participants: {
+          kicker: { playerId: 'H-9', team: 'H', role: 'kicker' },
+          returner: { playerId: 'V-0', team: 'V', role: 'returner' },
+        },
+        preState: { driveId: 'DRV-0011', driveNumber: 11 },
+        result: {
+          code: 'returned',
+          endYardLine: 'V30',
+          nextPossession: 'V',
+        },
+      },
+      {
+        eventId: 'KO-PENALTY-DRIVE-PLAY-2',
+        sequence: 2,
+        status: 'accepted',
+        type: 'rush',
+        period: 2,
+        clock: '01:28',
+        possession: 'V',
+        preState: {
+          possession: 'V',
+          down: 1,
+          distance: 10,
+          yardLine: 'V30',
+          lineToGain: 'V40',
+          driveId: 'DRV-0012',
+          driveNumber: 12,
+        },
+        result: { code: 'tackle', yards: 2, endYardLine: 'V32' },
+        penalties: [],
+      },
+    ];
+    envelope.drives = {
+      current: null,
+      completed: [{
+        driveId: 'DRV-0012',
+        driveNumber: 12,
+        team: 'V',
+        startYardLine: 'V30',
+        startReason: 'penaltyEnforcement',
+        startPeriod: 2,
+        startClock: '01:28',
+        endPeriod: 2,
+        endClock: '00:00',
+        plays: 3,
+        yards: 2,
+        result: 'endOfHalf',
+      }],
+    };
+
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+
+    expect(normalized.drives.completed[0].startReason).toBe('kickoff');
+    expect(envelope.drives.completed[0].startReason).toBe('penaltyEnforcement');
+  });
+
   it('repairs a zero-play drive created by a muffed punt recovery by the kicking team', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.clock = { ...envelope.clock, period: 2, clock: '03:22' };

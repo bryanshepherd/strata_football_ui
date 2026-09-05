@@ -283,6 +283,17 @@ describe('footballRulesEngine event application', () => {
         endYardLine: 'H30',
         nextPossession: 'V',
         kick: { receiveResultCode: 'O' },
+        officialOutcome: {
+          source: 'penaltyEnforcement',
+          calculated: {
+            possession: 'V',
+            down: 1,
+            distance: 10,
+            yardLine: 'H30',
+            lineToGain: 'H40',
+            firstDownAwarded: false,
+          },
+        },
       },
       penalties: [{
         penaltyId: 'test-fki',
@@ -312,6 +323,79 @@ describe('footballRulesEngine event application', () => {
       shouldStartNew: false,
       driveResult: 'rekick',
       reason: 'freeKickInfraction',
+    });
+  });
+
+  it('keeps kickoff as the drive source when a return penalty changes the final spot', () => {
+    const result = applyFootballEventToEnvelope(gameEnvelopeFixtures.pregame, {
+      clientEventId: 'test-kickoff-return-penalty-drive-source',
+      type: 'kickoff',
+      subtype: 'returned',
+      period: 2,
+      clock: '01:28',
+      possession: null,
+      preState: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'H35',
+        lineToGain: null,
+        driveId: null,
+        driveNumber: 11,
+      },
+      participants: {
+        primary: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        kicker: { playerId: 'H-9', team: 'H', role: 'kicker' },
+        returner: { playerId: 'V-0', team: 'V', role: 'returner' },
+      },
+      result: {
+        code: 'returned',
+        endYardLine: 'V15',
+        nextPossession: 'V',
+        kick: { receiveResultCode: 'R', catchYardLine: 'V00', kickYards: 65 },
+        return: { returnerPlayerId: 'V-0', returnStartYardLine: 'V00', returnEndYardLine: 'V15' },
+        officialOutcome: {
+          source: 'penaltyEnforcement',
+          calculated: {
+            possession: 'V',
+            down: 1,
+            distance: 10,
+            yardLine: 'V30',
+            lineToGain: 'V40',
+            firstDownAwarded: false,
+          },
+        },
+      },
+      penalties: [{
+        penaltyId: 'test-kickoff-face-mask',
+        code: 'FMB',
+        team: 'H',
+        timing: 'liveBall',
+        status: 'accepted',
+        yards: 15,
+        enforcedFrom: 'endOfRun',
+        finalSpot: 'V30',
+        replayDown: false,
+      }],
+    });
+
+    expect(result.liveState).toMatchObject({
+      possession: 'V',
+      down: 1,
+      distance: 10,
+      yardLine: 'V30',
+      lineToGain: 'V40',
+    });
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: true,
+      endedDriveId: null,
+      driveResult: null,
+      startedDrive: {
+        team: 'V',
+        startYardLine: 'V30',
+        startReason: 'kickoff',
+      },
     });
   });
 

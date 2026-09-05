@@ -224,6 +224,10 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     return applyPossessionFreeSetupPenalty(envelope, event, preState, endYardLine, trace);
   }
 
+  if (eventType === 'kickoff' && acceptedPreviousSpotPenalty(event) && hasReplayDown(event)) {
+    return applyKickoffRekick(envelope, event, preState, endYardLine, trace);
+  }
+
   const officialPenaltyState = penaltyOfficialState(event)
     || legacyPenaltyOfficialState(event, preState, endYardLine, rules);
   if (officialPenaltyState) {
@@ -260,9 +264,6 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
   }
 
   if (eventType === 'kickoff') {
-    if (acceptedPreviousSpotPenalty(event) && hasReplayDown(event)) {
-      return applyKickoffRekick(envelope, event, preState, endYardLine, trace);
-    }
     return applyKickoff(envelope, event, preState, endYardLine, options, trace, rules);
   }
 
@@ -429,7 +430,8 @@ function applyPenaltyOfficialOutcome(envelope, event, preState, official, option
     ? official.distance
     : calculateYardsToGain(yardLine, lineToGain, possession);
   const down = Number.isInteger(official.down) ? official.down : 1;
-  const samePossession = possession && possession === previousPossession;
+  const kickoffEvent = event.type === 'kickoff';
+  const samePossession = !kickoffEvent && possession && possession === previousPossession;
 
   addTrace(trace, 'penalty', 'official penalty enforcement outcome', {
     input: { previousPossession, observedResult: event.result, penalties: event.penalties },
@@ -458,14 +460,33 @@ function applyPenaltyOfficialOutcome(envelope, event, preState, official, option
     });
   }
 
-  const driveResult = previousPossession
-    ? event.type === 'punt'
+  const driveResult = kickoffEvent
+    ? null
+    : previousPossession
+      ? event.type === 'punt'
+        ? 'punt'
+        : preState.down >= rules.downs
+          ? 'turnoverOnDowns'
+          : 'penaltyPossessionChange'
+      : null;
+  const kickoffReturnTurnover = kickoffEvent
+    && possession === kickoffKickingTeam(event, preState)
+    && Boolean(
+      event.result?.fumble?.turnover
+      || ['fumble', 'muffedKick'].includes(event.result?.turnover?.type),
+  );
+  const startReason = kickoffEvent
+    ? (kickoffReturnTurnover ? 'fumbleRecovery' : 'kickoff')
+    : event.type === 'punt'
       ? 'punt'
-      : preState.down >= rules.downs
-        ? 'turnoverOnDowns'
-        : 'penaltyPossessionChange'
-    : 'penaltyEnforcement';
-  const drive = createStartedDrive(envelope, possession, yardLine, driveResult, options);
+      : event.subtype === 'interception' || event.result?.turnover?.type === 'interception'
+        ? 'interception'
+        : event.result?.fumble?.turnover || event.result?.turnover?.type === 'fumble'
+          ? 'fumbleRecovery'
+          : preState.down >= rules.downs
+            ? 'turnoverOnDowns'
+            : 'possession';
+  const drive = createStartedDrive(envelope, possession, yardLine, startReason, options);
   return finish({
     envelope,
     event,
@@ -480,14 +501,14 @@ function applyPenaltyOfficialOutcome(envelope, event, preState, official, option
       driveNumber: drive.driveNumber,
     }),
     driveTransition: {
-      shouldEndCurrent: Boolean(previousPossession),
+      shouldEndCurrent: !kickoffEvent && Boolean(previousPossession),
       shouldStartNew: true,
-      endedDriveId: previousPossession ? preState.driveId : null,
+      endedDriveId: !kickoffEvent && previousPossession ? preState.driveId : null,
       startedDrive: drive,
       driveResult,
       reason: 'penaltyOfficialOutcome',
     },
-    yardsGained: previousPossession
+    yardsGained: !kickoffEvent && previousPossession
       ? calculateYardsGained(preState.yardLine, yardLine, previousPossession)
       : null,
     firstDown: official.firstDownAwarded === true,

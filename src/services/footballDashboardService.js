@@ -714,7 +714,8 @@ const repairReturnFumbleDriveReasons = (envelope) => {
 
   const repairDrive = (drive) => {
     const startReason = String(drive?.startReason || '').toLowerCase();
-    if (!drive || !['kickoff', 'punt'].includes(startReason)) return drive;
+    const penaltyStartReason = ['penaltyenforcement', 'penaltypossessionchange'].includes(startReason);
+    if (!drive || (!['kickoff', 'punt'].includes(startReason) && !penaltyStartReason)) return drive;
     const firstDriveEventIndex = firstEventIndexByDrive.get(drive.driveId);
     let acquisition = Number.isInteger(firstDriveEventIndex) && firstDriveEventIndex >= 1
       ? events[firstDriveEventIndex - 1]
@@ -749,7 +750,19 @@ const repairReturnFumbleDriveReasons = (envelope) => {
       acquisition?.result?.fumble?.turnover
       || ['fumble', 'muffedKick'].includes(acquisition?.result?.turnover?.type),
     );
-    if (!isReturnFumble || recoveryTeam !== kickingTeam || drive.team !== recoveryTeam) return drive;
+    const recoveredByKickingTeam = isReturnFumble
+      && recoveryTeam === kickingTeam
+      && drive.team === recoveryTeam;
+    let correctedReason = recoveredByKickingTeam ? 'fumbleRecovery' : null;
+    if (!correctedReason && penaltyStartReason) {
+      if (acquisition.type === 'kickoff') correctedReason = 'kickoff';
+      else if (acquisition.type === 'punt') correctedReason = 'punt';
+      else if (acquisition.subtype === 'interception' || acquisition?.result?.turnover?.type === 'interception') correctedReason = 'interception';
+      else if (acquisition?.result?.fumble?.turnover || acquisition?.result?.turnover?.type === 'fumble') correctedReason = 'fumbleRecovery';
+      else if (finiteNumber(acquisition?.preState?.down, 0) >= finiteNumber(envelope?.game?.rules?.downs, 4)) correctedReason = 'turnoverOnDowns';
+      else correctedReason = 'possession';
+    }
+    if (!correctedReason) return drive;
     const recoveredStart = acquisition.type === 'punt'
       ? {
           startPeriod: drive.startPeriod || acquisition.period,
@@ -758,7 +771,7 @@ const repairReturnFumbleDriveReasons = (envelope) => {
       : {};
     return {
       ...drive,
-      startReason: 'fumbleRecovery',
+      startReason: correctedReason,
       ...recoveredStart,
     };
   };

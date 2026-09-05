@@ -72,6 +72,18 @@ describe('football drive chart report projection', () => {
     });
   });
 
+  it('reports the acquisition kickoff instead of a stale penalty-enforcement drive reason', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.drives.current.startReason = 'penaltyEnforcement';
+
+    const repairedReport = buildFootballDriveChartReport(envelope);
+
+    expect(repairedReport.chronological.at(-1)).toMatchObject({
+      driveNumber: 28,
+      howObtained: 'Kickoff',
+    });
+  });
+
   it('breaks third and fourth downs and average field positions out by quarter', () => {
     expect(breakdownRow(report, 'V', 'third-down').values).toEqual({
       1: '0-2',

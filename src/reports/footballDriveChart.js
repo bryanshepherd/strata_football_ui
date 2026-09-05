@@ -80,6 +80,9 @@ const turnoverKind = (event) => {
 
 const obtainedLabel = (reason, acquisitionEvent) => {
   const normalized = String(reason || '').toLowerCase();
+  const penaltyStartReason = normalized === 'penaltyenforcement' || normalized === 'penaltypossessionchange';
+  if (penaltyStartReason && acquisitionEvent?.type === 'kickoff') return 'Kickoff';
+  if (penaltyStartReason && acquisitionEvent?.type === 'punt') return 'Punt';
   if (normalized === 'kickoff') return 'Kickoff';
   if (normalized === 'punt') return 'Punt';
   if (normalized === 'fumblerecovery') return 'Fumble';
