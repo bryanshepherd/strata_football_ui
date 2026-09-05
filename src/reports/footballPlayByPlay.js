@@ -1,4 +1,5 @@
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { isFootballTryReplayEvent } from '../scoring/footballDriveSummary';
 import { buildFootballQuickieStatsReport } from './footballQuickieStats';
 import { formatFootballReportDate } from './footballScoringSummary';
 
@@ -263,7 +264,10 @@ const followingTry = (events, terminalEvent) => {
   const terminalIndex = events.indexOf(terminalEvent);
   for (let index = terminalIndex + 1; index < events.length; index += 1) {
     const event = events[index];
-    if (event.type === 'try') return event;
+    if (event.type === 'try') {
+      if (isFootballTryReplayEvent(event)) continue;
+      return event;
+    }
     if (event.type === 'kickoff') return null;
     if (event?.preState?.driveId && event.preState.driveId !== terminalEvent?.preState?.driveId) return null;
   }
@@ -308,6 +312,7 @@ const scoreBySequence = (events) => {
       return map;
     }
     if (event.type === 'try') {
+      if (isFootballTryReplayEvent(event)) return map;
       if (pendingTouchdown) map.set(finiteNumber(event.sequence, 0), { ...score });
       pendingTouchdown = false;
       return map;

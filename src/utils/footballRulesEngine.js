@@ -212,7 +212,18 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
   });
 
   if (eventType === 'try') {
-    const tryTeam = normalizeTeamCode(event?.participants?.primary?.team || event?.participants?.kicker?.team || event?.result?.scoring?.team);
+    const tryTeam = normalizeTeamCode(
+      event?.participants?.primary?.team
+      || event?.participants?.kicker?.team
+      || event?.result?.scoring?.team
+      || envelope?.liveState?.pendingTryTeam,
+    );
+    if (hasReplayDown(event)) {
+      return endPossessionFreeContext(envelope, event, preState, 'tryReplay', trace, endYardLine, {
+        pendingTryTeam: tryTeam,
+        nextPlayContext: 'awaitingTry',
+      }, null);
+    }
     const kickoffSpot = ruleSpotForTeam(rules.kickoffSpot || 'H35', tryTeam, 'own');
     return endPossessionFreeContext(envelope, event, preState, 'try', trace, kickoffSpot, {
       kickoffTeam: tryTeam,
@@ -702,7 +713,16 @@ function endDriveOnly(envelope, event, preState, endYardLine, driveResult, trace
   });
 }
 
-function endPossessionFreeContext(envelope, event, preState, driveResult, trace, nextSpot = event.result?.endYardLine || preState.yardLine, setup = {}) {
+function endPossessionFreeContext(
+  envelope,
+  event,
+  preState,
+  driveResult,
+  trace,
+  nextSpot = event.result?.endYardLine || preState.yardLine,
+  setup = {},
+  scoringUpdate = event.result?.scoring || null,
+) {
   addTrace(trace, 'scoring', 'PAT/two-point context', {
     input: { type: event.type, subtype: event.subtype, result: event.result },
     result: driveResult,
@@ -724,6 +744,7 @@ function endPossessionFreeContext(envelope, event, preState, driveResult, trace,
     },
     yardsGained: null,
     firstDown: false,
+    scoringUpdate,
   });
 }
 
@@ -897,7 +918,7 @@ function hasAutomaticFirstDown(event) {
 function hasReplayDown(event) {
   return Boolean(event.penalties?.some((penalty) => (
     penalty.replayDown
-    && (penalty.status === 'accepted' || event.type === 'penalty')
+    && (penalty.status === 'accepted' || penalty.status === 'offsetting' || event.type === 'penalty')
   )));
 }
 

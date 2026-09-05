@@ -141,6 +141,31 @@ describe('football Play-by-Play projection', () => {
     );
   });
 
+  it('defers the touchdown score and drive end through a repeated try', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const originalTryIndex = envelope.events.findIndex((event) => event.sequence === 15);
+    envelope.events = envelope.events.map((event) => (
+      event.sequence >= 15 ? { ...event, sequence: event.sequence + 1 } : event
+    ));
+    const retake = envelope.events[originalTryIndex];
+    envelope.events.splice(originalTryIndex, 0, {
+      ...retake,
+      eventId: 'REPEATED-TRY-15',
+      clientEventId: 'repeated-try-15',
+      sequence: 15,
+      result: { code: 'missed', driveEnds: true },
+      penalties: [{ status: 'accepted', finalSpot: 'H01', replayDown: true }],
+    });
+
+    const rows = buildFootballPlayByPlayReport(envelope).quarters[0].rows;
+
+    expect(rows.find((row) => row.id === 'score-15')).toBeUndefined();
+    expect(rows.find((row) => row.id === 'score-16')?.text).toBe('FAIR 7 – WVSU 0');
+    expect(rows.findIndex((row) => row.id === 'drive-end-DRV-0002')).toBeGreaterThan(
+      rows.findIndex((row) => row.id === 'score-16'),
+    );
+  });
+
   it('does not derive a possession time for an unfinished active drive', () => {
     const envelope = structuredClone(baselineRecord.envelope);
     envelope.game.status = 'inProgress';

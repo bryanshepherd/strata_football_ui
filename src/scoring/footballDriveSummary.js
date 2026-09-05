@@ -67,9 +67,17 @@ const isTouchdown = (event) => (
   || event?.result?.code === 'touchdown'
 );
 
+export const isFootballTryReplayEvent = (event) => Boolean(
+  event?.type === 'try'
+  && event.penalties?.some((penalty) => (
+    penalty.replayDown
+    && (penalty.status === 'accepted' || penalty.status === 'offsetting')
+  )),
+);
+
 export const isFootballDriveSummaryTerminalEvent = (event) => {
   if (!event || isTouchdown(event)) return false;
-  if (event.type === 'try') return true;
+  if (event.type === 'try') return !isFootballTryReplayEvent(event);
   if (scoringType(event) === 'safety' || event.result?.code === 'safety') return true;
   return event.type === 'fieldGoal'
     && scoringType(event) === 'fieldGoal'

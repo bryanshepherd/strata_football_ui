@@ -2,6 +2,7 @@ import {
   buildFootballDriveSummary,
   buildFootballScoringPlaySummary,
   isFootballDriveSummaryTerminalEvent,
+  isFootballTryReplayEvent,
 } from '../scoring/footballDriveSummary';
 
 export const FOOTBALL_REPORT_TIME_ZONE = 'America/New_York';
@@ -85,6 +86,7 @@ const orderedEvents = (envelope) => (Array.isArray(envelope?.events) ? envelope.
   .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
 
 const isScoringEvent = (event) => {
+  if (isFootballTryReplayEvent(event)) return false;
   const scoring = event?.result?.scoring;
   return scoring && ['V', 'H'].includes(scoring.team) && Number(scoring.points) > 0;
 };

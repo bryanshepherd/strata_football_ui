@@ -1729,6 +1729,91 @@ describe('local football test-game projection', () => {
     }
   });
 
+  it('persists a penalized try as awaiting a retake without awarding its score', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.game.teams.V.score = 6;
+    envelope.events = [{
+      eventId: 'TRY-REPLAY-TOUCHDOWN',
+      clientEventId: 'try-replay-touchdown',
+      sequence: 1,
+      status: 'accepted',
+      type: 'pass',
+      subtype: 'complete',
+      period: 3,
+      clock: '08:38',
+      possession: 'V',
+      preState: { possession: 'V', down: 2, distance: 9, yardLine: 'H37', lineToGain: 'H28', driveId: 'DRV-0013', driveNumber: 13 },
+      result: { code: 'complete', endYardLine: 'goal', scoring: { team: 'V', points: 6, type: 'touchdown' } },
+      penalties: [],
+    }];
+    envelope.stats.sourceEventSequence = 1;
+    envelope.liveState = {
+      ...envelope.liveState,
+      possession: null,
+      down: null,
+      distance: null,
+      yardLine: 'H03',
+      lineToGain: null,
+      driveId: null,
+      driveNumber: 13,
+      pendingTryTeam: 'V',
+      kickoffTeam: null,
+      nextPlayContext: 'awaitingTry',
+    };
+
+    const repeated = await submitFootballEventLocally(envelope, playRequest(envelope, 'LOCAL-PAT-REPEAT', {
+      type: 'try',
+      subtype: 'kick',
+      participants: { primary: { playerId: 'V-30', team: 'V', role: 'kicker' }, secondary: null, defenders: [] },
+      result: {
+        code: 'missed',
+        scoring: { team: 'V', points: 1, type: 'patKick' },
+        officialOutcome: {
+          source: 'penaltyEnforcement',
+          calculated: { possession: 'V', down: 1, distance: 1, yardLine: 'H01', lineToGain: 'goal' },
+        },
+      },
+      penalties: [{
+        penaltyId: 'PAT-REPEAT-PENALTY',
+        team: 'H',
+        status: 'accepted',
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'H01',
+        replayDown: true,
+      }],
+    }));
+
+    expect(repeated.gameEnvelope.game.teams.V.score).toBe(6);
+    expect(repeated.gameEnvelope.liveState).toMatchObject({
+      possession: null,
+      yardLine: 'H01',
+      pendingTryTeam: 'V',
+      kickoffTeam: null,
+      nextPlayContext: 'awaitingTry',
+    });
+    expect(normalizeFootballScoringSetupEnvelope(repeated.gameEnvelope).liveState).toMatchObject({
+      yardLine: 'H01',
+      pendingTryTeam: 'V',
+      nextPlayContext: 'awaitingTry',
+    });
+
+    const retake = await submitFootballEventLocally(repeated.gameEnvelope, playRequest(repeated.gameEnvelope, 'LOCAL-PAT-RETAKE', {
+      type: 'try',
+      subtype: 'kick',
+      participants: { primary: { playerId: 'V-30', team: 'V', role: 'kicker' }, secondary: null, defenders: [] },
+      result: { code: 'made', kick: { kickSpot: 'H01' }, scoring: { team: 'V', points: 1, type: 'patKick' } },
+      penalties: [],
+    }));
+
+    expect(retake.gameEnvelope.game.teams.V.score).toBe(7);
+    expect(retake.gameEnvelope.events.at(-1).preState.yardLine).toBe('H01');
+    expect(retake.gameEnvelope.liveState).toMatchObject({
+      pendingTryTeam: null,
+      kickoffTeam: 'V',
+      nextPlayContext: 'awaitingKickoff',
+    });
+  });
+
   it.each([
     ['inside the 10', 'H05', 4, undefined],
     ['at the 10', 'H10', 9, 1],

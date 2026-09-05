@@ -113,6 +113,31 @@ describe('football drive summary', () => {
     expect(summary.scoringPlay).toBe(`LeJay Hatcher 5 yard rush (${expected})`);
   });
 
+  it('waits through a repeated try and summarizes only the retake', () => {
+    const repeated = {
+      ...tryEvent('kick', { code: 'missed' }),
+      penalties: [{ status: 'accepted', finalSpot: 'H01', replayDown: true }],
+    };
+    const retake = {
+      ...tryEvent('kick', {
+        code: 'made',
+        scoring: { team: 'V', points: 1, type: 'patKick' },
+      }, {
+        primary: { playerId: 'V-93' },
+        kicker: { playerId: 'V-93' },
+      }),
+      eventId: 'TRY-kick-retake',
+      sequence: 4,
+    };
+    const envelope = envelopeFor([punt, rushTouchdown, repeated, retake]);
+
+    expect(isFootballDriveSummaryTerminalEvent(repeated)).toBe(false);
+    expect(isFootballDriveSummaryTerminalEvent(retake)).toBe(true);
+    expect(buildFootballDriveSummary(envelope, retake)?.scoringPlay).toBe(
+      'LeJay Hatcher 5 yard rush (Richardson Kick)',
+    );
+  });
+
   it('describes a defensive conversion with the failed try and returner', () => {
     const pat = tryEvent('rush', {
       code: 'fumble',

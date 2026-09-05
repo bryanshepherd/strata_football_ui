@@ -53,6 +53,39 @@ describe('football scoring summary projection', () => {
     });
   });
 
+  it('prints one scoring row after a penalized try is repeated', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const originalTryIndex = envelope.events.findIndex((event) => event.sequence === 15);
+    envelope.events = envelope.events.map((event) => (
+      event.sequence >= 15 ? { ...event, sequence: event.sequence + 1 } : event
+    ));
+    const retake = envelope.events[originalTryIndex];
+    envelope.events.splice(originalTryIndex, 0, {
+      ...retake,
+      eventId: 'REPEATED-TRY-15',
+      clientEventId: 'repeated-try-15',
+      sequence: 15,
+      result: { code: 'missed', driveEnds: true },
+      penalties: [{
+        penaltyId: 'REPEATED-TRY-PENALTY',
+        team: 'H',
+        status: 'accepted',
+        finalSpot: 'H01',
+        replayDown: true,
+      }],
+    });
+
+    const repeatedScore = buildFootballScoringSummary(envelope).scoring
+      .filter((row) => row.time === '13:32' && row.team === 'FAIR');
+
+    expect(repeatedScore).toHaveLength(1);
+    expect(repeatedScore[0]).toMatchObject({
+      sequence: 16,
+      description: 'LeJay Hatcher 5 yard rush (Richardson Kick)',
+      score: '7-0',
+    });
+  });
+
   it('formats game details in the report timezone', () => {
     expect(formatFootballReportDate('2025-09-27T17:30:00.000Z')).toBe('September 27, 2025');
     expect(formatFootballReportTime('2025-09-27T20:42:00.000Z')).toBe('4:42 PM');

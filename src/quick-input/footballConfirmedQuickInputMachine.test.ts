@@ -2282,6 +2282,28 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark extra point good.');
   });
 
+  it('uses the enforced pending-try spot for a repeated kick PAT', () => {
+    const context = makeContext({
+      play: { actionTeam: 'H', possession: null },
+      prePlay: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V01',
+        lineToGain: null,
+        setupContext: 'awaitingTry',
+        driveId: null,
+        driveNumber: 3,
+      },
+    });
+    const ready = completePatKickDraft({ result: 'G' }, context);
+
+    expect(ready.draft).toMatchObject({
+      prePlay: { yardLine: 'V01' },
+      result: { kick: { kickSpot: 'V01' } },
+    });
+  });
+
   it('kick PAT missed asks reason and builds', () => {
     const reviewing = transition(completePatKickDraft({ result: 'M', missedReason: 'R' }), { type: 'GENERATE_SUMMARY' });
 

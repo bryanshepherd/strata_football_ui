@@ -4810,6 +4810,15 @@ function buildKickDraft(
   return buildKickoffDraft(state, context);
 }
 
+function activeTrySpot(context: FootballQuickInputContext): Spot | undefined {
+  if (context.prePlay.setupContext === 'awaitingTry' && context.prePlay.yardLine) {
+    return context.prePlay.yardLine;
+  }
+  return ruleSpotForTeam(context.game.rules?.patSpot, context.play.actionTeam, 'opponent')
+    ?? context.prePlay.yardLine
+    ?? undefined;
+}
+
 function buildFieldGoalDraft(
   state: Pick<FootballConfirmedQuickInputState, 'tokens'>,
   context: FootballQuickInputContext,
@@ -4905,7 +4914,7 @@ function buildTryDraft(
       possession: null,
       down: null,
       distance: null,
-      yardLine: ruleSpotForTeam(context.game.rules?.patSpot, context.play.actionTeam, 'opponent') ?? context.prePlay.yardLine,
+      yardLine: activeTrySpot(context),
       lineToGain: null,
     },
     participants: {
@@ -5076,7 +5085,7 @@ function buildTryResult(tokens: FootballFlowTokens, context: FootballQuickInputC
     code: made ? 'made' : tokens.patKickResult === 'blocked' ? 'blocked' : 'missed',
     driveEnds: true,
     kick: {
-      kickSpot: ruleSpotForTeam(context.game.rules?.patSpot, context.play.actionTeam, 'opponent'),
+      kickSpot: activeTrySpot(context),
       missedReason: tokens.patKickMissedReason,
       blockedByPlayerId: tokens.tacklers[0]?.playerId,
     },

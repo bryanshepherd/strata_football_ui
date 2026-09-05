@@ -925,7 +925,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');
-  const completedScoringSequence = latestEvent?.type === 'try'
+  const completedScoringSequence = (latestEvent?.type === 'try' && !hasReplayDownPenalty(latestEvent))
     || (
       latestEvent?.type === 'fieldGoal'
       && (latestEvent.subtype === 'made' || latestEvent.result?.code === 'made')

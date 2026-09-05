@@ -141,6 +141,64 @@ describe('footballRulesEngine event application', () => {
     expect(result.firstDown).toBe(false);
   });
 
+  it('keeps a played try pending when its accepted penalty repeats the try', () => {
+    const awaitingTryEnvelope = {
+      ...normalEnvelope,
+      liveState: {
+        possession: null,
+        down: null,
+        distance: null,
+        yardLine: 'V03',
+        lineToGain: null,
+        goalToGo: false,
+        redZone: false,
+        driveId: null,
+        driveNumber: 3,
+        pendingTryTeam: 'H',
+        kickoffTeam: null,
+        nextPlayContext: 'awaitingTry',
+      },
+    };
+    const result = applyFootballEventToEnvelope(awaitingTryEnvelope, {
+      clientEventId: 'test-played-try-repeat',
+      type: 'try',
+      subtype: 'kick',
+      possession: null,
+      preState: awaitingTryEnvelope.liveState,
+      participants: { kicker: { playerId: 'H-9', team: 'H', role: 'kicker' } },
+      result: {
+        code: 'missed',
+        scoring: { team: 'H', points: 1, type: 'patKick' },
+        officialOutcome: {
+          source: 'penaltyEnforcement',
+          calculated: { possession: 'H', down: 1, distance: 1, yardLine: 'V01', lineToGain: 'goal' },
+        },
+      },
+      penalties: [{
+        penaltyId: 'pen-played-try-repeat',
+        team: 'V',
+        status: 'accepted',
+        enforcedFrom: 'previousSpot',
+        finalSpot: 'V01',
+        replayDown: true,
+      }],
+    });
+
+    expect(result.liveState).toMatchObject({
+      possession: null,
+      yardLine: 'V01',
+      pendingTryTeam: 'H',
+      kickoffTeam: null,
+      nextPlayContext: 'awaitingTry',
+    });
+    expect(result.driveTransition).toMatchObject({
+      shouldEndCurrent: false,
+      shouldStartNew: false,
+      driveResult: 'tryReplay',
+    });
+    expect(result.scoringUpdate).toBeNull();
+  });
+
   it('calculates a normal first down without mutating the envelope', () => {
     const event = {
       clientEventId: 'test-first-down',
