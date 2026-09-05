@@ -9,6 +9,7 @@ import {
   fetchFootballEnvelope,
   flushFootballServerSync,
   FOOTBALL_DASHBOARD_STORAGE_KEY,
+  FOOTBALL_COMPRESSED_STORAGE_PREFIX,
   FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
   getDashboardSeededFootballEnvelopeRecord,
@@ -99,6 +100,36 @@ describe('local-first football persistence', () => {
     expect(stored.gameId).toBe(envelope.gameId);
     expect(record.envelope.gameId).toBe(envelope.gameId);
     expect(record.envelope.game.teams.H.name).toBe(envelope.game.teams.H.name);
+  });
+
+  it('preserves every game by compressing the football store when browser quota is reached', () => {
+    const first = clone(getGameEnvelopeFixture('normal'));
+    first.gameId = 'FB-QUOTA-FIRST';
+    first.rosters.gameId = first.gameId;
+    const second = clone(getGameEnvelopeFixture('pregame'));
+    second.gameId = 'FB-QUOTA-SECOND';
+    second.rosters.gameId = second.gameId;
+    saveDashboardSeededFootballEnvelope(first.gameId, first);
+
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function setItemWithQuota(key, value) {
+      if (key === FOOTBALL_DASHBOARD_STORAGE_KEY && !String(value).startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    try {
+      expect(saveDashboardSeededFootballEnvelope(second.gameId, second).gameId).toBe(second.gameId);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY)).toMatch(
+      new RegExp(`^${FOOTBALL_COMPRESSED_STORAGE_PREFIX}`),
+    );
+    expect(getDashboardSeededFootballEnvelopeRecord(first.gameId).envelope.gameId).toBe(first.gameId);
+    expect(getDashboardSeededFootballEnvelopeRecord(second.gameId).envelope.gameId).toBe(second.gameId);
   });
 
   it('hydrates through the authenticated dashboard proxy and never from it again once local data exists', async () => {

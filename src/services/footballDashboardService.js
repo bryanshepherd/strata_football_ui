@@ -2,6 +2,7 @@ import {
   defaultFixtureKey,
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
+import LZString from 'lz-string';
 import {
   applyFootballEventToEnvelope,
   calculateYardsGained,
@@ -16,6 +17,7 @@ import { normalizeFootballEnvelopeRuleSpots } from '../utils/footballSpotNormali
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
 export const FOOTBALL_SYNC_QUEUE_STORAGE_KEY = 'strata.football.syncQueue.v1';
 export const FOOTBALL_MIRROR_SOURCE_STORAGE_KEY = 'strata.football.mirrorSource.v1';
+export const FOOTBALL_COMPRESSED_STORAGE_PREFIX = 'strata.lz-string.utf16.v1:';
 export const FOOTBALL_ENVELOPE_ENDPOINT_PREFIX = '/strata_football/api/football/games/envelope.php';
 export const FOOTBALL_PREGAME_ENDPOINT = '/strata_football/api/football/games/pregame.php';
 export const FOOTBALL_EVENT_ENDPOINT = '/strata_football/api/football/events/submit.php';
@@ -29,6 +31,42 @@ export const footballTeamOptions = [
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
+const isStorageQuotaError = (error) => (
+  error?.name === 'QuotaExceededError'
+  || error?.code === 22
+  || /quota.*exceed/i.test(String(error?.message || ''))
+);
+
+const compressFootballStore = (serialized) => (
+  `${FOOTBALL_COMPRESSED_STORAGE_PREFIX}${LZString.compressToUTF16(serialized)}`
+);
+
+const decodeFootballStore = (raw) => {
+  if (!raw.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) return raw;
+  const decoded = LZString.decompressFromUTF16(raw.slice(FOOTBALL_COMPRESSED_STORAGE_PREFIX.length));
+  if (typeof decoded !== 'string' || !decoded) {
+    throw new Error('The compressed football dashboard store could not be decoded.');
+  }
+  return decoded;
+};
+
+const compactExistingFootballStore = () => {
+  if (typeof window === 'undefined') return false;
+  const raw = window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+  if (!raw || raw.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) return false;
+  window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(raw));
+  return true;
+};
+
+const writeAuxiliaryStorageItem = (key, value) => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    if (!isStorageQuotaError(error) || !compactExistingFootballStore()) throw error;
+    window.localStorage.setItem(key, value);
+  }
+};
+
 const readStore = () => {
   if (typeof window === 'undefined') {
     return { games: {} };
@@ -37,7 +75,7 @@ const readStore = () => {
   try {
     const raw = window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
     if (!raw) return { games: {} };
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(decodeFootballStore(raw));
     if (!parsed || typeof parsed !== 'object' || !parsed.games || typeof parsed.games !== 'object') {
       return { games: {} };
     }
@@ -50,10 +88,21 @@ const readStore = () => {
 
 const writeStore = (store) => {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, JSON.stringify({
+  const serialized = JSON.stringify({
     version: 1,
     games: store.games || {},
-  }));
+  });
+  const current = window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
+  if (current?.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) {
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(serialized));
+    return;
+  }
+  try {
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, serialized);
+  } catch (error) {
+    if (!isStorageQuotaError(error)) throw error;
+    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(serialized));
+  }
 };
 
 const readSyncQueue = () => {
@@ -71,7 +120,7 @@ const readSyncQueue = () => {
 
 const writeSyncQueue = (items) => {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
+  writeAuxiliaryStorageItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
     version: 2,
     items,
   }));
@@ -111,7 +160,7 @@ const nextMirrorIdentity = (gameId) => {
     },
   };
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({ version: 2, ...next }));
+    writeAuxiliaryStorageItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({ version: 2, ...next }));
   }
   return { mirrorSourceId, mirrorRevision };
 };
@@ -119,7 +168,7 @@ const nextMirrorIdentity = (gameId) => {
 const adoptMirrorIdentity = (gameId, sourceId, revision) => {
   if (typeof window === 'undefined' || typeof sourceId !== 'string' || !sourceId || !Number.isSafeInteger(revision) || revision < 1) return;
   const state = readMirrorSource();
-  window.localStorage.setItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({
+  writeAuxiliaryStorageItem(FOOTBALL_MIRROR_SOURCE_STORAGE_KEY, JSON.stringify({
     version: 2,
     sources: {
       ...state.sources,
