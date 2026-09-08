@@ -1,12 +1,11 @@
 import React, { useMemo } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
 import { buildFootballTeamStatsReport } from '../reports/footballTeamStats';
 import {
-  getDashboardSeededFootballEnvelopeRecord,
   normalizeFootballScoringSetupEnvelope,
 } from '../services/footballDashboardService';
 import '../reports/footballReports.css';
@@ -15,13 +14,6 @@ const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  const gameId = reportSearchParams().get('gameId');
-  const sourceEnvelope = explicitEnvelope
-    || getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope
-    || baselineRecord.envelope;
-  return normalizeFootballScoringSetupEnvelope(sourceEnvelope);
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -31,8 +23,8 @@ const scorerHref = (gameId) => {
   return `${import.meta.env.BASE_URL}index.html?${destination.toString()}`;
 };
 
-export default function FootballTeamStatsReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballTeamStatsReportContent({ envelope }) {
+  const reportEnvelope = useMemo(() => normalizeFootballScoringSetupEnvelope(envelope), [envelope]);
   const report = useMemo(() => buildFootballTeamStatsReport(reportEnvelope), [reportEnvelope]);
 
   return (
@@ -80,5 +72,13 @@ export default function FootballTeamStatsReport({ envelope }) {
         <FootballReportFooterBrand />
       </article>
     </main>
+  );
+}
+
+export default function FootballTeamStatsReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballTeamStatsReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

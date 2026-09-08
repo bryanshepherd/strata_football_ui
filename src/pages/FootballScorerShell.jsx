@@ -1037,6 +1037,7 @@ const ScorerHeader = ({
       dashboardGameId,
       gameId: isGameRoute ? gameId : envelope.gameId,
       reportId: report.id,
+      source: 'local',
     }),
   }));
 

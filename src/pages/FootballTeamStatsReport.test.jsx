@@ -50,7 +50,7 @@ describe('FootballTeamStatsReport', () => {
     window.history.pushState(
       {},
       '',
-      '/football-scorer/index.html?report=team-stats&gameId=FB-RECOVERED-TEAM-STATS&dashboardGameId=DASH-RECOVERED-TEAM-STATS',
+      '/football-scorer/index.html?report=team-stats&gameId=FB-RECOVERED-TEAM-STATS&source=local&dashboardGameId=DASH-RECOVERED-TEAM-STATS',
     );
 
     try {

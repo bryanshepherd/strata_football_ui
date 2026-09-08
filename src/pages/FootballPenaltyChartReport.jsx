@@ -1,22 +1,16 @@
 import React, { Fragment, useMemo } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
 import { buildFootballPenaltyChartReport } from '../reports/footballPenaltyChart';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
 import '../reports/footballReports.css';
 
 const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
-  const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -80,8 +74,8 @@ const PenaltySection = ({ section, team }) => (
   </section>
 );
 
-export default function FootballPenaltyChartReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballPenaltyChartReportContent({ envelope }) {
+  const reportEnvelope = envelope;
   const report = useMemo(() => buildFootballPenaltyChartReport(reportEnvelope), [reportEnvelope]);
 
   return (
@@ -110,5 +104,13 @@ export default function FootballPenaltyChartReport({ envelope }) {
         );
       })}
     </main>
+  );
+}
+
+export default function FootballPenaltyChartReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballPenaltyChartReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

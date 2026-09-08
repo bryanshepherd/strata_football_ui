@@ -70,7 +70,7 @@ describe('FootballScoringSummaryReport', () => {
     window.history.pushState(
       {},
       '',
-      '/football-scorer/index.html?report=scoring-summary&gameId=FB-RECOVERED-REPORT&dashboardGameId=DASH-RECOVERED-REPORT',
+      '/football-scorer/index.html?report=scoring-summary&gameId=FB-RECOVERED-REPORT&source=local&dashboardGameId=DASH-RECOVERED-REPORT',
     );
 
     try {

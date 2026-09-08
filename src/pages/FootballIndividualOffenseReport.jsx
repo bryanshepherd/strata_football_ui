@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
 import { buildFootballIndividualOffenseReport } from '../reports/footballIndividualOffense';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
 import {
   FootballIndividualStatTable,
   FootballPlayerName,
@@ -16,11 +15,6 @@ const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
-  const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -265,8 +259,8 @@ export const FootballIndividualOffenseReportPage = ({ report }) => (
   </article>
 );
 
-export default function FootballIndividualOffenseReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballIndividualOffenseReportContent({ envelope }) {
+  const reportEnvelope = envelope;
   const report = useMemo(
     () => buildFootballIndividualOffenseReport(reportEnvelope),
     [reportEnvelope],
@@ -280,5 +274,13 @@ export default function FootballIndividualOffenseReport({ envelope }) {
       </nav>
       <FootballIndividualOffenseReportPage report={report} />
     </main>
+  );
+}
+
+export default function FootballIndividualOffenseReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballIndividualOffenseReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

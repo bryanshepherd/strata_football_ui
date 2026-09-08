@@ -69,7 +69,7 @@ describe('FootballPenaltyChartReport', () => {
     window.history.pushState(
       {},
       '',
-      '/football-scorer/index.html?report=penalty-chart&gameId=FB-RECOVERED-PENALTY-CHART&dashboardGameId=DASH-RECOVERED-PENALTY-CHART',
+      '/football-scorer/index.html?report=penalty-chart&gameId=FB-RECOVERED-PENALTY-CHART&source=local&dashboardGameId=DASH-RECOVERED-PENALTY-CHART',
     );
 
     try {

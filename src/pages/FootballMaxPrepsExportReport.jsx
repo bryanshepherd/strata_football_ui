@@ -1,10 +1,9 @@
 import React, { useMemo } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
 import { formatFootballReportDate } from '../reports/footballScoringSummary';
 import { buildFootballMaxPrepsExports } from '../reports/footballMaxPrepsExport';
 import '../reports/footballReports.css';
@@ -13,11 +12,6 @@ const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
-  const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -78,8 +72,8 @@ const TeamExportCard = ({ teamExport }) => (
   </section>
 );
 
-export default function FootballMaxPrepsExportReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballMaxPrepsExportReportContent({ envelope }) {
+  const reportEnvelope = envelope;
   const report = useMemo(() => buildFootballMaxPrepsExports(reportEnvelope), [reportEnvelope]);
   const teams = reportEnvelope.game.teams;
   const matchup = `${teams.V.name} vs. ${teams.H.name} (${formatFootballReportDate(reportEnvelope.game.scheduledAt)})`;
@@ -107,5 +101,13 @@ export default function FootballMaxPrepsExportReport({ envelope }) {
         <FootballReportFooterBrand />
       </article>
     </main>
+  );
+}
+
+export default function FootballMaxPrepsExportReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballMaxPrepsExportReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

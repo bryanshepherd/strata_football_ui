@@ -909,35 +909,35 @@ describe('FootballScorerShell', () => {
       expect(screen.getByText('Reports')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Scoring Summary' })).toHaveAttribute(
         'href',
-        '/index.html?report=scoring-summary&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=scoring-summary&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Team Stats' })).toHaveAttribute(
         'href',
-        '/index.html?report=team-stats&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=team-stats&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Penalty Chart' })).toHaveAttribute(
         'href',
-        '/index.html?report=penalty-chart&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=penalty-chart&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Drive Chart' })).toHaveAttribute(
         'href',
-        '/index.html?report=drive-chart&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=drive-chart&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Quickie Stats' })).toHaveAttribute(
         'href',
-        '/index.html?report=quickie-stats&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=quickie-stats&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Individual Offense' })).toHaveAttribute(
         'href',
-        '/index.html?report=individual-offense&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=individual-offense&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'Play-by-Play' })).toHaveAttribute(
         'href',
-        '/index.html?report=play-by-play&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=play-by-play&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
       expect(screen.getByRole('link', { name: 'MaxPreps Export' })).toHaveAttribute(
         'href',
-        '/index.html?report=maxpreps-export&gameId=FB-SERVER-RECOVERY-UI&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+        '/index.html?report=maxpreps-export&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Fetch from server' }));

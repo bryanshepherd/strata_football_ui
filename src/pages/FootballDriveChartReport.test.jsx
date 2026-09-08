@@ -78,7 +78,7 @@ describe('FootballDriveChartReport', () => {
     window.history.pushState(
       {},
       '',
-      '/football-scorer/index.html?report=drive-chart&gameId=FB-RECOVERED-DRIVE-CHART&dashboardGameId=DASH-RECOVERED-DRIVE-CHART',
+      '/football-scorer/index.html?report=drive-chart&gameId=FB-RECOVERED-DRIVE-CHART&source=local&dashboardGameId=DASH-RECOVERED-DRIVE-CHART',
     );
 
     try {
