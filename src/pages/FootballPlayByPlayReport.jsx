@@ -1,11 +1,10 @@
 import React, { Fragment, useMemo } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
 } from '../components/reports/FootballReportHeader';
 import { buildFootballPlayByPlayReport } from '../reports/footballPlayByPlay';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
 import { FootballQuickieReportPage } from './FootballQuickieStatsReport';
 import '../reports/footballReports.css';
 
@@ -13,11 +12,6 @@ const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
-  const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -75,8 +69,8 @@ const QuarterPage = ({ first, quarter, report }) => (
   </article>
 );
 
-export default function FootballPlayByPlayReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballPlayByPlayReportContent({ envelope }) {
+  const reportEnvelope = envelope;
   const report = useMemo(
     () => buildFootballPlayByPlayReport(reportEnvelope, reportSearchParams()),
     [reportEnvelope],
@@ -99,5 +93,13 @@ export default function FootballPlayByPlayReport({ envelope }) {
         </Fragment>
       ))}
     </main>
+  );
+}
+
+export default function FootballPlayByPlayReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballPlayByPlayReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

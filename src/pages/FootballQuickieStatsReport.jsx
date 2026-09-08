@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
+import FootballReportLoader from '../components/reports/FootballReportLoader';
 import {
   FootballReportFooterBrand,
   FootballReportHeader,
@@ -9,18 +9,12 @@ import {
   FOOTBALL_QUICKIE_SCOPE_OPTIONS,
   resolveFootballQuickieScope,
 } from '../reports/footballQuickieStats';
-import { getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
 import '../reports/footballReports.css';
 
 const reportSearchParams = () => (
   typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
 );
 
-const resolveReportEnvelope = (explicitEnvelope) => {
-  if (explicitEnvelope) return explicitEnvelope;
-  const gameId = reportSearchParams().get('gameId');
-  return getDashboardSeededFootballEnvelopeRecord(gameId)?.envelope || baselineRecord.envelope;
-};
 
 const scorerHref = (gameId) => {
   const params = reportSearchParams();
@@ -278,8 +272,8 @@ export const FootballQuickieReportPage = ({
   </article>
 );
 
-export default function FootballQuickieStatsReport({ envelope }) {
-  const reportEnvelope = useMemo(() => resolveReportEnvelope(envelope), [envelope]);
+function FootballQuickieStatsReportContent({ envelope }) {
+  const reportEnvelope = envelope;
   const [scope, setScope] = useState(() => resolveFootballQuickieScope(reportSearchParams()));
   const report = useMemo(
     () => buildFootballQuickieStatsReport(reportEnvelope, scope),
@@ -307,5 +301,13 @@ export default function FootballQuickieStatsReport({ envelope }) {
       </nav>
       <FootballQuickieReportPage report={report} />
     </main>
+  );
+}
+
+export default function FootballQuickieStatsReport({ envelope }) {
+  return (
+    <FootballReportLoader envelope={envelope}>
+      {(loadedEnvelope) => <FootballQuickieStatsReportContent envelope={loadedEnvelope} />}
+    </FootballReportLoader>
   );
 }

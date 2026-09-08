@@ -629,7 +629,7 @@ export async function persistFootballWrapUpEnvelope(gameId, envelope, { dashboar
   return localEnvelope;
 }
 
-export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', signal, fetchImpl = globalThis.fetch } = {}) {
+export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', signal, fetchImpl = globalThis.fetch, updateMirrorIdentity = true } = {}) {
   if (!gameId) {
     throw new Error('A valid gameId is required to load a football envelope.');
   }
@@ -658,7 +658,7 @@ export async function fetchFootballEnvelope(gameId, { dashboardGameId = '', sign
   if (payload.gameId !== String(gameId)) {
     throw new Error('Football envelope API returned a different game.');
   }
-  if (dashboardGameId) {
+  if (dashboardGameId && updateMirrorIdentity) {
     const mirrorSourceId = response.headers?.get?.('X-Strata-Football-Mirror-Source');
     const mirrorRevision = Number(response.headers?.get?.('X-Strata-Football-Mirror-Revision') || 0);
     adoptMirrorIdentity(String(gameId), mirrorSourceId, mirrorRevision);

@@ -14,8 +14,10 @@ export const buildFootballReportHref = ({
   dashboardGameId,
   gameId,
   reportId,
+  source,
 }) => {
   const params = new URLSearchParams({ report: reportId, gameId });
+  if (source) params.set('source', source);
   if (dashboardGameId) params.set('dashboardGameId', dashboardGameId);
   const requestedBase = String(baseUrl || '/');
   const normalizedBase = requestedBase.endsWith('/') ? requestedBase : `${requestedBase}/`;
