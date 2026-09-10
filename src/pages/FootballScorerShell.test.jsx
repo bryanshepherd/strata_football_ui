@@ -592,6 +592,44 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it.each([undefined, null, '', '--'])('submits a midgame rush safely with roster positions %s', async (position) => {
+    const importedEnvelope = gameEnvelopeFixtures.secondQuarterRecovery;
+    expect(getHighestFootballFcqiSeedCounter(importedEnvelope)).toBe(52);
+    const originalRosters = importedEnvelope.rosters;
+    importedEnvelope.rosters = structuredClone(originalRosters);
+    for (const team of Object.values(importedEnvelope.rosters.teams)) {
+      for (const player of Object.values(team.players)) {
+        player.position = position;
+        delete player.pos;
+        delete player.off_position;
+        delete player.def_position;
+        delete player.st_position;
+      }
+    }
+    const submitMock = mockSubmitSuccess();
+
+    try {
+      renderScorer('/scorer?fixture=secondQuarterRecovery');
+      fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+      const rusherInput = screen.getByLabelText(/rusher jersey/i);
+      fireEvent.change(rusherInput, { target: { value: '10' } });
+      fireEvent.submit(rusherInput.closest('form'));
+      fireEvent.click(screen.getByRole('button', { name: /^end of play/i }));
+      const spotInput = screen.getByLabelText(/final ball spot/i);
+      fireEvent.change(spotInput, { target: { value: 'H28' } });
+      fireEvent.submit(spotInput.closest('form'));
+
+      const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
+      fireEvent.click(within(summaryDialog).getByRole('button', { name: /^submit play$/i }));
+
+      await waitFor(() => expect(submitMock.fetchSpy).toHaveBeenCalledTimes(1));
+      expect(submittedRequest(submitMock.fetchSpy).event.clientEventId).toBe('fcqi-rush-53-client');
+    } finally {
+      importedEnvelope.rosters = originalRosters;
+      submitMock.restore();
+    }
+  });
+
   it('places a drive-start separator between the drive plays and the event that created the drive', () => {
     const envelope = JSON.parse(JSON.stringify(gameEnvelopeFixtures.kickoffDrive));
     envelope.drives.current = {
@@ -830,6 +868,45 @@ describe('FootballScorerShell', () => {
   it('hydrates a dashboard launch once, then reloads only from the local envelope', async () => {
     const originalFetch = globalThis.fetch;
     const envelope = cloneNormalEnvelope();
+    envelope.gameId = 'FB-PROD-HYDRATE';
+    envelope.rosters.gameId = envelope.gameId;
+    envelope.game.teams.H.name = 'Hydrated Home';
+    envelope.game.teams.V.name = 'Hydrated Visitor';
+    const fetchSpy = vi.fn().mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        return successfulMirrorResponse(JSON.parse(init.body));
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => envelope,
+      };
+    });
+    globalThis.fetch = fetchSpy;
+
+    try {
+      const first = renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
+      expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
+      expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(1);
+      expect(fetchSpy.mock.calls.find(([, init]) => init?.method === 'GET')[0]).toBe('/api/football/games/DASH-PROD/envelope');
+
+      first.unmount();
+      renderScorer('/scorer?dashboardGameId=DASH-PROD&envelopeGameId=FB-PROD-HYDRATE');
+      expect(await screen.findByRole('heading', { name: /hydrated visitor at hydrated home/i })).toBeInTheDocument();
+      await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2));
+      expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('hydrates and reloads a roster with no positions safely', async () => {
+    const originalFetch = globalThis.fetch;
+    const envelope = cloneNormalEnvelope();
+    for (const team of Object.values(envelope.rosters.teams)) {
+      for (const player of Object.values(team.players)) delete player.position;
+    }
     envelope.gameId = 'FB-PROD-HYDRATE';
     envelope.rosters.gameId = envelope.gameId;
     envelope.game.teams.H.name = 'Hydrated Home';

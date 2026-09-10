@@ -212,3 +212,30 @@ function player(
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
+
+
+describe('optional dashboard roster positions', () => {
+  it.each([undefined, null, '', '--'])('resolves a unique jersey with position %s in every scoring context', (position) => {
+    for (const actionContext of ['offense', 'defense', 'specialTeams'] as const) {
+      const result = resolvePlayerByJersey({ jerseyToken: '5', teamScope: 'H', actionContext,
+        roster: [player('unique', 'H', '5', 'Unique', { position } as Partial<PlayerResolutionRosterPlayer>)] });
+      expect(result.kind).toBe('resolved');
+    }
+  });
+  it.each([['offense', 'WR'], ['defense', 'CB'], ['specialTeams', 'K']] as const)(
+    'recommends %s duplicates from dashboard position alone', (actionContext, expectedPosition) => {
+      const roster = ['CB', 'K', 'WR'].map((position) => player(position, 'H', '7', position, { position }));
+      const result = resolvePlayerByJersey({ jerseyToken: '7', teamScope: 'H', actionContext, roster });
+      expect(result.kind).toBe('duplicate');
+      if (result.kind === 'duplicate') {
+        expect(result.candidates).toHaveLength(3);
+        expect(result.recommended.playerId).toBe(expectedPosition);
+      }
+    });
+  it('keeps legacy unpositioned duplicates selectable without crashing', () => {
+    const result = resolvePlayerByJersey({ jerseyToken: '7', teamScope: 'H', actionContext: 'offense',
+      roster: [player('one', 'H', '7', 'One', {}), player('two', 'H', '7', 'Two', { position: '--' })] });
+    expect(result.kind).toBe('duplicate');
+    if (result.kind === 'duplicate') expect(result.candidates).toHaveLength(2);
+  });
+});
