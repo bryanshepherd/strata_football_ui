@@ -172,6 +172,26 @@ describe('FootballPlayEditorModal', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(within(dialog).getByRole('alertdialog', { name: /discard play edits/i })).toBeInTheDocument();
   });
+
+  it.each(['catchYardLine', 'caughtAtYardLine'])('saves a catch-spot correction in the existing %s field without changing the touchdown', (field) => {
+    const play = structuredClone(footballPlayEditorSandboxPlays[1]);
+    play.subtype = 'complete';
+    play.possession = 'V';
+    play.preState = { ...play.preState, possession: 'V', yardLine: 'H39', down: 2, distance: 6 };
+    play.result = {
+      code: 'complete', yards: 39, endYardLine: 'goal',
+      scoring: { team: 'V', type: 'touchdown', points: 6 },
+      pass: { outcome: 'complete', [field]: 'V14', terminalYardLine: 'goal', passingYards: 39, receivingYards: 39 },
+    };
+    const onSave = vi.fn();
+    renderEditor({ play, onSave });
+    expect(screen.getByLabelText(/Caught at/i)).toHaveValue('V14');
+    fireEvent.change(screen.getByLabelText(/Caught at/i), { target: { value: 'H14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].result).toEqual({ ...play.result, pass: { ...play.result.pass, [field]: 'H14' } });
+    expect(play.result.pass[field]).toBe('V14');
+  });
 });
 
 function renderEditor({

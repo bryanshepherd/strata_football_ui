@@ -512,11 +512,12 @@ const CommonResultFields = ({ draft, firstInputRef, update, updateMany }) => {
 const PassFields = ({ draft, roster, update }) => {
   const pass = draft.result?.pass;
   if (!pass) return null;
+  const catchSpotField = pass.catchYardLine !== undefined ? 'catchYardLine' : 'caughtAtYardLine';
   return (
     <div className="mt-4 rounded border border-zinc-300 bg-zinc-50 p-4">
       <h3 className="text-sm font-black">Passing statistics</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {pass.caughtAtYardLine !== undefined && <TextField label="Caught at" onChange={(value) => update(['result', 'pass', 'caughtAtYardLine'], value)} value={pass.caughtAtYardLine || ''} />}
+        {pass[catchSpotField] !== undefined && <TextField hint="H = home, V = visitor (for example H14)" label="Caught at" onChange={(value) => update(['result', 'pass', catchSpotField], value)} value={pass[catchSpotField] || ''} />}
         {pass.intendedYardLine !== undefined && <TextField label="Intended spot" onChange={(value) => update(['result', 'pass', 'intendedYardLine'], value)} value={pass.intendedYardLine || ''} />}
         {pass.passingYards !== undefined && <CalculatedField label="Passing yards" value={pass.passingYards} />}
         {pass.receivingYards !== undefined && <CalculatedField label="Receiving yards" value={pass.receivingYards} />}
