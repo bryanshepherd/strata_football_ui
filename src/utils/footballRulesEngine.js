@@ -1,3 +1,5 @@
+import { validPenaltyBallContext } from './footballPenaltyPossession.js';
+
 const TEAM_CODES = new Set(['H', 'V']);
 const DEFAULT_DOWNS = 4;
 const DEFAULT_YARDS_TO_FIRST = 10;
@@ -211,6 +213,11 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     reason: 'Engine consumes canonical GameEnvelope.liveState plus ScoringEvent.preState.',
   });
 
+  if (result.penaltyContext && event.penalties?.length) {
+    if (!validPenaltyBallContext(result.penaltyContext)) throw new Error('Invalid or unconfirmed penalty ball context.');
+    return applyConfirmedPenaltyContext(envelope, event, preState, options, trace);
+  }
+
   if (eventType === 'try') {
     const tryTeam = normalizeTeamCode(
       event?.participants?.primary?.team
@@ -321,6 +328,54 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
   }
 
   return applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules, statisticalEndYardLine);
+}
+
+function applyConfirmedPenaltyContext(envelope, event, preState, options, trace) {
+  const context = event.result.penaltyContext;
+  if (context.setupContext === 'awaitingTry' || context.setupContext === 'awaitingSafetyKick') {
+    return endDriveOnly(envelope, event, preState, event.result.endYardLine, context.scoring.type, trace, context.yardLine, context.scoring, {
+      pendingTryTeam: context.setupContext === 'awaitingTry' ? context.possession : null,
+      kickoffTeam: context.setupContext === 'awaitingSafetyKick' ? context.possession : null,
+      nextPlayContext: context.setupContext,
+    });
+  }
+  if (context.setupContext === 'awaitingKickoff') {
+    return finish({
+      envelope, event, trace,
+      liveState: createInactiveLiveState(preState, context.yardLine, { kickoffTeam: context.possession, nextPlayContext: 'awaitingKickoff' }),
+      driveTransition: continueDrive(preState.driveId), yardsGained: null, firstDown: false, scoringUpdate: null,
+    });
+  }
+  const startNewDrive = context.startNewDrive || context.possession !== preState.possession;
+  const reason = event.type === 'kickoff'
+    ? (context.possession === kickoffKickingTeam(event, preState) ? 'fumbleRecovery' : 'kickoff')
+    : event.type === 'punt' ? 'punt' : 'turnover';
+  const drive = startNewDrive ? createStartedDrive(envelope, context.possession, context.yardLine, reason, options) : null;
+  const lineToGain = calculateLineToGain(context.yardLine, context.possession, context.distance);
+  addTrace(trace, 'drive', 'confirmed penalty ball context', {
+    input: context,
+    result: startNewDrive ? `start ${drive.driveId}` : 'continue current drive',
+    reason: 'The operator confirmed the possession, down, distance, and spot after penalty enforcement.',
+  });
+  return finish({
+    envelope, event, trace,
+    liveState: createLiveState({
+      possession: context.possession, down: context.down, distance: context.distance,
+      yardLine: context.yardLine, lineToGain,
+      driveId: drive?.driveId || preState.driveId, driveNumber: drive?.driveNumber || preState.driveNumber,
+    }),
+    driveTransition: drive ? {
+      shouldEndCurrent: Boolean(preState.driveId), shouldStartNew: true,
+      endedDriveId: preState.driveId, startedDrive: drive,
+      driveResult: preState.driveId ? reason : null, reason,
+    } : continueDrive(preState.driveId),
+    yardsGained: event.type === 'kickoff' ? null
+      : context.decision === 'beforeChange'
+        ? calculateYardsGained(preState.yardLine, acceptedSpotOfFoul(event) || context.yardLine, preState.possession)
+        : event.result.yards ?? null,
+    firstDown: !drive && (event.result.officialOutcome?.verified?.firstDownAwarded ?? hasAutomaticFirstDown(event)),
+    scoringUpdate: null,
+  });
 }
 
 function applyScrimmagePlay(envelope, event, preState, endYardLine, options, trace, rules, statisticalEndYardLine = endYardLine) {

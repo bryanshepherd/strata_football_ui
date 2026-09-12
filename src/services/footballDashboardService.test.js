@@ -132,6 +132,82 @@ describe('local-first football persistence', () => {
     expect(getDashboardSeededFootballEnvelopeRecord(second.gameId).envelope.gameId).toBe(second.gameId);
   });
 
+  it.each([0, 1024])('preserves every queued game under an origin quota with %i characters of headroom', async (headroom) => {
+    const first = clone(getGameEnvelopeFixture('normal'));
+    first.gameId = 'FB-QUOTA-QUEUED-FIRST';
+    const second = clone(getGameEnvelopeFixture('normal'));
+    second.gameId = 'FB-QUOTA-QUEUED-SECOND';
+    second.game.teams.H.score = 17;
+    const originalSetItem = Storage.prototype.setItem;
+    const forceMainCompression = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === FOOTBALL_DASHBOARD_STORAGE_KEY && !String(value).startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+    try {
+      saveDashboardSeededFootballEnvelope(first.gameId, first);
+      saveDashboardSeededFootballEnvelope(second.gameId, second);
+    } finally {
+      forceMainCompression.mockRestore();
+    }
+    const savedFirst = getDashboardSeededFootballEnvelopeRecord(first.gameId).envelope;
+    const savedSecond = getDashboardSeededFootballEnvelopeRecord(second.gameId).envelope;
+    enqueueFootballEnvelopeMirror({ gameId: first.gameId, dashboardGameId: 'DASH-FIRST', envelope: first });
+    expect(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY)).toContain(FOOTBALL_COMPRESSED_STORAGE_PREFIX);
+    expect(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY)).not.toContain(FOOTBALL_COMPRESSED_STORAGE_PREFIX);
+
+    const usage = () => Object.keys(window.localStorage).reduce((total, key) => (
+      total + key.length + window.localStorage.getItem(key).length
+    ), 0);
+    const quota = usage() + headroom;
+    const quotaSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      const old = this.getItem(key);
+      const nextUsage = usage() - (old === null ? 0 : key.length + old.length) + key.length + String(value).length;
+      if (nextUsage > quota) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    });
+    const transmitted = [];
+    const fetchImpl = vi.fn(async (_url, options) => {
+      const payload = JSON.parse(options.body);
+      transmitted.push(payload);
+      return { ok: true, json: async () => mirrorAck(payload) };
+    });
+    try {
+      enqueueFootballEnvelopeMirror({ gameId: second.gameId, dashboardGameId: 'DASH-SECOND', envelope: second });
+      expect(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY)).toContain(FOOTBALL_COMPRESSED_STORAGE_PREFIX);
+      expect(getPendingFootballSyncCount(first.gameId)).toBe(1);
+      expect(getPendingFootballSyncCount(second.gameId)).toBe(1);
+      expect(getDashboardSeededFootballEnvelopeRecord(first.gameId).envelope).toEqual(savedFirst);
+      expect(getDashboardSeededFootballEnvelopeRecord(second.gameId).envelope).toEqual(savedSecond);
+      expect(await flushFootballServerSync({ fetchImpl })).toMatchObject({ syncedCount: 2, pendingCount: 0, error: '' });
+      expect(transmitted.map((item) => item.envelope)).toEqual([first, second]);
+      for (const payload of transmitted) expect(payload.checksum).toBe(checksumFootballEnvelope(payload.envelope));
+    } finally {
+      quotaSpy.mockRestore();
+    }
+  });
+
+  it('leaves an existing pending snapshot intact when even compressed storage cannot fit', () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    enqueueFootballEnvelopeMirror({ gameId: envelope.gameId, dashboardGameId: 'DASH-FULL', envelope });
+    const originalQueue = window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
+    const originalSetItem = Storage.prototype.setItem;
+    const quotaSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === FOOTBALL_SYNC_QUEUE_STORAGE_KEY) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    });
+    try {
+      expect(() => enqueueFootballEnvelopeMirror({
+        gameId: envelope.gameId, dashboardGameId: 'DASH-FULL', envelope: { ...envelope, updatedAt: '2026-09-12T06:00:00Z' },
+      })).toThrow('The quota has been exceeded.');
+      expect(window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY)).toBe(originalQueue);
+      expect(getPendingFootballSyncCount(envelope.gameId)).toBe(1);
+    } finally {
+      quotaSpy.mockRestore();
+    }
+  });
+
   it('hydrates through the authenticated dashboard proxy and never from it again once local data exists', async () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.gameId = 'FB-ENVELOPE-001';
@@ -1502,6 +1578,31 @@ describe('local football test-game projection', () => {
       lineToGain: 'H49',
       nextPlayContext: 'H,2,5,H44',
     });
+  });
+
+  it('honors the explicit team and context in an operator correction over the previous possession', async () => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    const response = await submitFootballEventLocally(envelope, gameControlRequest('OPERATOR-CONTEXT', 'setBallContext', {
+      possession: 'V', down: 3, distance: 7, spot: 'V23', lineToGain: 'V30',
+    }));
+    expect(response.gameEnvelope.liveState).toMatchObject({
+      possession: 'V', down: 3, distance: 7, yardLine: 'V23', lineToGain: 'V30', nextPlayContext: 'V,3,7,V23',
+    });
+    const reloaded = getDashboardSeededFootballEnvelopeRecord(envelope.gameId).envelope;
+    expect(normalizeFootballScoringSetupEnvelope(reloaded).liveState).toEqual(response.gameEnvelope.liveState);
+    expect(response.gameEnvelope.game.teams).toEqual(envelope.game.teams);
+    expect(response.gameEnvelope.events.slice(0, -1)).toEqual(envelope.events);
+  });
+
+  it('keeps halftime paused when the operator corrects the ball context', async () => {
+    const envelope = clone(getGameEnvelopeFixture('halftime'));
+    envelope.pregame = { gamePhase: 'halftime' };
+    const response = await submitFootballEventLocally(envelope, gameControlRequest('HALFTIME-CONTEXT', 'setBallContext', {
+      possession: 'H', down: 1, distance: 10, spot: 'H35', lineToGain: 'H45',
+    }));
+    expect(response.gameEnvelope.liveState).toMatchObject({ possession: 'H', down: 1, distance: 10, yardLine: 'H35' });
+    expect(response.gameEnvelope.game.status).toBe('halftime');
+    expect(response.gameEnvelope.pregame.gamePhase).toBe('halftime');
   });
 
   it('applies an accepted queued penalty final spot and repeats the down', async () => {

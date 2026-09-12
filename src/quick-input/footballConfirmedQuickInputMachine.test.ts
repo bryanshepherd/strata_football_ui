@@ -6,6 +6,10 @@ import {
   type FootballQuickInputContext,
 } from './footballConfirmedQuickInputMachine';
 import type { PlayerResolutionRosterPlayer } from './playerResolution';
+import { applyFootballScorerEventToEnvelope, saveDashboardSeededFootballEnvelope, getDashboardSeededFootballEnvelopeRecord } from '../services/footballDashboardService';
+import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
+import { validateFootballDraftIntent } from './footballIntentSchema';
+import { footballPossessionChanges } from '../utils/footballPenaltyPossession';
 
 describe('footballConfirmedQuickInputMachine', () => {
   it('starts idle', () => {
@@ -1092,7 +1096,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     const queued = transition(kickoff, { type: 'QUEUE_PENALTY_REQUEST' });
     const accepted = commitPenaltyTokens(
       startQueuedPenalty(queued),
-      ['Offside', 'H', 'A', '', 'S', 'V31', 'D'],
+      ['Offside', 'H', 'A', '', 'S', 'Y', 'V31', 'Y'],
     );
 
     expect(accepted.status).toBe('summary.reviewing');
@@ -1101,8 +1105,8 @@ describe('footballConfirmedQuickInputMachine', () => {
       yards: 5,
       enforcedFrom: 'END',
       finalSpot: 'V31',
-      downConsequence: 'DOWN_COUNTS',
-      downCounts: true,
+      downConsequence: 'NEW_SERIES',
+      downCounts: false,
     });
 
     const nestedEndOnly: FootballConfirmedQuickInputState = {
@@ -1116,51 +1120,20 @@ describe('footballConfirmedQuickInputMachine', () => {
     };
     const acceptedWithNestedEnd = commitPenaltyTokens(
       startQueuedPenalty(transition(nestedEndOnly, { type: 'QUEUE_PENALTY_REQUEST' })),
-      ['Offside', 'H', 'A', '', 'S', 'V31', 'D'],
+      ['Offside', 'H', 'A', '', 'S', 'Y', 'V31', 'Y'],
     );
 
     expect(acceptedWithNestedEnd.status).toBe('summary.reviewing');
     expect(acceptedWithNestedEnd.draft?.penalties[0].yards).toBe(5);
   });
 
-  it('defaults an offensive succeeding-spot foul to Down Counts and rejects it elsewhere', () => {
+  it('preserves a completed succeeding-spot play without a Down Counts menu', () => {
     const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
-    const downCounts = commitPenaltyTokens(
-      startQueuedPenalty(queued),
-      ['Holding', 'H', 'A', '', 'S', 'H41'],
-    );
-
-    expect(downCounts).toMatchObject({
-      status: 'token.awaiting',
-      currentStep: 'penaltyDown',
-      currentToken: 'D',
-      tokens: { penaltyDownConsequence: 'DOWN_COUNTS' },
-    });
-
-    const accepted = commitPenaltyTokens(downCounts, ['D']);
+    const accepted = commitPenaltyTokens(startQueuedPenalty(queued), ['Holding', 'H', 'A', '', 'S', 'H41']);
     expect(accepted.status).toBe('summary.reviewing');
-    expect(accepted.draft?.penalties[0]).toMatchObject({
-      team: 'H',
-      enforcedFrom: 'END',
-      downConsequence: 'DOWN_COUNTS',
-      downCounts: true,
-      replayDown: false,
-      automaticFirstDown: false,
-      lossOfDown: false,
-    });
-    expect(accepted.summary?.summaryText).toContain('down counts');
-
-    const defensive = commitPenaltyTokens(
-      startQueuedPenalty(queued),
-      ['Holding', 'V', 'A', '', 'S', 'V40', 'D'],
-    );
-    expect(defensive).toMatchObject({
-      status: 'token.error',
-      error: {
-        code: 'INVALID_DOWN_CONSEQUENCE',
-        message: 'Down Counts is available for a dead-ball foul or an offensive foul enforced from the succeeding spot.',
-      },
-    });
+    expect(accepted.draft?.penalties[0]).toMatchObject({ downCounts: true, replayDown: false });
+    const defensive = commitPenaltyTokens(startQueuedPenalty(queued), ['Holding', 'V', 'A', '', 'S', 'V40', 'D']);
+    expect(defensive).toMatchObject({ status: 'token.error', error: { code: 'INVALID_DOWN_CONSEQUENCE' } });
   });
 
   it('accepted queued spot-of-foul penalty preserves signed derived yardage', () => {
@@ -2795,7 +2768,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     const twoFouls = commitPenaltyTokens(
       selectedSecondTeam,
-      ['D', 'A', '', 'S', 'V44', 'D'],
+      ['D', 'A', '', 'S', 'V44'],
     );
     expect(twoFouls.error).toBeUndefined();
     expect(twoFouls.status).toBe('summary.reviewing');
@@ -2844,6 +2817,209 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(state).toEqual(beforeState);
     expect({ ...context, calculateRushYards: undefined }).toEqual(beforeContext);
     expect(context.calculateRushYards).toBe(beforeCalculator);
+  });
+});
+
+describe('penalties on possession-change plays', () => {
+  const cases = [
+    ['kickoff', () => completeKickoffReturnDraft({ terminalResult: '.', startSpot: 'V20', endSpot: 'V31' })],
+    ['fumble', () => completeDefensiveFumbleReturnAt('V31')],
+    ['punt', () => completePuntReturnAt('V31')],
+    ['interception', () => completeInterceptionReturnAt('V31')],
+  ] as const;
+
+  for (const [label, makePlay] of cases) {
+    for (const team of ['H', 'V']) {
+      it.each(['P', 'F', 'S'])(`${label}, foul on ${team}, enforcement %s asks timing and confirms a new drive`, (enforcement) => {
+        const base = makePlay();
+        const question = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', team, 'A', '', enforcement]);
+        expect(question.currentStep).toBe('penaltyAfterPossession');
+        expect(question.buildResult).toBeUndefined();
+        const spotTokens = enforcement === 'F' ? ['V31', 'V21'] : ['V21'];
+        const confirmation = commitPenaltyTokens(question, ['Y', ...spotTokens]);
+        expect(confirmation).toMatchObject({
+          currentStep: 'penaltyConfirmContext',
+          tokens: { penaltyContext: { possession: 'V', down: 1, distance: 10, yardLine: 'V21', confirmed: false } },
+        });
+        expect(confirmation.draft?.penalties).toHaveLength(0);
+        const review = commitPenaltyTokens(confirmation, ['Y']);
+        expect(review.status).toBe('summary.reviewing');
+        expect(validateFootballDraftIntent(review.draft).ok).toBe(true);
+        expect(review.draft?.penalties[0]).toMatchObject({ replayDown: false, automaticFirstDown: false, downCounts: false, downConsequence: 'NEW_SERIES' });
+        const built = transition(review, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-09-12T00:00:00Z' });
+        expect(built.buildResult?.ok).toBe(true);
+        if (!built.buildResult?.ok) return;
+        expect(built.buildResult.event.result.penaltyContext).toMatchObject({ confirmed: true });
+        expect(built.buildResult.event.result.officialOutcome).toMatchObject({
+          operatorVerified: true,
+          verified: { possession: 'V', down: 1, distance: 10, yardLine: 'V21', lineToGain: 'V31', firstDownAwarded: false },
+        });
+        const envelope = getGameEnvelopeFixture('normal');
+        const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+        expect(projected.diagnostics).toEqual([]);
+        expect(projected.envelope.liveState).toMatchObject({ possession: 'V', down: 1, distance: 10, yardLine: 'V21', lineToGain: 'V31' });
+        expect(projected.envelope.drives.current).toMatchObject({ team: 'V', startYardLine: 'V21', plays: 0 });
+        expect(projected.envelope.events.at(-1).result.penaltyContext).toMatchObject({ confirmed: true });
+        expect(projected.envelope.stats.teams[team].penalties.num).toBeGreaterThan(0);
+        if (label === 'interception') expect(projected.envelope.stats.players['H-12'].passAttempts).toBeGreaterThan(0);
+      });
+    }
+
+    it(`${label} also asks for a declined foul`, () => {
+      const question = commitPenaltyTokens(startQueuedPenalty(makePlay()), ['Holding', 'V', 'D']);
+      expect(question.currentStep).toBe('penaltyAfterPossession');
+      const confirmation = commitPenaltyTokens(question, ['Y']);
+      expect(confirmation.currentStep).toBe('penaltyConfirmContext');
+      expect(confirmation.tokens.penaltyContext).toMatchObject({ possession: 'V', yardLine: 'V31' });
+      expect(commitPenaltyTokens(confirmation, ['Y']).draft?.penalties[0].status).toBe('declined');
+    });
+  }
+
+  it('allows the operator to correct every ball-context field and requires another confirmation', () => {
+    const question = commitPenaltyTokens(startQueuedPenalty(completePuntReturnAt('V31')), ['Holding', 'V', 'A', '', 'S', 'Y', 'V21']);
+    const corrected = commitPenaltyTokens(question, ['N', 'H', '2', '7', 'H33']);
+    expect(corrected.currentStep).toBe('penaltyConfirmContext');
+    expect(corrected.tokens.penaltyContext).toMatchObject({ possession: 'H', down: 2, distance: 7, yardLine: 'H33', confirmed: false });
+    const review = commitPenaltyTokens(corrected, ['Y']);
+    expect(review.draft?.penalties[0].finalSpot).toBe('H33');
+    const built = transition(review, { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'H', down: 2, distance: 7, yardLine: 'H33', lineToGain: 'H40' });
+    saveDashboardSeededFootballEnvelope(projected.envelope.gameId, projected.envelope);
+    expect(getDashboardSeededFootballEnvelopeRecord(projected.envelope.gameId).envelope.liveState).toMatchObject({ possession: 'H', down: 2, distance: 7, yardLine: 'H33' });
+  });
+
+  it('uses the original series when the foul preceded an interception and the down is replayed', () => {
+    const question = commitPenaltyTokens(startQueuedPenalty(completeInterceptionReturnAt('V31')), ['Holding', 'H', 'A', '', 'P']);
+    const confirmation = commitPenaltyTokens(question, ['N', 'H34', 'R']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ possession: 'H', down: 2, distance: 16, yardLine: 'H34', startNewDrive: false });
+    const review = commitPenaltyTokens(confirmation, ['Y']);
+    const built = transition(review, { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const envelope = getGameEnvelopeFixture('normal');
+    const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'H', down: 2, distance: 16, yardLine: 'H34' });
+    expect(projected.projection.driveTransition.shouldStartNew).toBe(false);
+  });
+
+  it.each(['punt', 'kickoff'])('%s returned and fumbled back asks who has the ball, even though the starting team recovered it', (family) => {
+    const terminal = family === 'punt' ? completePuntReturnThroughTerminal({ terminalResult: 'F' }) : completeKickoffReturnThroughTerminal({ terminalResult: 'F' });
+    const base = commitPenaltyTokens(terminal, ['V31', '22', 'H', '12', 'V31', 'N']);
+    expect(footballPossessionChanges(base.draft)).toMatchObject({ count: 2, teams: ['H', 'V', 'H'], finalTeam: 'H' });
+    const question = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', 'H', 'A', '', 'F']);
+    expect(question.currentStep).toBe('penaltyPossessionTeam');
+    const confirmation = commitPenaltyTokens(question, ['H', 'V31', 'V41']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ decision: 'multipleChanges', possession: 'H', down: 1, distance: 10, yardLine: 'V41', startNewDrive: true });
+    const built = transition(commitPenaltyTokens(confirmation, ['Y']), { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
+    expect(projected.envelope.drives.current).toMatchObject({ team: 'H', startYardLine: 'V41' });
+    expect(projected.projection.driveTransition.shouldStartNew).toBe(true);
+  });
+
+  it.each(['interception', 'fumble'])('%s returned and fumbled back is also detected as multiple changes', (family) => {
+    const base = family === 'interception'
+      ? commitPenaltyTokens(startPass(), ['12', 'X', '44', 'V49', 'F', 'V31', '22', 'H', '12', 'V31', 'N'])
+      : commitPenaltyTokens(startRush(), ['22', 'F', '44', 'V', '44', 'V20', 'Y', 'F', 'V31', '22', 'H', '12', 'V31', 'N']);
+    expect(base.status).toBe('draft.ready');
+    expect(footballPossessionChanges(base.draft)).toMatchObject({ count: 2, finalTeam: 'H' });
+    const question = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', 'H', 'A', '', 'S']);
+    expect(question.currentStep).toBe('penaltyPossessionTeam');
+  });
+
+  it('does not ask about a fumble recovered by the same team without a possession change', () => {
+    const base = completeFumbleDraft({ returned: 'no' });
+    const next = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', 'H', 'A', '', 'P']);
+    expect(next.currentStep).toBe('penaltyFinalSpot');
+  });
+
+  it('preserves offensive yards when the foul occurred after a lost fumble', () => {
+    const base = completeDefensiveFumbleReturnAt('V31');
+    const review = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', 'V', 'A', '', 'F', 'Y', 'V31', 'V21', 'Y']);
+    const built = transition(review, { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const envelope = getGameEnvelopeFixture('normal');
+    const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+    expect(projected.envelope.stats.players['H-22'].rushYards).toBe(base.draft?.result.yards);
+  });
+
+  it('asks again when another foul is attached and replaces the earlier confirmation', () => {
+    const first = commitPenaltyTokens(startQueuedPenalty(completeInterceptionReturnAt('V31')), ['Holding', 'V', 'A', '', 'S', 'Y', 'V21', 'Y']);
+    const second = commitPenaltyTokens(startQueuedPenalty(first), ['Offside', 'H', 'L', 'A', '', 'S']);
+    expect(second.currentStep).toBe('penaltyAfterPossession');
+    const review = commitPenaltyTokens(second, ['Y', 'V26', 'Y']);
+    expect(review.draft?.penalties).toHaveLength(2);
+    expect(new Set(review.draft?.penalties.map(p => p.penaltyId)).size).toBe(2);
+    expect(review.draft?.result.penaltyContext?.yardLine).toBe('V26');
+    const built = transition(review, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-09-12T00:00:00Z' });
+    expect(built.buildResult?.ok).toBe(true);
+    expect(review.draft?.result.officialOutcome).toMatchObject({
+      operatorVerified: true, verified: { possession: 'V', down: 1, distance: 10, yardLine: 'V26' },
+    });
+  });
+
+  it('asks for offsetting fouls and still requires confirmation', () => {
+    const question = commitPenaltyTokens(startQueuedPenalty(completeInterceptionReturnAt('V31')), ['Holding', 'H', 'O', 'Offside', 'V', 'Y']);
+    expect(question.currentStep).toBe('penaltyAfterPossession');
+    const confirmation = commitPenaltyTokens(question, ['Y']);
+    expect(confirmation.currentStep).toBe('penaltyConfirmContext');
+    expect(commitPenaltyTokens(confirmation, ['Y']).draft?.penalties).toHaveLength(2);
+  });
+
+  it('No preserves a previous-spot kickoff replay without creating a receiving drive', () => {
+    const confirmation = commitPenaltyTokens(startQueuedPenalty(completeKickoffReturnDraft({ terminalResult: '.' })), ['Holding', 'H', 'A', '', 'P', 'N', 'H34', 'R']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ possession: 'H', setupContext: 'awaitingKickoff', startNewDrive: false, yardLine: 'H34' });
+    const built = transition(commitPenaltyTokens(confirmation, ['Y']), { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: null, down: null, kickoffTeam: 'H', nextPlayContext: 'awaitingKickoff', yardLine: 'H34' });
+    expect(projected.projection.driveTransition.shouldStartNew).toBe(false);
+  });
+
+  it('a declined foul does not erase a standing interception-return touchdown', () => {
+    const confirmation = commitPenaltyTokens(startQueuedPenalty(completeInterceptionReturnAt('H00')), ['Holding', 'V', 'D', 'Y']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ setupContext: 'awaitingTry', possession: 'V' });
+    const built = transition(commitPenaltyTokens(confirmation, ['Y']), { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const envelope = getGameEnvelopeFixture('normal');
+    const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+    expect(projected.envelope.liveState.nextPlayContext).toBe('awaitingTry');
+    expect(projected.envelope.game.teams.V.score).toBe(envelope.game.teams.V.score + 6);
+    expect(projected.projection.driveTransition.shouldStartNew).toBe(false);
+  });
+
+  it('also asks on turnover on downs and missed field goals', () => {
+    const context = makeContext({ prePlay: { down: 4, distance: 6, yardLine: 'H44', lineToGain: '50' } });
+    const start = transitionWithContext(createInitialFootballQuickInputState(), { type: 'START_RUSH', startedBy: 'button' }, context);
+    const rush = commitPenaltyTokens(start, ['22', '.', 'H45'], context);
+    expect(footballPossessionChanges(rush.draft)).toMatchObject({ count: 1, finalTeam: 'V' });
+    const question = commitPenaltyTokens(startQueuedPenalty(rush, context), ['Holding', 'V', 'A', '', 'S'], context);
+    expect(question.currentStep).toBe('penaltyAfterPossession');
+    const missed = completeFieldGoalDraft({ result: 'M', missedReason: 'R' });
+    expect(footballPossessionChanges(missed.draft)).toMatchObject({ count: 1, finalTeam: 'V' });
+    expect(commitPenaltyTokens(startQueuedPenalty(missed), ['Holding', 'V', 'A', '', 'S']).currentStep).toBe('penaltyAfterPossession');
+  });
+
+  it('defaults to first and goal when the enforced spot is inside the ten', () => {
+    const confirmation = commitPenaltyTokens(startQueuedPenalty(completeInterceptionReturnAt('V31')), ['Holding', 'H', 'A', '', 'S', 'Y', 'H05']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ possession: 'V', down: 1, distance: 5, yardLine: 'H05' });
+  });
+
+  it('rejects invalid or unconfirmed next-play contexts', () => {
+    const confirmation = commitPenaltyTokens(startQueuedPenalty(completePuntReturnAt('V31')), ['Holding', 'V', 'A', '', 'S', 'Y', 'V21']);
+    const invalid = commitPenaltyTokens(confirmation, ['N', 'V', '5']);
+    expect(invalid.error?.code).toBe('INVALID_DOWN');
+    const review = commitPenaltyTokens(confirmation, ['Y']);
+    const draft = clone(review.draft!);
+    draft.result.penaltyContext!.confirmed = false;
+    expect(validateFootballDraftIntent(draft).ok).toBe(false);
   });
 });
 

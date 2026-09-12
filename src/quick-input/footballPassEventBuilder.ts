@@ -35,6 +35,8 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     ...(isSpike ? { teamCharged: true } : {}),
     ...(intent.result.officialOutcome ? { officialOutcome: intent.result.officialOutcome } : {}),
   };
+  if (intent.result.possessionChanges) result.possessionChanges = [...intent.result.possessionChanges];
+  if (intent.result.penaltyContext) result.penaltyContext = { ...intent.result.penaltyContext };
   const participants: DraftScoringEvent['participants'] = { primary: base, secondary: targetParticipant, target: targetParticipant, receiver: null, interceptor: null, defenders: [] };
   if (outcome === 'complete') {
     const receiver = intent.participants.secondary;

@@ -1,3 +1,5 @@
+import { validPenaltyBallContext } from '../utils/footballPenaltyPossession';
+
 export const FOOTBALL_DRAFT_INTENT_SCHEMA_VERSION = 'football.draftIntent.v1' as const;
 
 export type TeamCode = 'H' | 'V';
@@ -187,6 +189,18 @@ export type DraftPlayerResolution = {
   actionContext: 'offense' | 'defense' | 'specialTeams' | 'penalty' | 'gameControl';
 };
 
+export type PenaltyBallContext = {
+  decision: 'beforeChange' | 'afterChange' | 'multipleChanges';
+  possession: TeamCode;
+  down: number;
+  distance: number;
+  yardLine: Spot;
+  startNewDrive: boolean;
+  confirmed: boolean;
+  setupContext?: 'awaitingKickoff' | 'awaitingTry' | 'awaitingSafetyKick';
+  scoring?: DraftScoringResult;
+};
+
 export type DraftResult = {
   code: DraftResultCode;
   teamCharged?: boolean;
@@ -195,6 +209,8 @@ export type DraftResult = {
   firstDown?: boolean;
   driveEnds?: boolean;
   nextPossession?: TeamCode;
+  possessionChanges?: TeamCode[];
+  penaltyContext?: PenaltyBallContext;
   pass?: DraftPassResult;
   kick?: DraftKickResult;
   return?: DraftReturnResult;
@@ -388,7 +404,7 @@ export type DraftPenaltyOffsetting = {
   previousPlayCounts: boolean;
 };
 
-export type DraftPenaltyDownConsequence = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS';
+export type DraftPenaltyDownConsequence = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS' | 'NEW_SERIES';
 
 export type DraftWarning = {
   code: DraftWarningCode;
@@ -622,6 +638,7 @@ const PENALTY_DOWN_CONSEQUENCES = new Set<DraftPenaltyDownConsequence>([
   'LOSS_OF_DOWN',
   'AUTO_FIRST',
   'DOWN_COUNTS',
+  'NEW_SERIES',
 ]);
 
 export function validateFootballDraftIntent(input: unknown): FootballIntentValidationResult {
@@ -646,6 +663,16 @@ export function validateFootballDraftIntent(input: unknown): FootballIntentValid
   if (isRecord(intent.participants)) validateParticipants(intent.participants, errors);
   if (isRecord(intent.result)) validateResult(intent.result, errors);
   if (Array.isArray(intent.penalties)) validatePenalties(intent.penalties, intent.play, errors);
+  if (isRecord(intent.result) && intent.result.penaltyContext !== undefined) {
+    if (!validPenaltyBallContext(intent.result.penaltyContext) || !Array.isArray(intent.penalties) || intent.penalties.length === 0) {
+      errors.push(error('INVALID_RESULT', 'The next ball context must be valid and confirmed after the penalty.', 'result.penaltyContext'));
+    }
+  }
+  if (Array.isArray(intent.penalties) && intent.penalties.some((penalty) => isRecord(penalty) && penalty.downConsequence === 'NEW_SERIES')) {
+    if (!isRecord(intent.result) || !validPenaltyBallContext(intent.result.penaltyContext)) {
+      errors.push(error('INVALID_RESULT', 'A new series requires confirmation of the next ball context.', 'result.penaltyContext'));
+    }
+  }
 
   if (isRecord(intent.play) && isRecord(intent.participants) && isRecord(intent.result)) {
     validatePlayFamilyRequirements(intent.play, intent.participants, intent.result, intent.penalties, errors);
@@ -942,6 +969,9 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
 
   if (result.nextPossession !== undefined && !isTeamCode(result.nextPossession)) {
     errors.push(error('INVALID_TEAM_CODE', 'result.nextPossession must be H or V', 'result.nextPossession'));
+  }
+  if (result.possessionChanges !== undefined && (!Array.isArray(result.possessionChanges) || !result.possessionChanges.every(isTeamCode))) {
+    errors.push(error('INVALID_RESULT', 'Possession history must contain only H or V.', 'result.possessionChanges'));
   }
 
   validateNestedSpot(result.kick, 'result.kick.catchYardLine', 'catchYardLine', errors);

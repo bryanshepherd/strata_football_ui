@@ -23,6 +23,7 @@ const yardLineSteps = new Set([
   'fieldGoalSpot',
   'penaltySpotOfFoul',
   'penaltyFinalSpot',
+  'penaltyContextSpot',
   'gameControlSpot',
   'gameControlDriveSpot',
 ]);
@@ -524,6 +525,33 @@ const stepCopy = {
     helper: 'Choose previous spot, spot of foul, or succeeding spot.',
     placeholder: 'P',
   },
+  penaltyAfterPossession: {
+    title: 'Foul timing', label: 'Foul timing',
+    helper: 'Did the foul happen after the change of possession?', placeholder: '',
+  },
+  penaltyPossessionTeam: {
+    title: 'Possession', label: 'Possession',
+    helper: 'Who currently has the ball?', placeholder: '',
+  },
+  penaltyConfirmContext: {
+    title: 'Confirm ball context', label: 'Next play', helper: '', placeholder: '',
+  },
+  penaltyContextTeam: {
+    title: 'Correct ball context', label: 'Possession',
+    helper: 'Which team has the ball for the next play?', placeholder: '',
+  },
+  penaltyContextDown: {
+    title: 'Correct ball context', label: 'Down',
+    helper: 'Enter the down for the next play (1–4).', placeholder: '1',
+  },
+  penaltyContextDistance: {
+    title: 'Correct ball context', label: 'Distance',
+    helper: 'Enter the yards to gain for the next play.', placeholder: '10',
+  },
+  penaltyContextSpot: {
+    title: 'Correct ball context', label: 'Ball spot',
+    helper: 'Enter the ball spot after enforcement.', placeholder: 'H25',
+  },
   penaltySpotOfFoul: {
     title: 'Spot of Foul',
     label: 'Spot of Foul',
@@ -539,7 +567,7 @@ const stepCopy = {
   penaltyDown: {
     title: 'Down',
     label: 'Down',
-    helper: 'Choose repeat down, loss of down, automatic first down, or down counts when available.',
+    helper: 'Choose repeat down, loss of down, or automatic first down.',
     placeholder: 'R',
   },
   offsettingSecondName: {
@@ -768,12 +796,10 @@ const penaltyDownButtons = [
   { label: 'Auto 1st Down', hotkey: 'A', value: 'A' },
 ];
 
-const downCountsButton = {
-  label: 'Down Counts',
-  description: 'The completed play stands. Apply the normal next-down or series result, then enforce the foul from the succeeding spot.',
-  hotkey: 'D',
-  value: 'D',
-};
+const penaltyYesNoButtons = [
+  { label: 'Yes', hotkey: 'Y', value: 'Y' },
+  { label: 'No', hotkey: 'N', value: 'N' },
+];
 
 const offsettingPlayCountsButtons = [
   { label: 'Play Counts', hotkey: 'Y', value: 'Y' },
@@ -828,6 +854,7 @@ export default function FootballFlowModal({
   const activeStep = state.currentStep ? stepCopyForState(state, aliases, teamNames) : null;
   const activeButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state, actionTeam);
   const buttonOnly = Boolean(activeButtons);
+  const questionFirst = ['penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
     : [];
@@ -942,6 +969,7 @@ export default function FootballFlowModal({
       title={activeStep.title}
     >
       <form className="space-y-4" onSubmit={onSubmit}>
+        {questionFirst && <p className="text-base font-semibold text-zinc-900">{activeStep.helper}</p>}
         {activeButtons && (
           <div className="grid gap-2 sm:grid-cols-2">
             {activeButtons.map((button) => (
@@ -1009,10 +1037,10 @@ export default function FootballFlowModal({
               />
             </>
           )}
-          <p className={buttonOnly ? 'text-sm text-zinc-600' : 'mt-2 text-sm text-zinc-600'}>
+          {!questionFirst && <p className={buttonOnly ? 'text-sm text-zinc-600' : 'mt-2 text-sm text-zinc-600'}>
             {activeStep.helper}
             {state.currentStep === 'endSpot' && prePlaySpot ? ` Current spot: ${prePlaySpot}.` : ''}
-          </p>
+          </p>}
           {state.error && (
             <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
               {state.error.message}
@@ -1127,12 +1155,13 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'penaltyResolution') return penaltyResolutionButtons;
   if (step === 'penaltyEjected') return penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
-  if (step === 'penaltyDown') return (
-    state?.tokens?.penaltyEnforcedFrom === 'END'
-    && (state?.tokens?.penaltyTiming === 'deadBall' || state?.tokens?.penaltyTeam === actionTeam)
-      ? [...penaltyDownButtons, downCountsButton]
-      : penaltyDownButtons
-  );
+  if (step === 'penaltyDown') return penaltyDownButtons;
+  if (step === 'penaltyAfterPossession') return penaltyYesNoButtons;
+  if (step === 'penaltyConfirmContext') return [
+    { label: 'Yes, confirm', hotkey: 'Y', value: 'Y' },
+    { label: 'No, correct context', hotkey: 'N', value: 'N' },
+  ];
+  if (step === 'penaltyPossessionTeam' || step === 'penaltyContextTeam') return teamButtonsForAliases(aliases, teamNames);
   if (step === 'offsettingPlayCounts') return offsettingPlayCountsButtons;
   if (step === 'gameControlMenu') return gameControlMenuButtons;
   if (step === 'gameControlQuarterMenu') return quarterFunctionButtons;
@@ -1170,6 +1199,22 @@ function timeoutButtonsForAliases(aliases, teamNames) {
 function stepCopyForState(state, aliases, teamNames) {
   const step = state.currentStep;
   const copy = stepCopy[step];
+  if (step === 'penaltyConfirmContext') {
+    const context = state.tokens?.penaltyContext;
+    const teamLabel = (team) => teamNames?.[team] || (team === 'H' ? 'Home' : 'Visitor');
+    const spot = context?.yardLine;
+    const yardline = spot === '50' ? '50 yard line' : /^[HV]\d{2}$/.test(spot || '')
+      ? `${teamLabel(spot[0])} ${Number(spot.slice(1))}` : 'entered yardline';
+    if (context?.setupContext) {
+      const next = context.setupContext === 'awaitingTry' ? 'will attempt the try'
+        : context.setupContext === 'awaitingSafetyKick' ? 'will take the safety free kick' : 'will kick off';
+      return { ...copy, helper: `Please confirm: ${teamLabel(context.possession)} ${next} from the ${yardline}.` };
+    }
+    const down = ['1st', '2nd', '3rd', '4th'][(context?.down || 1) - 1];
+    const goalDistance = spot === '50' ? 50 : spot?.[0] === context?.possession ? 100 - Number(spot?.slice(1)) : Number(spot?.slice(1));
+    const distance = context?.distance === goalDistance ? 'goal' : context?.distance;
+    return { ...copy, helper: `Please confirm: ${teamLabel(context?.possession)} ball, ${down} and ${distance} on the ${yardline}.` };
+  }
   if (step === 'returnerJersey' && state.tokens?.puntReceiveResult === 'fairCatch') {
     return {
       ...copy,

@@ -723,6 +723,40 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('keeps the game open after a full-storage queue failure and retries the latest saved game', async () => {
+    const submitMock = mockSubmitSuccess();
+    createFootballDashboardGame({
+      gameId: 'FB-FULL-STORAGE',
+      visitorTeamId: 'TEAM-RIV',
+      homeTeamId: 'TEAM-MTN',
+    });
+    const saved = getDashboardSeededFootballEnvelopeRecord('FB-FULL-STORAGE').envelope;
+    const originalSetItem = Storage.prototype.setItem;
+    const quotaSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === FOOTBALL_SYNC_QUEUE_STORAGE_KEY) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    });
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-FULL-STORAGE&envelopeGameId=FB-FULL-STORAGE');
+      expect(await screen.findByRole('heading', { name: /river valley at mountain high/i })).toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Server sync could not be prepared: The quota has been exceeded.');
+      expect(screen.getByText('Server sync blocked')).toBeInTheDocument();
+      expect(submitMock.fetchSpy).not.toHaveBeenCalled();
+      expect(getDashboardSeededFootballEnvelopeRecord(saved.gameId).envelope).toEqual(saved);
+      quotaSpy.mockRestore();
+      const newer = structuredClone(saved);
+      newer.game.teams.H.score = 7;
+      saveDashboardSeededFootballEnvelope(newer.gameId, newer);
+      fireEvent(window, new Event('online'));
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      expect(submittedRequest(submitMock.fetchSpy).envelope.game.teams.H.score).toBe(7);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      quotaSpy.mockRestore();
+      submitMock.restore();
+    }
+  });
+
   it('shows a blocking server-sync conflict instead of claiming the mirror is current', async () => {
     const originalFetch = globalThis.fetch;
     createFootballDashboardGame({
@@ -1784,6 +1818,96 @@ describe('FootballScorerShell', () => {
     fireEvent.click(within(possessionDialog).getByRole('button', { name: /^visitor tech v$/i }));
 
     expect(screen.getByText(/possession set to VIS/i)).toBeInTheDocument();
+  });
+
+  it.each(['ballContext', 'setPossession', 'startDrive'])('takes the posted %s correction after a penalty instead of reusing the penalty calculation', async (action) => {
+    const gameId = `FB-OPERATOR-${action}`;
+    const base = seedOperatorCorrectionGame(gameId);
+    const mounted = renderScorer(`/scorer?gameId=${gameId}`);
+    const scoreboard = () => screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="scoreboard"]');
+    await submitHoldingBeforeOperatorCorrection();
+    await waitFor(() => expect(within(scoreboard()).getByText('1 and 20')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    if (action === 'ballContext') {
+      fireEvent.click(screen.getByRole('button', { name: /^ball context b$/i }));
+      submitTextToken(/^down$/i, '1');
+      submitTextToken(/^distance$/i, '10');
+      submitTextToken(/^spot$/i, 'H19');
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: action === 'setPossession' ? /^set possession p$/i : /^drive start d$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^visitor tech v$/i }));
+      if (action === 'startDrive') submitTextToken(/^starting spot$/i, 'V25');
+    }
+    await submitOperatorSummary();
+
+    const saved = () => JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY)).games[gameId].envelope;
+    const corrected = saved();
+    expect(corrected.events.at(-1).result.gameControl.action).toBe(action === 'ballContext' ? 'setBallContext' : action);
+    expect(corrected.game.teams).toEqual(base.game.teams);
+    // Check before confirming the possession clock; that dialog must not be needed to repair the screen.
+    expect(within(scoreboard()).getByLabelText('Possession football').parentElement).toHaveTextContent(action === 'ballContext' ? 'HOM' : 'VIS');
+    expect(within(scoreboard()).getByText(`${corrected.liveState.down} and ${corrected.liveState.distance}`)).toBeInTheDocument();
+    expect(within(scoreboard()).getAllByText(action === 'startDrive' ? 'V25' : 'H19').length).toBeGreaterThan(0);
+
+    if (action === 'startDrive') {
+      const clockDialog = await screen.findByRole('dialog', { name: /change of possession clock/i });
+      fireEvent.submit(within(clockDialog).getByLabelText('Game Clock').closest('form'));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    }
+    const possession = corrected.liveState.possession;
+    fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+    submitTextToken(/rusher jersey/i, possession === 'H' ? '22' : '31');
+    fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+    submitTextToken(/^tackler jersey/i, possession === 'H' ? '44' : '22');
+    submitTextToken(/second tackler jersey/i, '');
+    submitTextToken(/final ball spot/i, action === 'startDrive' ? 'V30' : possession === 'H' ? 'H24' : 'H14');
+    await submitOperatorSummary();
+    expect(saved().events.at(-1).preState).toMatchObject({
+      possession,
+      down: corrected.liveState.down,
+      distance: corrected.liveState.distance,
+      yardLine: corrected.liveState.yardLine,
+      lineToGain: corrected.liveState.lineToGain,
+    });
+    expect(saved().events.at(-1).result.yards ?? saved().events.at(-1).result.rush?.yards).toBe(5);
+    const nextContext = saved().liveState;
+    mounted.unmount();
+    renderScorer(`/scorer?gameId=${gameId}`);
+    expect(within(scoreboard()).getByLabelText('Possession football').parentElement).toHaveTextContent(action === 'ballContext' ? 'HOM' : 'VIS');
+    expect(within(scoreboard()).getByText(`${nextContext.down} and ${nextContext.distance}`)).toBeInTheDocument();
+    if (action === 'ballContext') expect(nextContext).toMatchObject({ down: 2, distance: 5, yardLine: 'H24', lineToGain: 'H29' });
+  });
+
+  it.each(['setPossession', 'ballContext', 'startDrive'])('takes a %s correction out of awaiting-kickoff mode and enables the next scrimmage play', async (action) => {
+    const gameId = `FB-OPERATOR-KICKOFF-${action}`;
+    const envelope = seedOperatorCorrectionGame(gameId);
+    envelope.game.status = 'pregame';
+    envelope.pregame.gamePhase = 'awaitingKickoff';
+    envelope.liveState = { ...envelope.liveState, possession: null, down: null, distance: null, yardLine: 'H40', lineToGain: null, kickoffTeam: 'H', nextPlayContext: 'awaitingKickoff' };
+    saveDashboardSeededFootballEnvelope(gameId, envelope);
+    renderScorer(`/scorer?gameId=${gameId}`);
+    expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    if (action === 'ballContext') {
+      fireEvent.click(screen.getByRole('button', { name: /^ball context b$/i }));
+      submitTextToken(/^down$/i, '2');
+      submitTextToken(/^distance$/i, '7');
+      submitTextToken(/^spot$/i, 'H44');
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: action === 'setPossession' ? /^set possession p$/i : /^drive start d$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
+      if (action === 'startDrive') submitTextToken(/^starting spot$/i, 'H40');
+    }
+    await submitOperatorSummary();
+    expect(screen.getByRole('button', { name: /^rush/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^pass/i })).toBeEnabled();
+    const saved = JSON.parse(window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY)).games[gameId].envelope;
+    expect(saved.pregame.gamePhase).toBe('live');
+    expect(saved.game.status).toBe('inProgress');
+    expect(saved.liveState).toMatchObject(action === 'ballContext'
+      ? { possession: 'H', down: 2, distance: 7, yardLine: 'H44', lineToGain: 'V49', kickoffTeam: null }
+      : { possession: 'H', down: 1, distance: 10, yardLine: 'H40', kickoffTeam: null });
   });
 
   it('field goal good flow shows summary immediately and submits through the adapter', async () => {
@@ -3069,6 +3193,33 @@ function submitTextToken(label, value) {
   const input = screen.getByLabelText(label);
   fireEvent.change(input, { target: { value } });
   fireEvent.submit(input.closest('form'));
+}
+
+function seedOperatorCorrectionGame(gameId) {
+  const envelope = structuredClone(gameEnvelopeFixtures.normal);
+  envelope.gameId = gameId;
+  envelope.pregame = { gamePhase: 'live', coinToss: createCoinTossRecord(), starters: {} };
+  envelope.liveState = { ...envelope.liveState, possession: 'H', down: 1, distance: 10, yardLine: 'H29', lineToGain: 'H39', nextPlayContext: 'H,1,10,H29' };
+  saveDashboardSeededFootballEnvelope(gameId, envelope);
+  return envelope;
+}
+
+async function submitHoldingBeforeOperatorCorrection() {
+  fireEvent.keyDown(window, { key: 'e', code: 'KeyE' });
+  const name = screen.getByPlaceholderText(/hold or holding/i);
+  fireEvent.change(name, { target: { value: 'Holding' } });
+  fireEvent.submit(name.closest('form'));
+  fireEvent.click(screen.getByRole('button', { name: /^home state h$/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
+  submitTextToken(/penalized player/i, '');
+  submitTextToken(/^final spot$/i, 'H19');
+  await submitOperatorSummary();
+}
+
+async function submitOperatorSummary() {
+  const dialog = await screen.findByRole('dialog', { name: /play summary review/i });
+  fireEvent.click(within(dialog).getByRole('button', { name: /^submit play$/i }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: /play summary review/i })).not.toBeInTheDocument());
 }
 
 function completePassFlowInputs() {

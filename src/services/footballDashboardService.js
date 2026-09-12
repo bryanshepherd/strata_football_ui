@@ -13,6 +13,7 @@ import {
   spotToPossessionRelative,
 } from '../utils/footballRulesEngine';
 import { normalizeFootballEnvelopeRuleSpots } from '../utils/footballSpotNormalization';
+import { confirmedPenaltyAfterPossessionChange } from '../utils/footballPenaltyPossession';
 
 export const FOOTBALL_DASHBOARD_STORAGE_KEY = 'strata.football.dashboard.v1';
 export const FOOTBALL_SYNC_QUEUE_STORAGE_KEY = 'strata.football.syncQueue.v1';
@@ -50,22 +51,51 @@ const decodeFootballStore = (raw) => {
   return decoded;
 };
 
-const compactExistingFootballStore = () => {
-  if (typeof window === 'undefined') return false;
-  const raw = window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
-  if (!raw || raw.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) return false;
-  window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(raw));
-  return true;
+// Reclaim space only by losslessly compressing our own records. Never evict
+// another game or a pending server snapshot to make a write succeed.
+const compactExistingFootballStores = (exceptKey) => {
+  let compacted = false;
+  for (const key of [FOOTBALL_DASHBOARD_STORAGE_KEY, FOOTBALL_SYNC_QUEUE_STORAGE_KEY]) {
+    if (key === exceptKey) continue;
+    const raw = window.localStorage.getItem(key);
+    if (!raw || raw.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) continue;
+    const compressed = compressFootballStore(raw);
+    if (compressed.length >= raw.length) continue;
+    try {
+      window.localStorage.setItem(key, compressed);
+      compacted = true;
+    } catch (error) {
+      if (!isStorageQuotaError(error)) throw error;
+    }
+  }
+  return compacted;
 };
 
-const writeAuxiliaryStorageItem = (key, value) => {
+const writeFootballStorageItem = (key, serialized, compress = false) => {
+  const current = window.localStorage.getItem(key);
+  let value = compress && current?.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)
+    ? compressFootballStore(serialized) : serialized;
   try {
     window.localStorage.setItem(key, value);
+    return;
   } catch (error) {
-    if (!isStorageQuotaError(error) || !compactExistingFootballStore()) throw error;
-    window.localStorage.setItem(key, value);
+    if (!isStorageQuotaError(error)) throw error;
   }
+  if (compress && value === serialized) {
+    value = compressFootballStore(serialized);
+    try {
+      window.localStorage.setItem(key, value);
+      return;
+    } catch (error) {
+      if (!isStorageQuotaError(error)) throw error;
+    }
+  }
+  compactExistingFootballStores(key);
+  // If the compressed records still will not fit, surface the failed write.
+  window.localStorage.setItem(key, value);
 };
+
+const writeAuxiliaryStorageItem = (key, value) => writeFootballStorageItem(key, value);
 
 const readStore = () => {
   if (typeof window === 'undefined') {
@@ -92,17 +122,7 @@ const writeStore = (store) => {
     version: 1,
     games: store.games || {},
   });
-  const current = window.localStorage.getItem(FOOTBALL_DASHBOARD_STORAGE_KEY);
-  if (current?.startsWith(FOOTBALL_COMPRESSED_STORAGE_PREFIX)) {
-    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(serialized));
-    return;
-  }
-  try {
-    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, serialized);
-  } catch (error) {
-    if (!isStorageQuotaError(error)) throw error;
-    window.localStorage.setItem(FOOTBALL_DASHBOARD_STORAGE_KEY, compressFootballStore(serialized));
-  }
+  writeFootballStorageItem(FOOTBALL_DASHBOARD_STORAGE_KEY, serialized, true);
 };
 
 const readSyncQueue = () => {
@@ -110,7 +130,7 @@ const readSyncQueue = () => {
   try {
     const raw = window.localStorage.getItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(decodeFootballStore(raw));
     return Array.isArray(parsed?.items) ? parsed.items : [];
   } catch (error) {
     console.warn('Unable to read football server sync queue', error);
@@ -120,10 +140,10 @@ const readSyncQueue = () => {
 
 const writeSyncQueue = (items) => {
   if (typeof window === 'undefined') return;
-  writeAuxiliaryStorageItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
+  writeFootballStorageItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY, JSON.stringify({
     version: 2,
     items,
-  }));
+  }), true);
 };
 
 const createMirrorSourceId = () => {
@@ -1187,7 +1207,7 @@ const hasAcceptedSpotOfFoulPenalty = (event) => (event?.penalties || []).some((p
   && (penalty.enforcedFrom === 'SPOT' || penalty.enforcedFrom === 'spotOfFoul')
 ));
 
-const hasAcceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some((penalty) => (
+const hasAcceptedPreviousSpotPenalty = (event) => !confirmedPenaltyAfterPossessionChange(event) && (event?.penalties || []).some((penalty) => (
   penalty.status === 'accepted'
   && (penalty.enforcedFrom === 'PREVIOUS' || penalty.enforcedFrom === 'previousSpot')
 ));
@@ -2332,6 +2352,23 @@ const applyGameControlProjection = (envelope, event) => {
     events: appendEvent(envelope.events, event),
     stats: { ...envelope.stats, sourceEventSequence: event.sequence },
   });
+  const withBallContext = (liveState, patch = {}) => {
+    const hasBallContext = validTeamCode(liveState.possession)
+      && liveState.down >= 1 && liveState.down <= 4
+      && isUsableBallSpot(liveState.yardLine);
+    const resumesPlay = hasBallContext && (
+      envelope.game?.status === 'pregame'
+      || ['pregame', 'awaitingKickoff'].includes(envelope.pregame?.gamePhase)
+    );
+    return withEvent({
+      ...patch,
+      liveState: { ...envelope.liveState, ...liveState },
+      ...(resumesPlay ? {
+        game: { ...envelope.game, status: 'inProgress' },
+        pregame: envelope.pregame ? { ...envelope.pregame, gamePhase: 'live' } : envelope.pregame,
+      } : {}),
+    });
+  };
 
   if (control.action === 'setClock' || control.action === 'emergency') {
     const clock = control.clock || event.result.clock || envelope.clock.clock;
@@ -2430,7 +2467,7 @@ const applyGameControlProjection = (envelope, event) => {
   }
 
   if (control.action === 'setBallContext') {
-    const possession = envelope.liveState?.possession || team;
+    const possession = team || envelope.liveState?.possession;
     const liveState = createLiveState({
       possession,
       down: control.down,
@@ -2440,7 +2477,7 @@ const applyGameControlProjection = (envelope, event) => {
       driveId: envelope.liveState?.driveId,
       driveNumber: envelope.liveState?.driveNumber,
     });
-    return withEvent({ liveState: { ...envelope.liveState, ...liveState } });
+    return withBallContext(liveState);
   }
 
   if (control.action === 'setPossession') {
@@ -2462,8 +2499,7 @@ const applyGameControlProjection = (envelope, event) => {
         || Number(String(currentDrive?.driveId || '').match(/(\d+)$/)?.[1])
         || envelope.liveState?.driveNumber,
     });
-    return withEvent({
-      liveState: { ...envelope.liveState, ...liveState },
+    return withBallContext(liveState, {
       drives: correctedDrives,
     });
   }
@@ -2481,8 +2517,7 @@ const applyGameControlProjection = (envelope, event) => {
       result: null,
     };
     const liveState = createLiveState({ possession: control.possession, down: 1, yardLine: control.spot, driveId: drive.driveId, driveNumber });
-    return withEvent({
-      liveState: { ...envelope.liveState, ...liveState },
+    return withBallContext(liveState, {
       drives: { ...envelope.drives, current: drive },
     });
   }

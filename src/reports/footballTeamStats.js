@@ -1,4 +1,5 @@
 import { formatFootballReportDate } from './footballScoringSummary';
+import { confirmedPenaltyAfterPossessionChange } from '../utils/footballPenaltyPossession';
 
 const TEAM_CODES = ['V', 'H'];
 
@@ -48,7 +49,7 @@ const relativeSpot = (spot, team, length) => {
   return match[1].toUpperCase() === team ? yard : length - yard;
 };
 
-const acceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some((penalty) => (
+const acceptedPreviousSpotPenalty = (event) => !confirmedPenaltyAfterPossessionChange(event) && (event?.penalties || []).some((penalty) => (
   penalty.status === 'accepted'
   && ['previous', 'previousspot'].includes(String(penalty.enforcedFrom || '').toLowerCase())
 ));

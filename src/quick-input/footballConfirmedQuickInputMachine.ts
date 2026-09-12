@@ -1,6 +1,7 @@
 import type {
   DraftParticipant,
   DraftPenalty,
+  PenaltyBallContext,
   FootballDraftIntent,
   Spot,
   TeamCode,
@@ -33,6 +34,9 @@ import { calculateFootballPenaltyFinalSpot } from '../utils/footballPenaltyEnfor
 import { resolveFootballDraftPenaltyOutcome } from '../utils/footballPenaltyOutcome';
 import { normalizeFootballClock } from '../utils/footballClock';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
+import { footballPossessionChanges, validPenaltyBallContext } from '../utils/footballPenaltyPossession';
+import { applyFootballEventToEnvelope, calculateLineToGain, calculateYardsToGain } from '../utils/footballRulesEngine';
+import { mapDraftPenaltyToCanonicalEvent } from './footballPenaltyMapper';
 
 export type FootballQuickInputStateName =
   | 'idle'
@@ -67,7 +71,7 @@ export type PenaltySourceSelection = 'immediate' | 'queued';
 export type PenaltyResolutionSelection = 'accepted' | 'declined' | 'offsetting';
 export type PenaltyTimingSelection = 'liveBall' | 'deadBall';
 export type PenaltyEnforcedFromSelection = 'PREVIOUS' | 'SPOT' | 'END';
-export type PenaltyDownConsequenceSelection = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS';
+export type PenaltyDownConsequenceSelection = 'REPEAT' | 'LOSS_OF_DOWN' | 'AUTO_FIRST' | 'DOWN_COUNTS' | 'NEW_SERIES';
 export type GameControlMenuSelection = 'emergency' | 'quarter' | 'clock' | 'timeout' | 'challenge' | 'ballContext' | 'driveStart' | 'setPossession' | 'editPenalties' | 'coinToss' | 'roster';
 export type GameControlQuarterSelection = 'startQuarter' | 'endQuarter';
 export type GameControlChallengeStatusSelection = 'initiated' | 'successful' | 'unsuccessful' | 'callStands' | 'callConfirmed' | 'callOverturned';
@@ -170,6 +174,13 @@ export type PenaltyTokenStep =
   | 'penaltyPlayerJersey'
   | 'penaltyEjected'
   | 'penaltyEnforcedFrom'
+  | 'penaltyAfterPossession'
+  | 'penaltyPossessionTeam'
+  | 'penaltyConfirmContext'
+  | 'penaltyContextTeam'
+  | 'penaltyContextDown'
+  | 'penaltyContextDistance'
+  | 'penaltyContextSpot'
   | 'penaltySpotOfFoul'
   | 'penaltyFinalSpot'
   | 'penaltyDown'
@@ -205,6 +216,7 @@ export type FootballConfirmedQuickInputState = {
 };
 
 export type RushFlowTokens = {
+  possessionChanges?: TeamCode[];
   teamPlaySelection?: TeamPlaySelection;
   rusher?: DraftParticipant;
   result?: RushResultSelection;
@@ -303,6 +315,9 @@ export type PenaltyFlowTokens = KickFlowTokens & {
   penaltySpotOfFoul?: Spot;
   penaltyFinalSpot?: Spot;
   penaltyDownConsequence?: PenaltyDownConsequenceSelection;
+  penaltyPossessionDecision?: PenaltyBallContext['decision'];
+  penaltyPossessionTeam?: TeamCode;
+  penaltyContext?: PenaltyBallContext;
   offsettingSecondName?: string;
   offsettingSecondCode?: string;
   offsettingSecondDefinition?: FootballPenaltyTableEntry;
@@ -990,6 +1005,7 @@ function commitCurrentToken(
         tokens: {
           ...cloneTokens(state.tokens),
           recoverTeam,
+          possessionChanges: recoveryPossessionHistory(state.tokens, recoverTeam, context),
         },
       },
     };
@@ -2204,25 +2220,85 @@ function commitPenaltyToken(
     const nextTokens = {
       ...cloneTokens(state.tokens),
       penaltyEnforcedFrom: enforcedFrom,
-      penaltyDownConsequence: defaultPenaltyDownConsequence(
+      penaltyDownConsequence: state.tokens.penaltyTiming === 'deadBall' && enforcedFrom === 'END'
+        ? 'DOWN_COUNTS' : defaultPenaltyDownConsequence(
         state.tokens.penaltyDefinition,
         enforcedFrom,
         state.tokens.penaltyTeam,
         context.play.actionTeam,
       ),
     };
-    const nextStep = enforcedFrom === 'SPOT' ? 'penaltySpotOfFoul' : 'penaltyFinalSpot';
-    return {
-      state: {
-        ...baseActiveState(state),
-        status: 'token.awaiting',
-        currentStep: nextStep,
-        currentToken: nextStep === 'penaltyFinalSpot'
-          ? suggestedPenaltyFinalSpot(context, nextTokens, state.draft) ?? ''
-          : '',
-        tokens: nextTokens,
+    const nextState = { ...baseActiveState(state), tokens: nextTokens };
+    return needsPenaltyPossessionQuestion(nextState)
+      ? askPenaltyPossession(nextState)
+      : continuePenaltyEnforcement(nextState, context);
+  }
+
+  if (state.currentStep === 'penaltyAfterPossession') {
+    const afterChange = parseBooleanToken(state.currentToken);
+    if (afterChange === null) return { state: tokenError(state, 'INVALID_PENALTY_TIMING', 'Choose Yes or No.', 'penalties.possessionChange') };
+    const nextState = {
+      ...baseActiveState(state),
+      tokens: {
+        ...cloneTokens(state.tokens),
+        penaltyPossessionDecision: afterChange ? 'afterChange' as const : 'beforeChange' as const,
+        penaltyPossessionTeam: footballPossessionChanges(state.draft).finalTeam as TeamCode,
       },
     };
+    return nextState.tokens.penaltyResolution === 'accepted'
+      ? continuePenaltyEnforcement(nextState, context)
+      : finalizePenaltyEntry(nextState, context);
+  }
+
+  if (state.currentStep === 'penaltyPossessionTeam') {
+    const team = parseTeamCode(state.currentToken, context);
+    if (!team) return { state: tokenError(state, 'INVALID_POSSESSION_TEAM', 'Choose the team that currently has the ball.', 'result.penaltyContext.possession') };
+    const nextState = {
+      ...baseActiveState(state),
+      tokens: { ...cloneTokens(state.tokens), penaltyPossessionDecision: 'multipleChanges' as const, penaltyPossessionTeam: team },
+    };
+    return nextState.tokens.penaltyResolution === 'accepted'
+      ? continuePenaltyEnforcement(nextState, context)
+      : finalizePenaltyEntry(nextState, context);
+  }
+
+  if (state.currentStep === 'penaltyConfirmContext') {
+    const confirmed = parseBooleanToken(state.currentToken);
+    if (confirmed === null) return { state: tokenError(state, 'CONFIRM_BALL_CONTEXT', 'Confirm the ball context or choose No to correct it.', 'result.penaltyContext') };
+    if (!state.tokens.penaltyContext) return { state: tokenError(state, 'MISSING_BALL_CONTEXT', 'The next ball context is missing.', 'result.penaltyContext') };
+    if (!confirmed) return penaltyContextStep(state, 'penaltyContextTeam', state.tokens.penaltyContext.possession);
+    const ballContext = { ...state.tokens.penaltyContext, confirmed: true };
+    if (!validPenaltyBallContext(ballContext)) return { state: tokenError(state, 'INVALID_BALL_CONTEXT', 'Correct the team, down, distance, and field spot before confirming.', 'result.penaltyContext') };
+    return finalizePenaltyEntry({ ...baseActiveState(state), tokens: { ...cloneTokens(state.tokens), penaltyContext: ballContext } }, context);
+  }
+
+  if (state.currentStep === 'penaltyContextTeam') {
+    const possession = parseTeamCode(state.currentToken, context);
+    if (!possession) return { state: tokenError(state, 'INVALID_POSSESSION_TEAM', 'Choose Home or Visitor.', 'result.penaltyContext.possession') };
+    return state.tokens.penaltyContext?.setupContext
+      ? penaltyContextStep(withPenaltyContext(state, { possession }), 'penaltyContextSpot', state.tokens.penaltyContext.yardLine)
+      : penaltyContextStep(withPenaltyContext(state, { possession }), 'penaltyContextDown', String(state.tokens.penaltyContext?.down ?? 1));
+  }
+
+  if (state.currentStep === 'penaltyContextDown') {
+    const down = parseDown(state.currentToken);
+    if (down === null) return { state: tokenError(state, 'INVALID_DOWN', 'Down must be 1, 2, 3, or 4.', 'result.penaltyContext.down') };
+    return penaltyContextStep(withPenaltyContext(state, { down }), 'penaltyContextDistance', String(state.tokens.penaltyContext?.distance ?? 10));
+  }
+
+  if (state.currentStep === 'penaltyContextDistance') {
+    const distance = parseNonNegativeInteger(state.currentToken);
+    if (distance === null || distance < 1 || distance > 99) return { state: tokenError(state, 'INVALID_DISTANCE', 'Distance must be between 1 and 99 yards.', 'result.penaltyContext.distance') };
+    return penaltyContextStep(withPenaltyContext(state, { distance }), 'penaltyContextSpot', state.tokens.penaltyContext?.yardLine ?? '');
+  }
+
+  if (state.currentStep === 'penaltyContextSpot') {
+    const yardLine = parseSpot(state.currentToken, context);
+    const candidate = { ...state.tokens.penaltyContext, yardLine, confirmed: true };
+    if (!validPenaltyBallContext(candidate)) return { state: tokenError(state, 'INVALID_BALL_CONTEXT', 'Enter a field spot with enough room for the confirmed distance to the goal line.', 'result.penaltyContext.yardLine') };
+    const nextState = withPenaltyContext(state, { yardLine: yardLine! });
+    if (nextState.tokens.penaltyResolution === 'accepted') nextState.tokens.penaltyFinalSpot = yardLine!;
+    return penaltyContextStep(nextState, 'penaltyConfirmContext', '');
   }
 
   if (state.currentStep === 'penaltySpotOfFoul') {
@@ -2261,6 +2337,15 @@ function commitPenaltyToken(
       },
     };
     if (source === 'immediate') return finalizePenaltyEntry(nextState, context);
+    if (['afterChange', 'multipleChanges'].includes(nextState.tokens.penaltyPossessionDecision ?? '')) {
+      nextState.tokens.penaltyDownConsequence = 'NEW_SERIES';
+      return finalizePenaltyEntry(nextState, context);
+    }
+    // Succeeding-spot fouls without a possession change retain the completed
+    // play automatically; Down Counts is no longer an operator menu choice.
+    if (!footballPossessionChanges(state.draft).count && nextState.tokens.penaltyDownConsequence === 'DOWN_COUNTS') {
+      return finalizePenaltyEntry(nextState, context);
+    }
     const downDefault = penaltyDownInputCode(nextState.tokens.penaltyDownConsequence ?? defaultPenaltyDownConsequence(
       nextState.tokens.penaltyDefinition,
       nextState.tokens.penaltyEnforcedFrom,
@@ -2280,23 +2365,7 @@ function commitPenaltyToken(
   if (state.currentStep === 'penaltyDown') {
     const downConsequence = parsePenaltyDownConsequence(state.currentToken);
     if (!downConsequence) {
-      return { state: tokenError(state, 'INVALID_DOWN_CONSEQUENCE', 'Down must be R, L, A, or D.', 'penalties.downConsequence') };
-    }
-    if (
-      downConsequence === 'DOWN_COUNTS'
-      && (
-        state.tokens.penaltyEnforcedFrom !== 'END'
-        || (state.tokens.penaltyTiming !== 'deadBall' && state.tokens.penaltyTeam !== context.play.actionTeam)
-      )
-    ) {
-      return {
-        state: tokenError(
-          state,
-          'INVALID_DOWN_CONSEQUENCE',
-          'Down Counts is available for a dead-ball foul or an offensive foul enforced from the succeeding spot.',
-          'penalties.downConsequence',
-        ),
-      };
+      return { state: tokenError(state, 'INVALID_DOWN_CONSEQUENCE', 'Down must be R, L, or A.', 'penalties.downConsequence') };
     }
     return finalizePenaltyEntry({
       ...baseActiveState(state),
@@ -3679,25 +3748,45 @@ function makeReadyState(
     duplicate: undefined,
   };
 
-  const draft = readyState.flow === 'teamPlay'
+  const draft =
+    readyState.flow === 'teamPlay'
       ? buildTeamPlayDraft(readyState, context)
-      : readyState.flow === 'pass'
-      ? buildPassDraft(readyState, context)
-      : readyState.flow === 'punt'
-        ? buildPuntDraft(readyState, context)
-        : readyState.flow === 'kick'
-          ? buildKickDraft(readyState, context)
-          : readyState.flow === 'penalty'
-            ? buildPenaltyOnlyDraft(readyState, context)
-            : readyState.flow === 'gameControl'
-              ? buildGameControlDraft(readyState, context)
-              : buildRushDraft(readyState, context);
-
+      : readyState.flow === 'pass' ? buildPassDraft(readyState, context)
+        : readyState.flow === 'punt' ? buildPuntDraft(readyState, context)
+          : readyState.flow === 'kick' ? buildKickDraft(readyState, context)
+            : readyState.flow === 'penalty' ? buildPenaltyOnlyDraft(readyState, context)
+              : readyState.flow === 'gameControl' ? buildGameControlDraft(readyState, context)
+                : buildRushDraft(readyState, context);
+  if (state.tokens.possessionChanges?.length) draft.result.possessionChanges = [...state.tokens.possessionChanges];
+  if (!footballPossessionChanges(draft).count && (
+    draft.prePlay.down === (context.game.rules?.downs || 4) || draft.play.family === 'fieldGoal'
+  ) && !['penalty', 'gameControl', 'try'].includes(draft.play.family)) {
+    const projection = applyFootballEventToEnvelope({
+      gameId: draft.game.gameId, game: { rules: context.game.rules }, liveState: draft.prePlay, drives: { completed: [] },
+    }, {
+      type: draft.play.family, subtype: draft.play.subtype, possession: draft.play.possession,
+      preState: draft.prePlay, result: draft.result, penalties: [],
+    });
+    const nextTeam = projection.liveState.possession;
+    if (nextTeam && nextTeam !== draft.play.actionTeam) draft.result.possessionChanges = [draft.play.actionTeam, nextTeam];
+  }
   return {
     ...readyState,
     miscFumbleRequested: readyState.miscFumbleRequested && isMiscellaneousFumble(draft),
     draft,
   };
+}
+
+function recoveryPossessionHistory(tokens: FootballFlowTokens, team: TeamCode, context: FootballQuickInputContext): TeamCode[] {
+  const history = [...(tokens.possessionChanges || [context.play.actionTeam])];
+  const visit = (next?: TeamCode) => { if (next && history.at(-1) !== next) history.push(next); };
+  if (history.length === 1) {
+    visit(tokens.interceptor?.team);
+    if (tokens.puntReceiveResult === 'return' || tokens.kickReceiveResult === 'return') visit(opposingTeam(context.play.actionTeam));
+  }
+  visit(tokens.returnFumblePlayer?.team);
+  visit(team);
+  return history;
 }
 
 function advanceAfterPlayerCommit(
@@ -5347,6 +5436,7 @@ function finalizePenaltyEntry(
   state: FootballConfirmedQuickInputState,
   context: FootballQuickInputContext,
 ): FootballQuickInputTransitionResult {
+  if (needsPenaltyPossessionQuestion(state)) return askPenaltyPossession(state);
   const penalties = buildDraftPenaltiesFromTokens(state.tokens, context, state.tokens.penaltySource === 'queued' ? state.draft : undefined);
   const validationError = validatePenaltyTokenResult(penalties);
   if (validationError) return { state: tokenError(state, validationError.code, validationError.message, validationError.field) };
@@ -5355,12 +5445,22 @@ function finalizePenaltyEntry(
     if (!state.draft) {
       return { state: tokenError(state, 'MISSING_BASE_PLAY_DRAFT', 'Queued penalty resolution requires a play draft', 'draft') };
     }
-    const draft = attachPenaltiesToDraft(
+    let draft = attachPenaltiesToDraft(
       state.draft,
       penalties,
       context,
       state.tokens.penaltyPlayer ? [state.tokens.penaltyPlayer] : [],
     );
+    if (state.tokens.penaltyPossessionDecision) {
+      if (!state.tokens.penaltyContext?.confirmed) {
+        const ballContext = suggestPenaltyBallContext(state, draft, context);
+        return penaltyContextStep({ ...baseActiveState(state), tokens: { ...cloneTokens(state.tokens), penaltyContext: ballContext } }, 'penaltyConfirmContext', '');
+      }
+      draft.result.penaltyContext = { ...state.tokens.penaltyContext };
+      draft.result.possessionChanges = [...footballPossessionChanges(state.draft).teams] as TeamCode[];
+      if (!state.tokens.penaltyContext.setupContext) draft.result.nextPossession = state.tokens.penaltyContext.possession;
+      draft = resolveFootballDraftPenaltyOutcome(draft);
+    }
     const summary = generateFootballPlaySummary(draft);
     return {
       state: {
@@ -5386,6 +5486,88 @@ function finalizePenaltyEntry(
         penaltySource: 'immediate',
       },
     }, context),
+  };
+}
+
+function needsPenaltyPossessionQuestion(state: FootballConfirmedQuickInputState): boolean {
+  return state.tokens.penaltySource === 'queued'
+    && !state.tokens.penaltyPossessionDecision
+    && footballPossessionChanges(state.draft).count > 0;
+}
+
+function askPenaltyPossession(state: FootballConfirmedQuickInputState): FootballQuickInputTransitionResult {
+  return {
+    state: {
+      ...baseActiveState(state),
+      status: 'token.awaiting',
+      currentStep: footballPossessionChanges(state.draft).count > 1 ? 'penaltyPossessionTeam' : 'penaltyAfterPossession',
+      currentToken: '',
+    },
+  };
+}
+
+function continuePenaltyEnforcement(state: FootballConfirmedQuickInputState, context: FootballQuickInputContext): FootballQuickInputTransitionResult {
+  const step = state.tokens.penaltyEnforcedFrom === 'SPOT' ? 'penaltySpotOfFoul' : 'penaltyFinalSpot';
+  const tokens = cloneTokens(state.tokens);
+  if (tokens.penaltyPossessionDecision === 'beforeChange' && tokens.penaltyDownConsequence === 'DOWN_COUNTS') tokens.penaltyDownConsequence = 'REPEAT';
+  return {
+    state: {
+      ...baseActiveState(state), status: 'token.awaiting', currentStep: step,
+      currentToken: step === 'penaltyFinalSpot' ? suggestedPenaltyFinalSpot(context, tokens, state.draft) ?? '' : '',
+      tokens,
+    },
+  };
+}
+
+function penaltyContextStep(state: FootballConfirmedQuickInputState, step: PenaltyTokenStep, token: string): FootballQuickInputTransitionResult {
+  return { state: { ...baseActiveState(state), status: 'token.awaiting', currentStep: step, currentToken: token, selectCurrentToken: Boolean(token) } };
+}
+
+function withPenaltyContext(state: FootballConfirmedQuickInputState, changes: Partial<PenaltyBallContext>): FootballConfirmedQuickInputState {
+  return {
+    ...baseActiveState(state),
+    tokens: { ...cloneTokens(state.tokens), penaltyContext: { ...state.tokens.penaltyContext!, ...changes, confirmed: false } },
+  };
+}
+
+function suggestPenaltyBallContext(state: FootballConfirmedQuickInputState, draft: FootballDraftIntent, context: FootballQuickInputContext): PenaltyBallContext {
+  const decision = state.tokens.penaltyPossessionDecision!;
+  const accepted = draft.penalties.filter((penalty) => penalty.status === 'accepted');
+  const finalSpot = accepted.at(-1)?.finalSpot || draft.result.endYardLine || draft.result.return?.returnEndYardLine || draft.prePlay.yardLine!;
+  const event = {
+    type: draft.play.family as string, subtype: draft.play.subtype, possession: draft.play.possession,
+    preState: draft.prePlay, result: { ...draft.result, penaltyContext: undefined },
+    penalties: draft.penalties.map(mapDraftPenaltyToCanonicalEvent),
+  };
+  const replayOffsetting = state.tokens.penaltyResolution === 'offsetting' && state.tokens.offsettingPreviousPlayCounts === false;
+  if (decision === 'beforeChange' && (state.tokens.penaltyResolution === 'accepted' || replayOffsetting) && draft.play.family !== 'kickoff') {
+    event.type = 'rush';
+    event.result = { code: 'noPlay', endYardLine: finalSpot, penaltyContext: undefined };
+  }
+  const projection = applyFootballEventToEnvelope({
+    gameId: draft.game.gameId, game: { rules: context.game.rules }, liveState: draft.prePlay,
+    drives: { completed: [] },
+  }, event);
+  // No timing answer may turn a re-kick into a receiving-team drive. A
+  // declined foul also leaves any existing scoring result intact.
+  if (!projection.liveState.possession && (decision === 'beforeChange' || state.tokens.penaltyResolution === 'declined')) {
+    return {
+      decision, possession: projection.liveState.pendingTryTeam || projection.liveState.kickoffTeam || draft.play.actionTeam,
+      yardLine: projection.liveState.yardLine, down: 1, distance: 10, startNewDrive: false, confirmed: false,
+      setupContext: projection.liveState.nextPlayContext,
+      ...(projection.scoringUpdate ? { scoring: { ...projection.scoringUpdate } } : {}),
+    };
+  }
+  const startNewDrive = decision !== 'beforeChange' || projection.driveTransition.shouldStartNew;
+  const possession = (decision !== 'beforeChange' ? state.tokens.penaltyPossessionTeam : projection.liveState.possession)
+    || footballPossessionChanges(draft).finalTeam;
+  const yardLine = decision !== 'beforeChange' ? finalSpot : projection.liveState.yardLine;
+  const lineToGain = calculateLineToGain(yardLine, possession, 10);
+  return {
+    decision, possession, yardLine, startNewDrive,
+    down: decision !== 'beforeChange' ? 1 : projection.liveState.down || 1,
+    distance: decision !== 'beforeChange' ? calculateYardsToGain(yardLine, lineToGain, possession) : projection.liveState.distance || 10,
+    confirmed: false,
   };
 }
 
@@ -5496,7 +5678,8 @@ function buildGameControlDraft(
         distance: state.tokens.gameControlDistance,
         spot: state.tokens.gameControlDriveSpot ?? state.tokens.gameControlSpot,
         lineToGain: state.tokens.gameControlLineToGain,
-        possession: state.tokens.gameControlPossession,
+        possession: state.tokens.gameControlPossession
+          ?? (action === 'setBallContext' ? context.play.possession ?? context.play.actionTeam : undefined),
       },
     },
     penalties: [],
@@ -5544,6 +5727,8 @@ function attachPenaltiesToDraft(
   nextDraft.updatedAt = context.now ?? nextDraft.updatedAt;
   nextDraft.revision += 1;
   nextDraft.penalties = [...nextDraft.penalties.map(clonePenalty), ...penalties.map(clonePenalty)];
+  // A new foul needs a new confirmation; the prior foul's context is not final.
+  nextDraft.result.penaltyContext = undefined;
   nextDraft.confirmation = undefined;
   const resolvedPenalizedPlayers = [
     ...penalizedPlayers,
@@ -5595,9 +5780,9 @@ function buildDraftPenaltiesFromTokens(
 ): DraftPenalty[] {
   const source = tokens.penaltySource ?? 'immediate';
   const resolution = tokens.penaltyResolution ?? 'accepted';
-  const penaltyIndex = (baseDraft?.penalties.length ?? 0) + 1;
+  const penaltyNumber = (baseDraft?.penalties.length ?? 0) + 1;
   const base = buildSingleDraftPenalty(tokens, context, baseDraft, {
-    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyIndex}`,
+    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyNumber}`,
     name: tokens.penaltyName,
     code: tokens.penaltyCode,
     definition: tokens.penaltyDefinition,
@@ -5609,7 +5794,7 @@ function buildDraftPenaltiesFromTokens(
   if (resolution !== 'offsetting') return [base];
 
   const second = buildSingleDraftPenalty(tokens, context, baseDraft, {
-    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyIndex + 1}`,
+    penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyNumber + 1}`,
     name: tokens.offsettingSecondName,
     code: tokens.offsettingSecondCode,
     definition: tokens.offsettingSecondDefinition,
@@ -6354,7 +6539,6 @@ function parsePenaltyDownConsequence(value: string): PenaltyDownConsequenceSelec
   if (normalized === 'R' || normalized === 'REPEAT' || normalized === 'REPEAT DOWN') return 'REPEAT';
   if (normalized === 'L' || normalized === 'LOSS' || normalized === 'LOSS OF DOWN') return 'LOSS_OF_DOWN';
   if (normalized === 'A' || normalized === 'AUTO' || normalized === 'AUTO 1ST' || normalized === 'AUTO FIRST') return 'AUTO_FIRST';
-  if (normalized === 'D' || normalized === 'DOWN COUNTS') return 'DOWN_COUNTS';
   return null;
 }
 
@@ -6921,6 +7105,13 @@ function isPenaltySpecificTokenStep(step: FootballTokenStep): step is PenaltyTok
     'penaltyPlayerJersey',
     'penaltyEjected',
     'penaltyEnforcedFrom',
+    'penaltyAfterPossession',
+    'penaltyPossessionTeam',
+    'penaltyConfirmContext',
+    'penaltyContextTeam',
+    'penaltyContextDown',
+    'penaltyContextDistance',
+    'penaltyContextSpot',
     'penaltySpotOfFoul',
     'penaltyFinalSpot',
     'penaltyDown',
@@ -7029,6 +7220,7 @@ function initialTokens(): FootballFlowTokens {
 
 function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
   return {
+    possessionChanges: tokens.possessionChanges ? [...tokens.possessionChanges] : undefined,
     teamPlaySelection: tokens.teamPlaySelection,
     rusher: tokens.rusher ? cloneParticipant(tokens.rusher) : undefined,
     result: tokens.result,
@@ -7112,6 +7304,9 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     penaltySpotOfFoul: tokens.penaltySpotOfFoul,
     penaltyFinalSpot: tokens.penaltyFinalSpot,
     penaltyDownConsequence: tokens.penaltyDownConsequence,
+    penaltyPossessionDecision: tokens.penaltyPossessionDecision,
+    penaltyPossessionTeam: tokens.penaltyPossessionTeam,
+    penaltyContext: tokens.penaltyContext ? { ...tokens.penaltyContext } : undefined,
     offsettingSecondName: tokens.offsettingSecondName,
     offsettingSecondCode: tokens.offsettingSecondCode,
     offsettingSecondDefinition: tokens.offsettingSecondDefinition ? { ...tokens.offsettingSecondDefinition } : undefined,
@@ -7188,6 +7383,8 @@ function cloneDraft(draft: FootballDraftIntent): FootballDraftIntent {
     },
     result: {
       ...draft.result,
+      possessionChanges: draft.result.possessionChanges ? [...draft.result.possessionChanges] : undefined,
+      penaltyContext: draft.result.penaltyContext ? { ...draft.result.penaltyContext } : undefined,
       pass: draft.result.pass ? { ...draft.result.pass } : undefined,
       kick: draft.result.kick ? { ...draft.result.kick } : undefined,
       return: draft.result.return ? { ...draft.result.return } : undefined,
