@@ -372,7 +372,49 @@ describe('FootballScorerShell', () => {
 
     expect(screen.queryByRole('dialog', { name: /edit play 12/i })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Play #12 was updated in the local envelope.');
-    expect(screen.getByRole('button', { name: /undo last test event/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /undo last change/i })).toBeEnabled();
+  });
+
+  it('deletes an extra penalty through the editor, mirrors the result, survives reload, and supports undo', async () => {
+    const submitMock = mockSubmitSuccess();
+    const game = finalEnvelopeWithBallContextRevision('FB-DELETE-PENALTY');
+    game.events[1] = {
+      ...game.events[1], type: 'penalty', subtype: null,
+      result: { code: 'noPlay', endYardLine: 'V31' },
+      penalties: [{ penaltyId: 'EXTRA-HOLD', code: 'HOLD', name: 'Holding', team: 'H', status: 'accepted', yards: 10, enforcedFrom: 'previousSpot', finalSpot: 'V31', replayDown: true }],
+    };
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    let view;
+    try {
+      view = renderScorer('/scorer?dashboardGameId=DASH-DELETE&envelopeGameId=FB-DELETE-PENALTY');
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /edit play 2/i }));
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete Play' }));
+      fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete Play' }));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Play #2 was deleted.'));
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events).toHaveLength(2));
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.events.map((event) => event.eventId)).toEqual([game.events[0].eventId, game.events[2].eventId]);
+      expect(saved.events[1].preState).toEqual(game.events[2].preState);
+      expect(saved.game.status).toBe('final');
+      expect(saved.stats.teams.H.penalties?.count || 0).toBe(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+      await waitFor(() => expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toHaveLength(3));
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events).toHaveLength(3));
+      fireEvent.click(screen.getByRole('button', { name: /edit play 2/i }));
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete Play' }));
+      fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete Play' }));
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events).toHaveLength(2));
+      view.unmount();
+      view = renderScorer('/scorer?dashboardGameId=DASH-DELETE&envelopeGameId=FB-DELETE-PENALTY');
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      expect(screen.queryByText('EXTRA-HOLD')).not.toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Undo Last Change' })).toBeDisabled();
+    } finally {
+      view?.unmount();
+      submitMock.restore();
+    }
   });
 
   it('edits a ball context revision in a final game without rewriting the next play context', async () => {
@@ -2604,7 +2646,7 @@ describe('FootballScorerShell', () => {
     renderScorer('/scorer?fixture=normal&local=1');
     const eventLogSlot = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="event-log"]');
     const initialEvents = within(eventLogSlot).getAllByRole('listitem').length;
-    const undoButton = within(eventLogSlot).getByRole('button', { name: /undo last test event/i });
+    const undoButton = within(eventLogSlot).getByRole('button', { name: /undo last change/i });
     expect(undoButton).toBeDisabled();
 
     completeRushFlowInputs();

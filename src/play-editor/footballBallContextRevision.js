@@ -1,3 +1,4 @@
+import { deleteFootballPlayFromEnvelope } from './footballPlayDeletion';
 import { normalizeFootballScoringSetupEnvelope } from '../services/footballDashboardService';
 import { createLiveState } from '../utils/footballRulesEngine';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
@@ -125,58 +126,9 @@ export function updateFootballBallContextRevision(
   });
 }
 
-const rebaseEventSource = (source, deletedSequence) => {
-  if (!source || !Number.isFinite(Number(source.baseEventSequence))) return source;
-  const baseEventSequence = Number(source.baseEventSequence);
-  if (baseEventSequence < deletedSequence) return source;
-  return { ...source, baseEventSequence: Math.max(0, baseEventSequence - 1) };
-};
-
-export function deleteFootballBallContextRevision(
-  envelope,
-  target,
-  { editedAt = new Date().toISOString() } = {},
-) {
-  if (!envelope || !Array.isArray(envelope.events) || !target) {
-    throw new Error('A game envelope and ball context revision are required.');
-  }
-  const eventIndex = findEventIndex(envelope.events, target);
-  if (eventIndex < 0) throw new Error('The selected ball context revision is no longer in the game log.');
-  const original = envelope.events[eventIndex];
-  if (!isFootballBallContextRevision(original)) {
+export function deleteFootballBallContextRevision(envelope, target, options) {
+  if (!isFootballBallContextRevision(target)) {
     throw new Error('Only a ball context revision can be deleted with this control.');
   }
-
-  const deletedSequence = Number(original.sequence || eventIndex + 1);
-  const isLatestAccepted = eventIndex === latestAcceptedEventIndex(envelope.events);
-  const events = envelope.events
-    .filter((_event, index) => index !== eventIndex)
-    .map((event, index) => ({
-      ...clone(event),
-      sequence: index + 1,
-      source: rebaseEventSource(clone(event.source), deletedSequence),
-    }));
-  const restoredLiveState = createLiveState({
-    possession: original.preState?.possession,
-    down: original.preState?.down,
-    distance: original.preState?.distance,
-    yardLine: original.preState?.yardLine,
-    lineToGain: original.preState?.lineToGain,
-    driveId: original.preState?.driveId,
-    driveNumber: original.preState?.driveNumber,
-  });
-
-  const amended = {
-    ...clone(envelope),
-    updatedAt: editedAt,
-    events,
-    stats: {
-      ...clone(envelope.stats || {}),
-      sourceEventSequence: events.length,
-    },
-    liveState: isLatestAccepted
-      ? { ...clone(envelope.liveState || {}), ...restoredLiveState }
-      : clone(envelope.liveState || {}),
-  };
-  return normalizeFootballScoringSetupEnvelope(amended);
+  return deleteFootballPlayFromEnvelope(envelope, target, options);
 }

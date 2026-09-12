@@ -103,6 +103,7 @@ const familyName = (play) => {
 export default function FootballPlayEditorModal({
   isOpen,
   onClose,
+  onDelete,
   onReplace,
   onSave,
   play,
@@ -113,6 +114,7 @@ export default function FootballPlayEditorModal({
   const [draft, setDraft] = useState(() => prepareDraft(play));
   const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
   const [showReplacePrompt, setShowReplacePrompt] = useState(false);
+  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const firstInputRef = useRef(null);
   const baselinePlay = useMemo(() => prepareDraft(play), [play]);
 
@@ -121,6 +123,7 @@ export default function FootballPlayEditorModal({
     setDraft(clone(baselinePlay));
     setShowDiscardPrompt(false);
     setShowReplacePrompt(false);
+    setShowDeletePrompt(false);
     window.setTimeout(() => firstInputRef.current?.focus(), 0);
   }, [baselinePlay, isOpen]);
 
@@ -149,13 +152,14 @@ export default function FootballPlayEditorModal({
     const handleKeyDown = (event) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      if (showReplacePrompt) setShowReplacePrompt(false);
+      if (showDeletePrompt) setShowDeletePrompt(false);
+      else if (showReplacePrompt) setShowReplacePrompt(false);
       else if (showDiscardPrompt) setShowDiscardPrompt(false);
       else requestClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, hasChanges, showDiscardPrompt, showReplacePrompt]);
+  }, [isOpen, hasChanges, showDiscardPrompt, showReplacePrompt, showDeletePrompt]);
 
   if (!isOpen || !play || !draft) return null;
 
@@ -268,10 +272,17 @@ export default function FootballPlayEditorModal({
         )}
 
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-300 bg-white px-4 py-3 sm:px-6">
-          <div className="min-w-0 text-xs text-zinc-600">
+          <div className="flex min-w-0 items-center gap-3">
+            {onDelete && (
+              <button className="shrink-0 rounded border border-red-300 bg-white px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50" onClick={() => setShowDeletePrompt(true)} type="button">
+                Delete Play
+              </button>
+            )}
+            <div className="min-w-0 text-xs text-zinc-600">
             {hasChanges ? (
               <><span className="font-black text-zinc-900">Changed:</span> {changedPaths.join(', ')}</>
             ) : 'No changes yet.'}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-black text-zinc-700 hover:bg-zinc-100" onClick={requestClose} type="button">Cancel</button>
@@ -292,6 +303,18 @@ export default function FootballPlayEditorModal({
             </button>
           </div>
         </footer>
+
+        {showDeletePrompt && (
+          <ConfirmationDialog
+            confirmLabel="Delete Play"
+            onCancel={() => setShowDeletePrompt(false)}
+            onConfirm={() => { setShowDeletePrompt(false); onDelete?.(clone(play)); }}
+            title={`Delete play #${play.sequence}?`}
+          >
+            This removes this play and any attached penalties from the game log and statistics.
+            Later plays keep their recorded starting context. You can undo this deletion from the game log before reloading.
+          </ConfirmationDialog>
+        )}
 
         {showDiscardPrompt && (
           <ConfirmationDialog

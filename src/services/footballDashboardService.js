@@ -707,9 +707,12 @@ const nextAcceptedEventSequence = (envelope, event) => {
 
 const normalizeAcceptedEvent = (envelope, event, acceptedAt = new Date().toISOString()) => {
   const sequence = nextAcceptedEventSequence(envelope, event);
+  const existingIds = new Set((envelope.events || []).map((item) => item.eventId));
+  let localIdNumber = sequence;
+  while (existingIds.has(`LOCAL-${String(localIdNumber).padStart(6, '0')}`)) localIdNumber += 1;
   return {
     ...event,
-    eventId: event.eventId || `LOCAL-${String(sequence).padStart(6, '0')}`,
+    eventId: event.eventId || `LOCAL-${String(localIdNumber).padStart(6, '0')}`,
     sequence,
     status: 'accepted',
     acceptedAt: event.acceptedAt || acceptedAt,
@@ -1012,7 +1015,7 @@ const repairReplayDownThatReachedLineToGain = (envelope) => {
   };
 };
 
-export function normalizeFootballScoringSetupEnvelope(envelope) {
+export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptyStats = false } = {}) {
   const normalizedRuleEnvelope = normalizeFootballEnvelopeRuleSpots(envelope);
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
@@ -1020,7 +1023,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope) {
   const repairedReturnDriveEnvelope = repairSpecialTeamsReturnTouchdownDrives(repairedHalftimeEnvelope);
   const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedReturnDriveEnvelope);
   const repairedMuffClockEnvelope = repairSameTeamMuffedPuntStoppedClock(repairedDriveEnvelope);
-  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedMuffClockEnvelope);
+  const replayedStats = repairFootballStatsFromCompleteEventLog(repairedMuffClockEnvelope, rebuildEmptyStats);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedMuffClockEnvelope, replayedStats);
   const statsEnvelope = repairedStats === repairedMuffClockEnvelope?.stats
     ? repairedMuffClockEnvelope
@@ -1718,12 +1721,12 @@ export function projectFootballStatsForEvents(envelope, selectedEvents = envelop
   return projectedStats;
 }
 
-function repairFootballStatsFromCompleteEventLog(envelope) {
+function repairFootballStatsFromCompleteEventLog(envelope, rebuildEmptyStats = false) {
   const acceptedEvents = [...(envelope?.events || [])]
     .filter((event) => (!event.status || event.status === 'accepted') && Number.isFinite(Number(event.sequence)))
     .sort((left, right) => Number(left.sequence) - Number(right.sequence));
   if (
-    acceptedEvents.length === 0
+    (acceptedEvents.length === 0 && !rebuildEmptyStats)
     || acceptedEvents.some((event, index) => Number(event.sequence) !== index + 1)
   ) return envelope?.stats;
 
@@ -1760,7 +1763,7 @@ function repairFootballStatsFromCompleteEventLog(envelope) {
 
   const repaired = {
     ...(envelope.stats || {}),
-    sourceEventSequence: Number(acceptedEvents.at(-1).sequence),
+    sourceEventSequence: Number(acceptedEvents.at(-1)?.sequence || 0),
     teams,
     players,
   };
@@ -2032,6 +2035,30 @@ const updateDrives = (drives = {}, projection, event) => {
     completed: completedNext,
   };
 };
+
+// Historical edits preserve recorded drive boundaries and clock corrections,
+// while totals come from the plays that still belong to each drive.
+export function recalculateFootballDriveTotals(envelope) {
+  const recalculate = (drive) => {
+    if (!drive) return drive;
+    let current = { ...drive, plays: 0, yards: 0 };
+    for (const event of envelope.events || []) {
+      if ((event.status && event.status !== 'accepted') || event.type === 'gameControl'
+        || event.preState?.driveId !== drive.driveId) continue;
+      const projection = applyFootballEventToEnvelope({ ...envelope, liveState: event.preState }, event);
+      const updated = updateDrives({ current, completed: [] }, projection, event);
+      const played = updated.completed.find((item) => item.driveId === drive.driveId)
+        || (updated.current?.driveId === drive.driveId ? updated.current : current);
+      current = { ...drive, plays: played.plays, yards: played.yards };
+    }
+    return current;
+  };
+  return {
+    ...envelope.drives,
+    current: recalculate(envelope.drives?.current),
+    completed: (envelope.drives?.completed || []).map(recalculate),
+  };
+}
 
 const normalizeClockText = (clock) => {
   const match = String(clock || '').trim().match(/^(\d{1,2}):([0-5]\d)$/);

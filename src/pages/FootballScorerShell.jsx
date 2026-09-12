@@ -23,6 +23,7 @@ import {
   getGameEnvelopeFixture,
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
+import { deleteFootballPlayFromEnvelope } from '../play-editor/footballPlayDeletion';
 import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import {
   deleteFootballBallContextRevision,
@@ -485,6 +486,7 @@ export default function FootballScorerShell() {
       ? saveDashboardSeededFootballEnvelope(requestedGameId, previousEnvelope) || previousEnvelope
       : previousEnvelope;
     setLocalUndoStack((current) => current.slice(0, -1));
+    setPlayEditFeedback({ tone: 'success', message: 'Last change undone.' });
     setAcceptedScorerState({ gameEnvelope: restoredEnvelope, projection: null, acceptedEvents: [] });
     setPossessionClockChange(null);
     setDriveSummary(null);
@@ -569,6 +571,34 @@ export default function FootballScorerShell() {
       });
     }
   }, [dashboardGameId, editingPlay, envelope, flushServerSync, requestedGameId]);
+
+  const deletePlay = useCallback((play) => {
+    try {
+      const amendedEnvelope = deleteFootballPlayFromEnvelope(envelope, play);
+      const persistedEnvelope = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, amendedEnvelope) || amendedEnvelope
+        : amendedEnvelope;
+      setLocalUndoStack((current) => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setPossessionClockChange(null);
+      setDriveSummary(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey((current) => current + 1);
+      setPlayEditFeedback({ tone: 'success', message: `Play #${play.sequence} was deleted. Statistics were updated and later plays were renumbered. Use Undo Last Change to restore it.` });
+      if (requestedGameId && dashboardGameId) {
+        try {
+          enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persistedEnvelope });
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+          void flushServerSync();
+        } catch (error) {
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `The deletion was saved locally, but server sync could not be prepared: ${error.message}` });
+        }
+      }
+    } catch (error) {
+      setPlayEditFeedback({ tone: 'error', message: error instanceof Error ? error.message : 'The play could not be deleted.' });
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
   const savePlayEditor = useCallback((editedPlay) => {
     try {
@@ -990,6 +1020,7 @@ export default function FootballScorerShell() {
       <FootballPlayEditorModal
         isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay)}
         onClose={closePlayEditor}
+        onDelete={deletePlay}
         onReplace={requestPlayReplacement}
         onSave={savePlayEditor}
         play={editingPlay}
@@ -1405,10 +1436,10 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
             className="rounded border border-zinc-300 px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
             disabled={!canUndo}
             onClick={onUndoLastEvent}
-            title="Restore the local test game to its state before the most recent submitted event"
+            title="Restore the game to its state before the most recent local change"
             type="button"
           >
-            Undo Last Test Event
+            Undo Last Change
           </button>
         )}
       </div>
