@@ -9,6 +9,25 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('requires confirmation before deleting the original play and cancels deletion with Escape', () => {
+    const onDelete = vi.fn();
+    const onSave = vi.fn();
+    const onClose = vi.fn();
+    renderEditor({ onDelete, onSave, onClose });
+    const dialog = screen.getByRole('dialog', { name: /edit play 129/i });
+    fireEvent.change(within(dialog).getByLabelText(/End spot/i), { target: { value: 'H40' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Play' }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('alertdialog', { name: 'Delete play #129?' })).toHaveTextContent('any attached penalties');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Play' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete Play' }));
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith(footballPlayEditorSandboxPlays[0]);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('edits rush-owned and existing penalty fields without exposing context controls', () => {
     renderEditor();
     const dialog = screen.getByRole('dialog', { name: /edit play 129/i });
@@ -141,6 +160,7 @@ describe('FootballPlayEditorModal', () => {
 function renderEditor({
   play = footballPlayEditorSandboxPlays[0],
   onClose = vi.fn(),
+  onDelete = vi.fn(),
   onReplace = vi.fn(),
   onSave = vi.fn(),
 } = {}) {
@@ -148,6 +168,7 @@ function renderEditor({
     <FootballPlayEditorModal
       isOpen
       onClose={onClose}
+      onDelete={onDelete}
       onReplace={onReplace}
       onSave={onSave}
       play={play}
