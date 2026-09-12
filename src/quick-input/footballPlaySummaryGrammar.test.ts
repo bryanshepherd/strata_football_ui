@@ -10,6 +10,20 @@ import type {
 } from './footballIntentSchema';
 
 describe('footballPlaySummaryGrammar', () => {
+  it('separates the rush from an opponent fumble-return touchdown in the confirmation', () => {
+    const intent = baseIntent({
+      family: 'rush', subtype: null,
+      primary: participant('rusher', 'H', 'H-16', '16', 'Savan Briggs'),
+      recoveredBy: participant('recoverer', 'V', 'V-6', '6', 'Malachi Adkins'),
+      result: {
+        code: 'touchdown', yards: 11, endYardLine: 'goal',
+        scoring: { team: 'V', type: 'touchdown', points: 6 },
+        fumble: { fumblerPlayerId: 'H-16', spot: 'V08', recoveredByPlayerId: 'V-6', recoveredByTeam: 'V', recoverySpot: 'V08', returnYards: 92, returnEndYardLine: 'goal', turnover: true },
+      },
+    });
+    intent.prePlay.yardLine = 'V11';
+    expect(generateFootballPlaySummary(intent).summaryText).toBe('HOM #16 Savan Briggs rush for 3 yards to the V08, fumbled at the V8, recovered by #6 Malachi Adkins for VIS at the V8, returned 92 yards for a touchdown.');
+  });
   it('generates a rush summary', () => {
     expectSummary(
       baseIntent({

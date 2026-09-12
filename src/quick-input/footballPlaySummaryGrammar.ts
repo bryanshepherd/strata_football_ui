@@ -9,6 +9,7 @@ import type {
 } from './footballIntentSchema';
 import { isCanonicalSpot } from './footballIntentSchema';
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 
 export type FootballPlaySummaryWarning = DraftWarning;
 
@@ -35,7 +36,7 @@ export function generateFootballPlaySummary(intent: FootballDraftIntent): Footba
     : playSummary;
 
   return {
-    summaryText,
+    summaryText: formatFootballFumbleReadout({ type: intent.play.family, possession: intent.play.actionTeam, preState: intent.prePlay, result: intent.result }, summaryText),
     warnings: context.warnings,
   };
 }

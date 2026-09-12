@@ -1,4 +1,5 @@
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { isFootballTryReplayEvent } from '../scoring/footballDriveSummary';
 import { buildFootballQuickieStatsReport } from './footballQuickieStats';
 import { formatFootballReportDate } from './footballScoringSummary';
@@ -222,6 +223,7 @@ const labelDeadBallPenalties = (text, penalties) => {
 
 export const formatFootballPlayText = (event, teams) => {
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
+  text = formatFootballFumbleReadout(event, text);
   text = labelDeadBallPenalties(text, event?.penalties);
   const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
   if (!timeout) {

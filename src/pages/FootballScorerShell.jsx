@@ -63,6 +63,7 @@ import {
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { formatFootballSpotForDisplay } from '../utils/footballSpotNormalization';
 import { footballTeamAliasesForEnvelope, normalizeFootballTeamAliases, validateFootballTeamAliases } from '../utils/footballTeamAliases';
 
@@ -1647,7 +1648,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                       {item.event.subtype ? ` · ${item.event.subtype}` : ''}
                     </div>
                     <p className="mt-1 text-sm text-zinc-700">
-                      {item.event.description || item.event.result?.code || 'Accepted event'}
+                      {formatFootballFumbleReadout(item.event, item.event.description || item.event.result?.code || 'Accepted event')}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
