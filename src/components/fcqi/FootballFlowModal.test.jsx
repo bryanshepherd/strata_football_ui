@@ -479,6 +479,30 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenCalledWith('S');
   });
 
+  it('shows Returned and Spot the ball for a missed FGA and commits their R/S hotkeys', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting', flow: 'kick', currentStep: 'fieldGoalReturnAttempted', currentToken: '',
+          tokens: { kickMenuSelection: 'fieldGoal', laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Returned R' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Spot the ball S' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Return')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'r', code: 'KeyR' });
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' });
+    fireEvent.click(screen.getByRole('button', { name: 'Returned R' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Spot the ball S' }));
+    expect(onTokenCommit.mock.calls.map(([value]) => value)).toEqual(['R', 'S', 'R', 'S']);
+  });
+
   it('uses button-only Rekick and Spot the Ball choices with R/S hotkeys', () => {
     const onTokenCommit = vi.fn();
     render(

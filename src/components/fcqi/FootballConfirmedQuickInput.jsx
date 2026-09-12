@@ -88,7 +88,8 @@ export const getFootballFcqiAssistantMessage = (state) => {
   if (state.currentStep === 'fieldGoalResult') return 'Choose field goal result.';
   if (state.currentStep === 'fieldGoalMissedReason') return 'Choose missed field goal reason.';
   if (state.currentStep === 'fieldGoalBlockedByJersey') return 'Enter field goal blocker jersey.';
-  if (state.currentStep === 'fieldGoalReturnAttempted') return 'Choose Return or No Return.';
+  if (state.currentStep === 'fieldGoalReturnAttempted') return 'Choose Returned (R) or Spot the ball (S).';
+  if (state.currentStep === 'fieldGoalNextSpot') return 'Enter the next possession’s ball spot.';
   if (state.currentStep === 'patType') return 'Choose PAT type.';
   if (state.currentStep === 'patKickResult') return 'Choose kick PAT result.';
   if (state.currentStep === 'patKickMissedReason') return 'Choose missed PAT reason.';

@@ -21,6 +21,7 @@ const yardLineSteps = new Set([
   'kickOutOfBoundsSpot',
   'kickOutOfBoundsAwardedSpot',
   'fieldGoalSpot',
+  'fieldGoalNextSpot',
   'penaltySpotOfFoul',
   'penaltyFinalSpot',
   'penaltyContextSpot',
@@ -406,10 +407,16 @@ const stepCopy = {
     placeholder: '44',
   },
   fieldGoalReturnAttempted: {
-    title: 'Field Goal Return',
-    label: 'Field Goal Return',
-    helper: 'Choose Return or No Return.',
-    placeholder: 'N',
+    title: 'Returned or Spot the ball?',
+    label: 'Missed field goal outcome',
+    helper: 'Choose Returned or Spot the ball.',
+    placeholder: 'S',
+  },
+  fieldGoalNextSpot: {
+    title: 'Spot the ball',
+    label: 'Next ball spot',
+    helper: 'Enter the yardline where the receiving team will begin its possession.',
+    placeholder: 'V20',
   },
   patType: {
     title: 'PAT Type',
@@ -726,6 +733,11 @@ const missedReasonButtons = [
   { label: 'Left Upright', hotkey: 'E', value: 'E' },
   { label: 'Right Upright', hotkey: 'I', value: 'I' },
   { label: 'Crossbar', hotkey: 'C', value: 'C' },
+];
+
+const fieldGoalOutcomeButtons = [
+  { label: 'Returned', hotkey: 'R', value: 'R' },
+  { label: 'Spot the ball', hotkey: 'S', value: 'S' },
 ];
 
 const patTypeButtons = [
@@ -1147,7 +1159,7 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'hurried') return hurryButtons;
   if (step === 'fieldGoalResult') return fieldGoalResultButtons;
   if (step === 'fieldGoalMissedReason') return missedReasonButtons;
-  if (step === 'fieldGoalReturnAttempted') return returnAttemptedButtons;
+  if (step === 'fieldGoalReturnAttempted') return fieldGoalOutcomeButtons;
   if (step === 'patType') return patTypeButtons;
   if (step === 'patKickResult') return fieldGoalResultButtons;
   if (step === 'patKickMissedReason') return missedReasonButtons;
@@ -1205,6 +1217,19 @@ function timeoutButtonsForAliases(aliases, teamNames) {
 function stepCopyForState(state, aliases, teamNames) {
   const step = state.currentStep;
   const copy = stepCopy[step];
+  if (state.tokens?.kickMenuSelection === 'fieldGoal') {
+    if (step === 'kickerJersey') return { ...copy, title: 'Field goal' };
+    if (step === 'returnerJersey') return { ...copy, title: 'Field goal return' };
+    if (step === 'kickReturnStartSpot') return { ...copy, title: 'Field goal return', helper: 'Enter where the field-goal return began.' };
+    if (step === 'fieldGoalNextSpot') {
+      const team = state.tokens.kicker?.team === 'V' ? 'H' : 'V';
+      return {
+        ...copy,
+        helper: `Enter the yardline where ${teamNames?.[team] || (team === 'H' ? 'Home' : 'Visitor')} will begin its possession.`,
+        placeholder: `${aliases[team]}20`,
+      };
+    }
+  }
   if (step === 'penaltyConfirmContext') {
     const context = state.tokens?.penaltyContext;
     const teamLabel = (team) => teamNames?.[team] || (team === 'H' ? 'Home' : 'Visitor');

@@ -2162,6 +2162,11 @@ describe('FootballScorerShell', () => {
     fireEvent.click(screen.getByRole('button', { name: /^missed/i }));
     expect(screen.getByRole('dialog', { name: /missed how/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^wide right/i }));
+    expect(screen.getByRole('button', { name: 'Returned R' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' });
+    const spotInput = screen.getByLabelText('Next ball spot');
+    fireEvent.change(spotInput, { target: { value: 'V20' } });
+    fireEvent.submit(spotInput.closest('form'));
     expect(await screen.findByRole('dialog', { name: /play summary review/i })).toHaveTextContent(/no good, wide right/i);
     unmount();
 
@@ -2171,6 +2176,10 @@ describe('FootballScorerShell', () => {
     const blockerInput = screen.getByLabelText(/blocked by jersey/i);
     fireEvent.change(blockerInput, { target: { value: '44' } });
     fireEvent.submit(blockerInput.closest('form'));
+    fireEvent.click(screen.getByRole('button', { name: 'Spot the ball S' }));
+    const blockedSpotInput = screen.getByLabelText('Next ball spot');
+    fireEvent.change(blockedSpotInput, { target: { value: 'V32' } });
+    fireEvent.submit(blockedSpotInput.closest('form'));
     expect(await screen.findByRole('dialog', { name: /play summary review/i })).toHaveTextContent(/blocked by #44 caleb moss/i);
   });
 
