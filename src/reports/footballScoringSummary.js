@@ -3,6 +3,7 @@ import {
   buildFootballScoringPlaySummary,
   isFootballDriveSummaryTerminalEvent,
   isFootballTryReplayEvent,
+  footballScoringPlayText,
 } from '../scoring/footballDriveSummary';
 
 export const FOOTBALL_REPORT_TIME_ZONE = 'America/New_York';
@@ -211,7 +212,7 @@ export const buildFootballScoringSummary = (envelope) => {
       quarter: period > 4 ? periodLabel(period) : String(period),
       time: String(event.clock || '—'),
       team: teams[team].abbr || team,
-      description: String(event.description || 'Scoring play'),
+      description: event.result?.scoring?.type === 'touchdown' ? footballScoringPlayText(envelope, event) : String(event.description || 'Scoring play'),
       drive: scoringDriveText(envelope, event),
       score: `${score.V}-${score.H}`,
     }];

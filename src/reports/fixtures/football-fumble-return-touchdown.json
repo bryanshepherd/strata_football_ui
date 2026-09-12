@@ -1,0 +1,822 @@
+{
+  "schemaVersion": "football.gameEnvelope.v1",
+  "gameId": "FB-eda8397c-c417-4446-abbd-59d0e9c53e59",
+  "game": {
+    "teams": {
+      "H": {
+        "teamId": "d1e9921a-a960-4521-88db-289ba19edde8",
+        "name": "Bluefield State",
+        "abbr": "BSTATE",
+        "score": 0
+      },
+      "V": {
+        "teamId": "e2342563-babf-47f2-ba97-1f9e073d1fd9",
+        "name": "Livingstone",
+        "abbr": "LIV",
+        "score": 7
+      }
+    },
+    "rules": {
+      "periods": 4,
+      "minutesPerPeriod": 15,
+      "downs": 4,
+      "yardsToFirstDown": 10,
+      "fieldLength": 100,
+      "kickoffSpot": "H35",
+      "touchbackSpot": "H20",
+      "kickoffTouchbackSpot": "H25",
+      "safetyKickSpot": "H20",
+      "patSpot": "V03",
+      "overtimeEnabled": true,
+      "overtimeStyle": "possessionSeries",
+      "timeoutsPerHalf": 3,
+      "challenge": {
+        "resetAtHalf": false,
+        "allowChallenges": true,
+        "numberOfChallenges": 2,
+        "regainWonChallenge": true,
+        "failedChallengeDecreasesTimeout": true,
+        "successfulChallengeDecreasesChallenge": false
+      },
+      "scoring": {
+        "safety": 2,
+        "patKick": 1,
+        "patPass": 2,
+        "patRush": 2,
+        "fieldGoal": 3,
+        "touchdown": 6,
+        "patRushPass": 2
+      },
+      "statRules": {
+        "sackIsRush": true,
+        "sackAttributedToQb": true,
+        "fieldGoalCountsAsPlay": false,
+        "puntToTouchbackSpot": true
+      },
+      "rulesPresetId": "ncaa"
+    },
+    "period": 2,
+    "status": "inProgress"
+  },
+  "clock": {
+    "period": 2,
+    "clock": "10:57"
+  },
+  "liveState": {
+    "possession": "V",
+    "down": 0,
+    "distance": 0,
+    "yardLine": "V35"
+  },
+  "rosters": {
+    "schemaVersion": "football.rosterEnvelope.v1",
+    "gameId": "FB-eda8397c-c417-4446-abbd-59d0e9c53e59",
+    "updatedAt": "2026-09-12T21:16:37.310Z",
+    "teams": {
+      "H": {
+        "teamId": "d1e9921a-a960-4521-88db-289ba19edde8",
+        "name": "Bluefield State",
+        "abbr": "BSTATE",
+        "players": {
+          "b751d327-c483-4b88-a746-1218d4f86bbd": {
+            "playerId": "b751d327-c483-4b88-a746-1218d4f86bbd",
+            "team": "H",
+            "jersey": "16",
+            "firstName": "Savan",
+            "lastName": "Briggs",
+            "displayName": "Savan Briggs",
+            "position": "QB",
+            "active": true
+          }
+        },
+        "jerseyIndex": {
+          "0": [
+            "6a39618b-4468-4283-9913-4487ac651383"
+          ],
+          "1": [
+            "301e23e0-869d-4732-9e99-1f1419e50f79"
+          ],
+          "2": [
+            "424268ab-5490-4eee-b29f-536518140805"
+          ],
+          "3": [
+            "c72c0fa3-bd4c-45a2-8579-2e96867e08d2"
+          ],
+          "4": [
+            "8425121b-73f3-42ad-8599-97a7626eeefb"
+          ],
+          "5": [
+            "5c4d23a3-8ab1-4e3d-b15d-e266c9ecdb01"
+          ],
+          "6": [
+            "f1ac547a-ec6f-44ac-a82d-3b4dbcdd67da"
+          ],
+          "7": [
+            "ebdf2d19-2b55-4d63-b3de-69243494b65a"
+          ],
+          "8": [
+            "5a2dfb1e-2149-4b9b-8025-5ba436d66e0c"
+          ],
+          "9": [
+            "fe242e00-0424-4f25-9e6a-01fef02b7276"
+          ],
+          "10": [
+            "6da9fa48-2c31-4acd-a682-c5830803ec95"
+          ],
+          "11": [
+            "b07e0e2f-a2f5-4193-83ba-7be969c12bbf"
+          ],
+          "12": [
+            "a40c548b-bbed-4d64-bbe8-b99aee79f12e"
+          ],
+          "13": [
+            "5353b09d-6ccf-4760-a849-972be9fc331b"
+          ],
+          "14": [
+            "adad636d-2530-48a5-85f3-c12da8d1c777"
+          ],
+          "15": [
+            "63994050-6b62-492e-9eb5-54ebc3074669"
+          ],
+          "16": [
+            "b751d327-c483-4b88-a746-1218d4f86bbd"
+          ],
+          "17": [
+            "420b7b02-9288-4660-8d58-cc8391c81745"
+          ],
+          "18": [
+            "499741fb-e016-4f32-996e-f354bed50c04"
+          ],
+          "19": [
+            "f666bf1c-945a-4001-b924-d89da60e67b1"
+          ],
+          "20": [
+            "7e9c710e-4d92-46a8-b712-f1374b02580d"
+          ],
+          "21": [
+            "1f5c2b2a-6da5-4068-9319-87561c22b577"
+          ],
+          "22": [
+            "064ca513-bc8b-4d1a-9091-2840035d324b"
+          ],
+          "23": [
+            "8d35a09a-68dd-4c74-bdb7-4edf1e7b4b70"
+          ],
+          "24": [
+            "f1638535-f6c6-47da-bfbf-60afb00f6b37"
+          ],
+          "25": [
+            "9bdb5691-dae3-40b7-a4cc-3bd525841a6a"
+          ],
+          "26": [
+            "1a56f5b9-b1d2-4e07-b091-7cdf0ae621fd"
+          ],
+          "27": [
+            "e998feaa-ba77-4b31-982e-1b8dc9c1ac2a"
+          ],
+          "28": [
+            "8150f641-54e3-4f85-860f-023d75e041af"
+          ],
+          "29": [
+            "522c51a3-ecfb-4288-930b-d8139fe4439f"
+          ],
+          "30": [
+            "bc0822ed-adc9-4a79-ad0e-0da60988d8b5"
+          ],
+          "31": [
+            "34be0f6c-4805-4794-8384-1bac51e004f6"
+          ],
+          "32": [
+            "69545826-39a2-4c86-b350-ea04823b2a30"
+          ],
+          "33": [
+            "547ff46d-6909-452a-a1c5-f3a5b9699c27"
+          ],
+          "34": [
+            "f52973e8-a04b-4c3a-b425-6cd67574c994"
+          ],
+          "35": [
+            "d6afc162-4a4d-4d28-b1cd-8500df90c6dc"
+          ],
+          "36": [
+            "ef24414e-06ac-4ac8-8a82-486a612ae4b7"
+          ],
+          "37": [
+            "468a5398-3fdd-480b-a1cc-5027076e4f92"
+          ],
+          "38": [
+            "202d932c-4585-4711-82dd-64af68e83c17"
+          ],
+          "39": [
+            "c80de793-a4d5-463b-83aa-f628c6a1fabd"
+          ],
+          "40": [
+            "dfb62373-d83c-482a-95ea-95a9400ceff7"
+          ],
+          "41": [
+            "0fcffc5d-27ed-4a7b-9b0b-d55ea17b238d"
+          ],
+          "42": [
+            "2c65b59a-b5fa-4853-b81d-778b5609dd9c"
+          ],
+          "43": [
+            "6f93d79a-ac59-43e1-9b7a-c78b7234f69b"
+          ],
+          "44": [
+            "62dad4d2-2bf2-480e-a003-6c132ddb1369"
+          ],
+          "45": [
+            "38b9f19d-0434-4059-96cc-267ba555a543"
+          ],
+          "48": [
+            "deb7e7cb-71f0-44c5-9a94-bd2ce2472270"
+          ],
+          "50": [
+            "3e445e70-616e-493e-9e6b-3f78a6818d38"
+          ],
+          "51": [
+            "6ee931ee-0460-4d24-8d1b-89ae42696e69"
+          ],
+          "52": [
+            "e47c3ff1-a601-4c6a-a994-7eba57105d00"
+          ],
+          "53": [
+            "04afe547-09a7-4593-a2cc-786e9176176d"
+          ],
+          "55": [
+            "5e860974-5774-418b-a908-f8de0060e285"
+          ],
+          "56": [
+            "1c20b3fb-156e-409c-b282-2da4671db569"
+          ],
+          "57": [
+            "715490f1-2bb5-49d6-bf29-9723c1807bfe"
+          ],
+          "58": [
+            "8542f9a9-8a0d-42bf-9e38-659d0df4d7b5"
+          ],
+          "59": [
+            "183b61fb-4611-4e20-9b28-1d2d66fbf4f0"
+          ],
+          "63": [
+            "0eb99d42-d9b6-44e8-b231-7c64f4dcbea3"
+          ],
+          "65": [
+            "3a22665b-5a23-4066-8500-077548bd73a3"
+          ],
+          "66": [
+            "2d8a05d0-25c0-4238-9bd1-be72e7576737"
+          ],
+          "67": [
+            "d03f5075-3217-42a0-a7fd-d2bd09b3d642"
+          ],
+          "70": [
+            "c26f2ff8-d638-41e9-a363-4f10886ae323"
+          ],
+          "71": [
+            "c1d4c8ad-e986-46b0-932f-2fc8d5ac08ac"
+          ],
+          "75": [
+            "898347a1-912f-4b25-ac1d-cc1419ea05a4"
+          ],
+          "76": [
+            "b0d56506-7da7-48fd-895b-5c399d22e8ce"
+          ],
+          "77": [
+            "f21c92df-da8e-499e-8c62-299b5a100975"
+          ],
+          "78": [
+            "d0bf0326-ad67-463d-9c09-a9c2afb9c219"
+          ],
+          "80": [
+            "5c877d86-049f-41f1-a9e3-411bd4943e67"
+          ],
+          "81": [
+            "0d89767b-935a-49a1-b6f6-0990ba8faae4"
+          ],
+          "82": [
+            "15d2c279-3845-47c5-a936-28abbd21fe87"
+          ],
+          "83": [
+            "8136be63-505b-4f3c-98fe-fdc5e34a8ced"
+          ],
+          "84": [
+            "f18bf616-0ffb-4dde-ba3d-e62572091946"
+          ],
+          "85": [
+            "709c5cc6-9f54-4989-930c-2f94e17982df"
+          ],
+          "86": [
+            "30e15129-e61a-4df1-a070-539e8d4b54f7"
+          ],
+          "87": [
+            "e838baee-c03c-455c-a966-48b42a5ad40f"
+          ],
+          "88": [
+            "42c244f5-6bd1-44fd-9d66-3ed1b30cd380"
+          ],
+          "89": [
+            "f6fe4ccd-947e-4663-acde-6d9627952ca1"
+          ],
+          "90": [
+            "3583ca34-c478-4bab-99b9-838a2ffb5969"
+          ],
+          "91": [
+            "960d8a15-b89a-43b0-8576-e67116c9bada"
+          ],
+          "93": [
+            "aa141ac4-1f44-4ab5-9c21-34c0c6e4291d"
+          ],
+          "94": [
+            "84fe7307-8eb8-4c12-90b8-a59c945a030b"
+          ],
+          "95": [
+            "a411278a-a510-4749-8855-f6e2cc8d0511"
+          ],
+          "99": [
+            "2af2d9fa-749e-49f6-a102-a40555061690"
+          ]
+        }
+      },
+      "V": {
+        "teamId": "e2342563-babf-47f2-ba97-1f9e073d1fd9",
+        "name": "Livingstone",
+        "abbr": "LIV",
+        "players": {
+          "aa66ad01-fae1-4274-8ced-ba5ba5f8aaea": {
+            "playerId": "aa66ad01-fae1-4274-8ced-ba5ba5f8aaea",
+            "team": "V",
+            "jersey": "13",
+            "firstName": "Jason",
+            "lastName": "Zapata",
+            "displayName": "Jason Zapata",
+            "position": "K",
+            "active": true
+          },
+          "62791dfa-80b4-48e4-95cc-b1d3c5df18d6": {
+            "playerId": "62791dfa-80b4-48e4-95cc-b1d3c5df18d6",
+            "team": "V",
+            "jersey": "6",
+            "firstName": "Malachi",
+            "lastName": "Adkins",
+            "displayName": "Malachi Adkins",
+            "position": "WS",
+            "active": true
+          }
+        },
+        "jerseyIndex": {
+          "0": [
+            "7be8e8d9-76fa-4e1f-b9f0-543a9553b90c",
+            "e16a53ab-9c3e-4841-946f-8d9bfe295b1b"
+          ],
+          "1": [
+            "96b4ec29-2b9b-43c9-8a49-a2647cd53019"
+          ],
+          "2": [
+            "1ff3a1d4-1293-4cd1-aca5-6996354a69e9",
+            "798d95ed-3047-4e2b-9c2e-6a5490859787"
+          ],
+          "3": [
+            "4ffd96e1-9412-4c0d-8f09-42631eb4d6dc",
+            "830f5f3e-154f-4b83-8a4d-d9055ddf24ef"
+          ],
+          "4": [
+            "6d5f4dfb-1b2d-4b53-b317-dc83e24fb7b9",
+            "9b60ccec-5592-4c2b-a5c1-31bdedce813b"
+          ],
+          "5": [
+            "baf66db8-8741-4489-bc28-365aadf16c31",
+            "cb3bd779-ab82-49b1-8596-e11f11e0374e"
+          ],
+          "6": [
+            "62791dfa-80b4-48e4-95cc-b1d3c5df18d6",
+            "b1341a93-e3e7-4497-b90e-5b210d4c4065"
+          ],
+          "7": [
+            "dfbe65ae-5238-462a-beef-c83668379bcd",
+            "e7e29110-b4ce-4f28-bfff-200b291724a9"
+          ],
+          "8": [
+            "3cc52328-b344-486e-9467-22e68e7aca62",
+            "3f6033de-b9f5-4d00-880f-948b425e1e7b"
+          ],
+          "9": [
+            "59c3bbcb-24dc-46de-9446-261c3d23bb56",
+            "ed62a647-8ffb-44b1-bfa7-502f254eea65"
+          ],
+          "10": [
+            "5e6baf1d-60f8-42ea-84eb-a5dcfb9a6e66",
+            "be678eea-44a3-4d8e-859c-14db9d7bc719"
+          ],
+          "11": [
+            "933fe1d6-6091-4626-87d9-33a03a31b20d",
+            "95118026-aa57-49d4-8ef6-19907248274c"
+          ],
+          "12": [
+            "6be088ad-7cb4-4df1-805f-d505c99b7936",
+            "c0aaf98f-f5f3-42ec-9f25-fa85e7842512"
+          ],
+          "13": [
+            "1204a837-0c21-427e-a4a5-17712b3cd41c",
+            "aa66ad01-fae1-4274-8ced-ba5ba5f8aaea"
+          ],
+          "14": [
+            "941dc160-cd5d-4b94-8e6e-4585b9e07e36",
+            "bc649156-9a3a-4436-a6e8-719e0e8f99e4"
+          ],
+          "15": [
+            "ff41d963-4d3d-4ce9-b461-c29684797c48"
+          ],
+          "16": [
+            "b52dbcce-e132-4f52-8590-b96af4a75108"
+          ],
+          "18": [
+            "2e9a528a-dd67-4cbd-8f05-887e9ba0134c"
+          ],
+          "19": [
+            "b1834c92-88b9-442e-ad07-82d7bef20150"
+          ],
+          "20": [
+            "6229ff9c-bda7-417e-acc9-b24faa6dcf94"
+          ],
+          "21": [
+            "5c1a1db4-49d1-4517-a904-a7f4c559d040"
+          ],
+          "23": [
+            "2d9119a5-bf96-4baa-bbae-6c59aa014d76"
+          ],
+          "25": [
+            "02a788bc-2a86-424e-aca7-4abcee17c868"
+          ],
+          "26": [
+            "6bceb2a3-8ad4-4306-84bb-05a04ae0d89d"
+          ],
+          "27": [
+            "1139eebb-9234-43ed-a77e-025cfb28f5bb"
+          ],
+          "28": [
+            "709929bc-7aef-403d-b660-c6442c347cea"
+          ],
+          "29": [
+            "268e458c-a752-4ad9-9566-e4352019e5a8"
+          ],
+          "30": [
+            "f46081b6-105c-45aa-8cc5-accbecc39e0b"
+          ],
+          "31": [
+            "c7805c62-8322-401f-9733-09590f1fb3c3"
+          ],
+          "32": [
+            "4247a573-46fd-46fc-8326-b246853cfaf0"
+          ],
+          "33": [
+            "ccefa9c7-37db-4cdc-8fde-08a3d1e994fc"
+          ],
+          "34": [
+            "6096fd80-1871-47c7-80a1-059da75b638a"
+          ],
+          "35": [
+            "721e0216-7d0a-4836-b494-e09b15d5374f"
+          ],
+          "36": [
+            "1e15e7f5-4c6f-4d06-b1b8-f85b027ccc02"
+          ],
+          "37": [
+            "0a1aea49-97d2-4d5c-8134-88cb5ffd2f91"
+          ],
+          "39": [
+            "41b68f50-ecd8-4e3f-8106-cd5500b57f3e"
+          ],
+          "40": [
+            "2ea2b15f-6ad4-4e47-859a-05d5fdeed52b"
+          ],
+          "41": [
+            "10c8b158-78d9-4212-bd62-2b8abb95496b"
+          ],
+          "42": [
+            "b4cf5b58-ada5-4cc9-9fe5-61a2b1a9891e"
+          ],
+          "43": [
+            "b3cf021b-8ac4-48d1-b4bc-f7d5ad96f794"
+          ],
+          "44": [
+            "edd720d0-9057-42d2-8ceb-469d40be93c1"
+          ],
+          "45": [
+            "d4a7d173-42ca-46bd-b3b4-b879c1e03dca"
+          ],
+          "46": [
+            "8c984085-89fd-4bfb-a1a9-be2b2a50f3c8"
+          ],
+          "48": [
+            "db00fdc9-29fd-4cf1-bb96-bd84ab57ba8c"
+          ],
+          "49": [
+            "105806f2-25f2-4f54-ad7d-2a498fca5694"
+          ],
+          "50": [
+            "5cb52c70-e221-4f73-89f9-b70c2fce9a14"
+          ],
+          "51": [
+            "da3fc23f-66a5-4b06-8c47-6a96b39dc5c3"
+          ],
+          "52": [
+            "7b451c0a-2e32-4612-a4cd-48ecb68276b8"
+          ],
+          "53": [
+            "d21dcaea-5e77-42ff-88ec-c7bf98d97e81"
+          ],
+          "55": [
+            "600e6563-44b9-4935-b4d4-c048cf8aabc8"
+          ],
+          "56": [
+            "65499eb7-7be4-4aeb-9d08-2711839c396f"
+          ],
+          "58": [
+            "3c2de0ca-665d-4524-bb39-8ef788a50259"
+          ],
+          "59": [
+            "f1205353-a777-4455-9979-f23d61632cc8"
+          ],
+          "60": [
+            "a5b03f6a-d78f-47a4-a538-29e9cf426cbd"
+          ],
+          "61": [
+            "b2982041-9ae3-40e6-bc65-5b3f3d55e533"
+          ],
+          "62": [
+            "bc06b48e-4852-4729-98c7-7f4af68ce721"
+          ],
+          "66": [
+            "291ceca2-8ca0-4833-a803-82977d2d1b16"
+          ],
+          "67": [
+            "792b687c-398c-4a6d-a34e-61e039af8e9f"
+          ],
+          "68": [
+            "49707c0d-d923-4e28-913a-dc765008d113"
+          ],
+          "69": [
+            "5c28828b-599a-4017-9299-003f2062e8df"
+          ],
+          "70": [
+            "f030bc3d-7ecf-4ea3-a31d-f089695dba85"
+          ],
+          "71": [
+            "fc009191-0307-4d4d-85fc-125e68639c04"
+          ],
+          "72": [
+            "78b26ee8-6c82-443e-85df-192f91c16a86"
+          ],
+          "73": [
+            "613ab39d-98d2-483b-8898-6a2341438de4"
+          ],
+          "74": [
+            "fd7efe6c-c017-45d6-9bfc-07b583c9db16"
+          ],
+          "75": [
+            "70659c48-e925-4ace-ba91-4b0814bdeb4a"
+          ],
+          "76": [
+            "1cb6a647-041a-49a4-a6f7-0fb23b97f011"
+          ],
+          "77": [
+            "9e692542-4827-4324-964a-a2a04a91c3d7"
+          ],
+          "78": [
+            "6b152471-2eb7-46ce-ab2a-a4c986e25668"
+          ],
+          "80": [
+            "b8f13e5a-c800-4eaa-9042-029a038e81d4"
+          ],
+          "81": [
+            "f966d0da-1900-45ff-ba7b-e43827f00716"
+          ],
+          "82": [
+            "004bf510-045d-4281-aee1-ce292dac20b0"
+          ],
+          "83": [
+            "affbc236-798a-4145-9624-f0f5c32434c9"
+          ],
+          "87": [
+            "9e3feedc-a99e-4a3f-94c0-7bf2a7efc116"
+          ],
+          "88": [
+            "73583a0a-3efc-483b-a8f4-65e5a3458278"
+          ],
+          "89": [
+            "52cbede1-a69f-4048-bf3d-f1b7437c2871"
+          ],
+          "90": [
+            "7fc06d51-0ac1-4b98-a344-e51bc3e8301d"
+          ],
+          "91": [
+            "544b3403-3da0-4b3a-8ee8-9d1c5ac6d11f"
+          ],
+          "92": [
+            "ce2222d1-3847-4b74-85dc-04da678a46c2"
+          ],
+          "93": [
+            "cacdac01-2dc3-4742-8552-0e0366ef44b7"
+          ],
+          "94": [
+            "932bf282-1267-44a3-957d-1f89abb1ddc9"
+          ],
+          "95": [
+            "f89fa74f-84db-469a-88fc-048ece24178e"
+          ],
+          "97": [
+            "72618e87-2024-4436-9215-b0c056401fcd"
+          ],
+          "98": [
+            "98bd9d5d-e6c0-429e-9b47-bcb2e5eab7e5"
+          ],
+          "99": [
+            "1558b5c5-1921-47c8-a8c5-586ec4c35c37"
+          ]
+        }
+      }
+    },
+    "unknownPlayerPolicy": {
+      "allowUnknown": false,
+      "idPrefix": "unknown"
+    }
+  },
+  "events": [
+    {
+      "clientEventId": "fcqi-rush-61-client",
+      "type": "rush",
+      "subtype": null,
+      "createdAt": "2026-09-12T22:38:43.225Z",
+      "period": 2,
+      "clock": "10:57",
+      "possession": "H",
+      "preState": {
+        "possession": "H",
+        "down": 4,
+        "distance": 1,
+        "yardLine": "V11",
+        "lineToGain": "V10",
+        "goalToGo": false,
+        "redZone": true,
+        "driveId": "DRV-0006",
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "b751d327-c483-4b88-a746-1218d4f86bbd",
+          "team": "H",
+          "role": "rusher"
+        },
+        "secondary": null,
+        "defenders": [
+          {
+            "playerId": "62791dfa-80b4-48e4-95cc-b1d3c5df18d6",
+            "team": "V",
+            "role": "recoverer"
+          }
+        ]
+      },
+      "result": {
+        "code": "touchdown",
+        "yards": 11,
+        "return": {
+          "type": "Fumble",
+          "returnerPlayerId": "62791dfa-80b4-48e4-95cc-b1d3c5df18d6",
+          "returnYards": 92,
+          "returnStartYardLine": "V08",
+          "returnEndYardLine": "goal",
+          "resultCode": ".",
+          "tackledByPlayerIds": []
+        },
+        "nextPossession": "V",
+        "possessionChanges": [
+          "H",
+          "V"
+        ],
+        "scoring": {
+          "team": "V",
+          "points": 6,
+          "type": "touchdown"
+        },
+        "fumble": {
+          "fumblerPlayerId": "b751d327-c483-4b88-a746-1218d4f86bbd",
+          "spot": "V08",
+          "recoveredByPlayerId": "62791dfa-80b4-48e4-95cc-b1d3c5df18d6",
+          "recoveredByTeam": "V",
+          "recoverySpot": "V08",
+          "returnYards": 92,
+          "returnEndYardLine": "goal",
+          "turnover": true
+        },
+        "turnover": {
+          "type": "fumble",
+          "team": "H",
+          "playerId": "b751d327-c483-4b88-a746-1218d4f86bbd",
+          "spot": "V08",
+          "recoveredBy": "V",
+          "returnYards": 92,
+          "returnEndYardLine": "goal"
+        }
+      },
+      "penalties": [],
+      "description": "BSTATE #16 Savan Briggs rush for 11 yards to the goal line for a touchdown, fumbled at the V8, recovered by #6 Malachi Adkins for LIV at the V8.",
+      "eventId": "LOCAL-000050",
+      "sequence": 50,
+      "status": "accepted",
+      "acceptedAt": "2026-09-12T22:38:43.225Z"
+    },
+    {
+      "clientEventId": "fcqi-pat-64-client",
+      "type": "try",
+      "subtype": "kick",
+      "period": 2,
+      "clock": "10:57",
+      "possession": null,
+      "preState": {
+        "possession": null,
+        "down": null,
+        "distance": null,
+        "yardLine": "H03",
+        "lineToGain": null,
+        "goalToGo": false,
+        "redZone": false,
+        "driveId": null,
+        "driveNumber": 6
+      },
+      "participants": {
+        "primary": {
+          "playerId": "aa66ad01-fae1-4274-8ced-ba5ba5f8aaea",
+          "team": "V",
+          "role": "kicker"
+        },
+        "secondary": null,
+        "defenders": [],
+        "returner": null,
+        "kicker": {
+          "playerId": "aa66ad01-fae1-4274-8ced-ba5ba5f8aaea",
+          "team": "V",
+          "role": "kicker"
+        },
+        "punter": null,
+        "holder": null,
+        "fumbler": null,
+        "forcedBy": null,
+        "recoveredBy": null,
+        "penalizedPlayers": [],
+        "others": []
+      },
+      "result": {
+        "code": "made",
+        "driveEnds": true,
+        "kick": {
+          "kickSpot": "H03"
+        },
+        "scoring": {
+          "team": "V",
+          "points": 1,
+          "type": "patKick"
+        }
+      },
+      "penalties": [],
+      "description": "LIV #13 Jason Zapata extra point good.",
+      "source": {
+        "kind": "fcqi",
+        "draftIntentId": "fcqi-pat-64-intent",
+        "draftRevision": 1,
+        "summaryRevision": 1,
+        "confirmedAt": "2026-09-12T22:43:12.376Z"
+      },
+      "confirmation": {
+        "summaryText": "LIV #13 Jason Zapata extra point good.",
+        "confirmedAt": "2026-09-12T22:43:12.376Z"
+      },
+      "warnings": [],
+      "eventId": "LOCAL-000053",
+      "sequence": 53,
+      "status": "accepted",
+      "acceptedAt": "2026-09-12T22:43:12.376Z",
+      "createdAt": "2026-09-12T22:43:12.376Z"
+    }
+  ],
+  "drives": {
+    "completed": [
+      {
+        "driveId": "DRV-0006",
+        "driveNumber": 6,
+        "team": "H",
+        "startYardLine": "H25",
+        "startReason": "kickoff",
+        "plays": 6,
+        "yards": 75,
+        "result": "touchdown",
+        "startPeriod": 2,
+        "startClock": "14:01",
+        "endPeriod": 2,
+        "endClock": "10:57"
+      }
+    ],
+    "current": null
+  },
+  "stats": {}
+}

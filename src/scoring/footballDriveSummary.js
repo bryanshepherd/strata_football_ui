@@ -1,4 +1,5 @@
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { footballReturnTouchdown } from './footballReturnTouchdown';
 
 const TEAM_CODES = ['H', 'V'];
 
@@ -104,6 +105,7 @@ const scoringEventForTerminal = (events, terminalEvent) => {
 };
 
 const completedDriveForScore = (envelope, scoringEvent) => {
+  if (footballReturnTouchdown(scoringEvent)) return null;
   if (
     ['kickoff', 'punt'].includes(scoringEvent?.type)
     && scoringType(scoringEvent) === 'touchdown'
@@ -179,7 +181,12 @@ const inferredDriveReason = (events, drive, scoringEvent) => {
   return acquisition.result?.driveResult || acquisition.type || 'possession';
 };
 
-const scoringPlayText = (envelope, scoringEvent) => {
+export const footballScoringPlayText = (envelope, scoringEvent) => {
+  const returned = footballReturnTouchdown(scoringEvent);
+  if (returned) {
+    const player = participantFullName(envelope, scoringEvent, [], returned.playerId);
+    return `${player} ${returned.yards} yard ${returned.type} return`;
+  }
   const yards = finiteNumber(
     scoringEvent?.result?.pass?.passingYards ?? scoringEvent?.result?.yards,
     0,
@@ -242,7 +249,7 @@ export const buildFootballScoringPlaySummary = (envelope, terminalEvent) => {
   if (!envelope || !isFootballDriveSummaryTerminalEvent(terminalEvent)) return null;
   const scoringEvent = scoringEventForTerminal(envelope.events || [], terminalEvent);
   if (!scoringEvent) return null;
-  const scoringPlay = scoringPlayText(envelope, scoringEvent);
+  const scoringPlay = footballScoringPlayText(envelope, scoringEvent);
   return {
     scoringEvent,
     terminalEvent,

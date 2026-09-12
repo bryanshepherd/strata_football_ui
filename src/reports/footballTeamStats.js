@@ -143,6 +143,7 @@ const rushingBreakdown = (events, team, authoritativeYards) => {
 
 const scoringTouchdowns = (events, team, playType) => events.filter((event) => (
   event.type === playType
+  && event.possession === team
   && event?.result?.scoring?.team === team
   && event.result.scoring.type === 'touchdown'
 )).length;

@@ -1,4 +1,5 @@
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
+import { footballOffensivePlayYards } from '../scoring/footballReturnTouchdown';
 import {
   buildFootballScoringSummary,
   formatFootballReportDate,
@@ -167,8 +168,11 @@ const returnFromEvents = (events, team, type) => {
     const returnType = String(event?.result?.return?.type || '').toLowerCase();
     if (returnType !== type.toLowerCase()) return false;
     const returnTeam = event?.participants?.returner?.team
-      || event?.result?.turnover?.team
-      || event?.result?.scoring?.team;
+      || event?.result?.fumble?.recoveredByTeam
+      || event?.result?.nextPossession
+      || event?.result?.turnover?.recoveredBy
+      || event?.result?.scoring?.team
+      || event?.result?.turnover?.team;
     return returnTeam === team;
   });
   return {
@@ -191,7 +195,12 @@ const teamProjection = (envelope, events, projected, team, periods) => {
     return total + (passYards(envelope, event) - finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards));
   }, 0);
   const passingYards = finiteNumber(pass.yds) + correction;
-  const totalYards = finiteNumber(source.yards) + correction;
+  const rushCorrection = events.reduce((total, event) => (
+    event.type === 'rush' && event.possession === team && !hasAcceptedPreviousSpotPenalty(event)
+      ? total + footballOffensivePlayYards(event, fieldLength(envelope)) - finiteNumber(event.result?.yards)
+      : total
+  ), 0);
+  const totalYards = finiteNumber(source.yards) + correction + rushCorrection;
   const punts = typeof source.punts === 'object' ? source.punts : {};
   const kickoffReturns = typeof source.kickReturns === 'object'
     ? { count: finiteNumber(source.kickReturns.num), yards: finiteNumber(source.kickReturns.yds) }
@@ -210,7 +219,7 @@ const teamProjection = (envelope, events, projected, team, periods) => {
     score: scoringByTeam(events, team),
     firstDowns: finiteNumber(source.firstDowns),
     rushAttempts: finiteNumber(source.rushAttempts) + baselineKneelCorrection,
-    rushYards: finiteNumber(source.rushYards) - baselineKneelCorrection,
+    rushYards: finiteNumber(source.rushYards) + rushCorrection - baselineKneelCorrection,
     passingYards,
     passCompletions: finiteNumber(pass.cmp),
     passAttempts: finiteNumber(pass.att),
@@ -357,12 +366,13 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
     const sack = event.type === 'pass' && outcome === 'sack';
     if (!suppressed && (event.type === 'rush' || sack) && !event?.result?.teamCharged) {
       const player = get(primary?.playerId, event.possession);
-      const yards = finiteNumber(event?.result?.yards);
+      const yards = footballOffensivePlayYards(event, fieldLength(envelope));
       if (player) {
+        player.rushYards += yards - finiteNumber(event?.result?.yards);
         if (yards >= 0) player.rushGain += yards;
         else player.rushLoss += Math.abs(yards);
         player.rushLong = Math.max(player.rushLong, yards);
-        if (event.type === 'rush' && event?.result?.scoring?.type === 'touchdown') player.rushTouchdowns += 1;
+        if (event.type === 'rush' && event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === event.possession) player.rushTouchdowns += 1;
       }
     }
     if (!suppressed && event.type === 'pass') {
@@ -377,12 +387,12 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
         if (passer) {
           passer.passYards += correction;
           passer.passLong = Math.max(passer.passLong, yards);
-          if (event?.result?.scoring?.type === 'touchdown') passer.passTouchdowns += 1;
+          if (event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === event.possession) passer.passTouchdowns += 1;
         }
         if (receiver) {
           receiver.receivingYards += correction;
           receiver.receivingLong = Math.max(receiver.receivingLong, yards);
-          if (event?.result?.scoring?.type === 'touchdown') receiver.receivingTouchdowns += 1;
+          if (event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === event.possession) receiver.receivingTouchdowns += 1;
           const yac = passYardsAfterCatch(envelope, event);
           if (yac !== null) {
             receiver.yac += yac;
