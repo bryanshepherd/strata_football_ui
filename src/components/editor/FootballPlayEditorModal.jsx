@@ -104,6 +104,8 @@ export default function FootballPlayEditorModal({
   isOpen,
   onClose,
   onDelete,
+  onRecalculate,
+  contextReview,
   onReplace,
   onSave,
   play,
@@ -217,10 +219,22 @@ export default function FootballPlayEditorModal({
           </div>
         </header>
 
-        <ReadOnlyContext play={play} teamNames={teamNames} />
+        <ReadOnlyContext play={play} teamNames={teamNames} canRecalculate={Boolean(contextReview?.expected && onRecalculate)} />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           <div className="mx-auto max-w-5xl space-y-4">
+            {contextReview?.expected && onRecalculate && (
+              <section aria-label="Play context review" className={`rounded-lg border p-4 ${contextReview.fields.length ? 'border-amber-400 bg-amber-50' : 'border-zinc-300 bg-white'}`}>
+                <h2 className="text-sm font-black text-zinc-950">{contextReview.fields.length ? 'Context mismatch' : 'Recalculate play context'}</h2>
+                <p className="mt-2 text-sm text-zinc-800">Recorded: <strong>{contextReview.recordedLabel}</strong></p>
+                <p className="mt-1 text-sm text-zinc-800">Expected after #{contextReview.previousSequence}: <strong>{contextReview.expectedLabel}</strong></p>
+                <p className="mt-2 text-xs text-zinc-600">Use the previous ending context and recalculate this play’s ending context. Following plays will be checked again.</p>
+                <button className="mt-3 rounded bg-amber-800 px-3 py-2 text-sm font-bold text-white hover:bg-amber-900 disabled:opacity-50" disabled={hasChanges} onClick={() => onRecalculate(play)} type="button">
+                  Recalculate this play
+                </button>
+                {hasChanges && <p className="mt-2 text-xs font-semibold text-amber-900">Save or discard your detail changes before recalculating.</p>}
+              </section>
+            )}
             <ReplacementBoundary onReplace={() => setShowReplacePrompt(true)} play={play} />
 
             <PlayOwnedFields
@@ -343,7 +357,7 @@ export default function FootballPlayEditorModal({
   );
 }
 
-const ReadOnlyContext = ({ play, teamNames }) => {
+const ReadOnlyContext = ({ play, teamNames, canRecalculate }) => {
   const pre = play.preState || {};
   const possession = teamNames[play.possession] || play.possession || 'Not set';
   const downDistance = pre.down ? `${pre.down}${ordinal(pre.down)} & ${pre.distance ?? '?'}` : 'Not set';
@@ -360,7 +374,7 @@ const ReadOnlyContext = ({ play, teamNames }) => {
           </div>
         </div>
         <div className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-300">
-          Context cannot be edited here
+          {canRecalculate ? 'Recorded starting context' : 'Context cannot be edited here'}
         </div>
       </div>
     </section>
