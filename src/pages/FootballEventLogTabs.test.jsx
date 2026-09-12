@@ -44,6 +44,53 @@ describe('Football game log quarter tabs', () => {
     expect(envelope).toEqual(original);
   });
 
+  it('shows the recorded starting context with the requested separators and team labels', () => {
+    const envelope = quarterEnvelope();
+    envelope.operatorTeamAliases = { H: 'W', V: 'S' };
+    envelope.game.teams.H.abbr = 'WNFELD';
+    envelope.liveState = { ...envelope.liveState, possession: 'V', down: 4, distance: 2, yardLine: 'H10' };
+    envelope.events[3] = {
+      ...envelope.events[3],
+      clock: '08:24',
+      possession: 'H',
+      preState: { possession: 'H', down: 2, distance: 5, yardLine: 'H44' },
+      postState: { possession: 'H', down: 1, distance: 10, yardLine: 'V43' },
+    };
+    render(<FootballEventLogSlot envelope={envelope} />);
+
+    expect(screen.getByText('Q2 8:24 · W - 2 & 5 · W44')).toBeInTheDocument();
+    expect(screen.queryByText(/Q2 · 8:24/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 & 10/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/4 & 2/)).not.toBeInTheDocument();
+  });
+
+  it.each([null, undefined, '', '  '])('omits an unentered time without adding an extra separator: %j', (clock) => {
+    const envelope = quarterEnvelope();
+    envelope.events[3] = {
+      ...envelope.events[3], clock, possession: 'V',
+      preState: { possession: 'V', down: 3, distance: 7, yardLine: '50' },
+    };
+    render(<FootballEventLogSlot envelope={envelope} />);
+
+    expect(screen.getByText('Q2 · V - 3 & 7 · 50')).toBeInTheDocument();
+    expect(screen.queryByText(/--:--/)).not.toBeInTheDocument();
+  });
+
+  it('shows an entered zero clock and goal-to-go without fabricating a series for a kickoff', () => {
+    const envelope = quarterEnvelope();
+    envelope.events[3] = {
+      ...envelope.events[3], clock: '00:00', possession: 'H',
+      preState: { possession: 'H', down: 4, distance: 3, goalToGo: true, yardLine: 'V03' },
+    };
+    envelope.events[0].preState = { possession: null, down: null, distance: null, yardLine: 'H35' };
+    render(<FootballEventLogSlot envelope={envelope} />);
+
+    expect(screen.getByText('Q2 0:00 · H - 4 & Goal · V03')).toBeInTheDocument();
+    chooseQuarter('Q1');
+    expect(screen.getByText('Q1 15:00 · — · H35')).toBeInTheDocument();
+    expect(screen.queryByText(/&/)).not.toBeInTheDocument();
+  });
+
   it('keeps the reviewed quarter after a deletion but follows a new quarter or game', () => {
     const envelope = quarterEnvelope();
     const { rerender } = render(<FootballEventLogSlot envelope={envelope} onEditEvent={vi.fn()} />);

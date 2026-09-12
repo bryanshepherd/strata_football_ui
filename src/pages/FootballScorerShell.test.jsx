@@ -1705,6 +1705,119 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('button', { name: 'Open roster editor' })).not.toBeInTheDocument();
   });
 
+  it('saves Game Control abbreviations for a final game, mirrors them, and restores them on reload', async () => {
+    const game = finalEnvelopeWithBallContextRevision('FB-FINAL-ALIASES');
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const submitMock = mockSubmitSuccess();
+    const route = '/scorer?dashboardGameId=DASH-FINAL-ALIASES&envelopeGameId=FB-FINAL-ALIASES';
+    try {
+      const first = renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      const control = screen.getByRole('dialog', { name: 'Game Control' });
+      expect(within(control).queryByRole('button', { name: /^ball context/i })).not.toBeInTheDocument();
+      expect(within(control).queryByRole('button', { name: /^quarter functions/i })).not.toBeInTheDocument();
+      fireEvent.click(within(control).getByRole('button', { name: /^team abbreviations a$/i }));
+      const editor = screen.getByRole('dialog', { name: 'Team Abbreviations' });
+      fireEvent.change(within(editor).getByLabelText('Home State abbreviation'), { target: { value: 'B' } });
+      fireEvent.change(within(editor).getByLabelText('Visitor Tech abbreviation'), { target: { value: 'A' } });
+      fireEvent.click(within(editor).getByRole('button', { name: 'Save Abbreviations' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.operatorTeamAliases).toEqual({ H: 'B', V: 'A' });
+      expect(saved.events).toEqual(game.events);
+      expect(saved.liveState).toEqual(game.liveState);
+      expect(saved.clock).toEqual(game.clock);
+      expect(saved.game).toEqual(game.game);
+      await waitFor(() => expect(submitMock.fetchSpy.mock.calls.some(([, init]) => {
+        const request = JSON.parse(init.body);
+        return request.schemaVersion === 'football.localEnvelopeMirrorRequest.v1'
+          && request.envelope.operatorTeamAliases?.H === 'B'
+          && request.envelope.operatorTeamAliases?.V === 'A';
+      })).toBe(true));
+      first.unmount();
+      renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^team abbreviations a$/i }));
+      expect(screen.getByLabelText('Home State abbreviation')).toHaveValue('B');
+      expect(screen.getByLabelText('Visitor Tech abbreviation')).toHaveValue('A');
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByText('Q4 4:12 · B - 2 & 18 · A32')).toBeInTheDocument();
+    } finally { submitMock.restore(); }
+  });
+
+  it('preserves saved abbreviations when undo restores a deleted play', async () => {
+    const game = finalEnvelopeWithBallContextRevision('FB-ALIAS-UNDO');
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    renderScorer('/scorer?envelopeGameId=FB-ALIAS-UNDO');
+    fireEvent.click(await screen.findByRole('button', { name: /edit ball context revision 2/i }));
+    const editor = screen.getByRole('dialog', { name: /edit ball context revision 2/i });
+    fireEvent.click(within(editor).getByRole('button', { name: /delete revision/i }));
+    const confirmation = within(editor).getByRole('alertdialog');
+    fireEvent.click(within(confirmation).getByRole('button', { name: /delete revision/i }));
+    expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^team abbreviations a$/i }));
+    fireEvent.change(screen.getByLabelText('Home State abbreviation'), { target: { value: 'B' } });
+    fireEvent.change(screen.getByLabelText('Visitor Tech abbreviation'), { target: { value: 'A' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Abbreviations' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+    const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    expect(saved.events).toEqual(game.events);
+    expect(saved.operatorTeamAliases).toEqual({ H: 'B', V: 'A' });
+  });
+
+  it('saves coin-toss abbreviations before completion and preserves them through stale pregame hydration', async () => {
+    const originalFetch = globalThis.fetch;
+    const serverGame = structuredClone(gameEnvelopeFixtures.pregame);
+    serverGame.gameId = 'FB-PREGAME-ALIASES';
+    serverGame.rosters.gameId = serverGame.gameId;
+    globalThis.fetch = vi.fn().mockImplementation(async () => ({ ok: true, json: async () => structuredClone(serverGame) }));
+    try {
+      const route = '/scorer?envelopeGameId=FB-PREGAME-ALIASES';
+      const first = renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Coin Toss' }));
+      fireEvent.change(screen.getByLabelText('West Virginia St. abbreviation'), { target: { value: 'B' } });
+      fireEvent.change(screen.getByLabelText('Fairmont St. abbreviation'), { target: { value: 'A' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByRole('heading', { name: 'Team Captains' })).toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(serverGame.gameId).envelope.operatorTeamAliases).toEqual({ H: 'B', V: 'A' });
+      first.unmount();
+      renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Coin Toss' }));
+      expect(screen.getByLabelText('West Virginia St. abbreviation')).toHaveValue('B');
+      expect(screen.getByLabelText('Fairmont St. abbreviation')).toHaveValue('A');
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      fireEvent.click(screen.getByRole('button', { name: 'West Virginia St.', exact: true }));
+      fireEvent.keyDown(window, { key: 'k' });
+      fireEvent.click(screen.getByRole('button', { name: 'North', exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: 'Finalize Coin Toss' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /coin toss/i })).not.toBeInTheDocument());
+      const saved = getDashboardSeededFootballEnvelopeRecord(serverGame.gameId).envelope;
+      expect(saved.operatorTeamAliases).toEqual({ H: 'B', V: 'A' });
+      expect(saved.pregame.coinToss.status).toBe('complete');
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  it('updates live team-selection hotkeys from Game Control without adding a play', () => {
+    const game = cloneNormalEnvelope();
+    game.gameId = 'FB-LIVE-ALIASES';
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    renderScorer('/scorer?envelopeGameId=FB-LIVE-ALIASES');
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^team abbreviations a$/i }));
+    fireEvent.change(screen.getByLabelText('Home State abbreviation'), { target: { value: 'B' } });
+    fireEvent.change(screen.getByLabelText('Visitor Tech abbreviation'), { target: { value: 'A' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Abbreviations' }));
+    fireEvent.click(screen.getByRole('button', { name: /^game control/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^set possession p$/i }));
+    const choice = screen.getByRole('dialog', { name: 'Select Team' });
+    expect(within(choice).getByRole('button', { name: /^home state b$/i })).toBeInTheDocument();
+    expect(within(choice).getByRole('button', { name: /^visitor tech a$/i })).toBeInTheDocument();
+    expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toEqual(game.events);
+  });
+
   it('keeps the coin toss moving after operator team aliases are accepted', () => {
     renderScorer('/scorer?fixture=pregame');
     fireEvent.click(screen.getByRole('button', { name: 'Open Coin Toss' }));

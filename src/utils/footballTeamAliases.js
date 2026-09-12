@@ -21,3 +21,19 @@ export function footballTeamAliasesForEnvelope(envelope, preferredAliases) {
   if (home === visitor) return { H: 'H', V: 'V' };
   return { H: home, V: visitor };
 }
+
+export function normalizeFootballTeamAlias(value) {
+  return String(value || '').replace(/[^a-z]/gi, '').slice(0, 1).toUpperCase();
+}
+
+export function normalizeFootballTeamAliases(aliases) {
+  return { H: normalizeFootballTeamAlias(aliases?.H), V: normalizeFootballTeamAlias(aliases?.V) };
+}
+
+export function validateFootballTeamAliases(aliases) {
+  const normalized = normalizeFootballTeamAliases(aliases);
+  if (!normalized.H || !normalized.V) return { ok: false, message: 'Enter one letter for each team.' };
+  if (normalized.H === normalized.V) return { ok: false, message: 'Team abbreviations must be different.' };
+  if (normalized.H === 'V' || normalized.V === 'H') return { ok: false, message: 'H and V remain reserved for their canonical Home and Visitor teams.' };
+  return { ok: true };
+}

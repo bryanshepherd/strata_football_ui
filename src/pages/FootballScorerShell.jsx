@@ -11,6 +11,7 @@ import FootballDriveSummaryModal from '../components/scorer/FootballDriveSummary
 import FootballGameWrapUpModal from '../components/scorer/FootballGameWrapUpModal';
 import FootballPossessionClockModal from '../components/scorer/FootballPossessionClockModal';
 import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
+import FootballTeamAliasesModal from '../components/scorer/FootballTeamAliasesModal';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
 import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
 import FootballRosterEditorModal from '../components/pregame/FootballRosterEditorModal';
@@ -61,6 +62,8 @@ import {
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { formatFootballSpotForDisplay } from '../utils/footballSpotNormalization';
+import { footballTeamAliasesForEnvelope, normalizeFootballTeamAliases, validateFootballTeamAliases } from '../utils/footballTeamAliases';
 
 const formatStatus = (status) =>
   String(status || 'unknown')
@@ -176,6 +179,7 @@ export default function FootballScorerShell() {
   const [possessionClockChange, setPossessionClockChange] = useState(null);
   const [driveSummary, setDriveSummary] = useState(null);
   const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
+  const [teamAliasesEditorOpen, setTeamAliasesEditorOpen] = useState(false);
   const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
   const [wrapUpOpen, setWrapUpOpen] = useState(false);
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
@@ -213,6 +217,7 @@ export default function FootballScorerShell() {
     setPossessionClockChange(null);
     setDriveSummary(null);
     setPenaltyCodeEditorOpen(false);
+    setTeamAliasesEditorOpen(false);
     setPendingSecondHalfStart(null);
     setWrapUpOpen(false);
     setWrapUpSaveState({ saving: false, error: '' });
@@ -249,8 +254,13 @@ export default function FootballScorerShell() {
     setLoadedGameState({ status: 'loading', envelope: null, source: 'server', error: '' });
     fetchFootballEnvelope(requestedGameId, { dashboardGameId, signal: controller.signal })
       .then((loadedEnvelope) => {
-        const localEnvelope = saveDashboardSeededFootballEnvelope(loadedEnvelope.gameId || requestedGameId, loadedEnvelope)
-          || loadedEnvelope;
+        // Pregame hydration still loads server setup, while saved operator
+        // abbreviations remain authoritative even if their mirror is pending.
+        const savedAliases = getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope?.operatorTeamAliases;
+        const hydratedEnvelope = savedAliases && validateFootballTeamAliases(savedAliases).ok
+          ? { ...loadedEnvelope, operatorTeamAliases: savedAliases } : loadedEnvelope;
+        const localEnvelope = saveDashboardSeededFootballEnvelope(loadedEnvelope.gameId || requestedGameId, hydratedEnvelope)
+          || hydratedEnvelope;
         setLoadedGameState({
           status: 'ready',
           envelope: localEnvelope,
@@ -482,9 +492,12 @@ export default function FootballScorerShell() {
   const undoLastLocalEvent = useCallback(() => {
     const previousEnvelope = localUndoStack[localUndoStack.length - 1];
     if (!previousEnvelope) return;
+    // Undo scoring changes without reverting separately saved team labels.
+    const restore = envelope.operatorTeamAliases
+      ? { ...previousEnvelope, operatorTeamAliases: envelope.operatorTeamAliases } : previousEnvelope;
     const restoredEnvelope = requestedGameId
-      ? saveDashboardSeededFootballEnvelope(requestedGameId, previousEnvelope) || previousEnvelope
-      : previousEnvelope;
+      ? saveDashboardSeededFootballEnvelope(requestedGameId, restore) || restore
+      : restore;
     setLocalUndoStack((current) => current.slice(0, -1));
     setPlayEditFeedback({ tone: 'success', message: 'Last change undone.' });
     setAcceptedScorerState({ gameEnvelope: restoredEnvelope, projection: null, acceptedEvents: [] });
@@ -501,7 +514,7 @@ export default function FootballScorerShell() {
       setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
       void flushServerSync();
     }
-  }, [dashboardGameId, flushServerSync, localUndoStack, requestedGameId]);
+  }, [dashboardGameId, envelope?.operatorTeamAliases, flushServerSync, localUndoStack, requestedGameId]);
 
   const openPlayEditor = useCallback((event) => {
     setPlayEditFeedback(null);
@@ -771,6 +784,27 @@ export default function FootballScorerShell() {
     }
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
+  const openTeamAliasesEditor = useCallback(() => setTeamAliasesEditorOpen(true), []);
+  const closeTeamAliasesEditor = useCallback(() => setTeamAliasesEditorOpen(false), []);
+  const saveTeamAliases = useCallback((aliases) => {
+    const validation = validateFootballTeamAliases(aliases);
+    if (!validation.ok) throw new Error(validation.message);
+    const amendedEnvelope = {
+      ...envelope,
+      operatorTeamAliases: normalizeFootballTeamAliases(aliases),
+      updatedAt: new Date().toISOString(),
+    };
+    const persisted = requestedGameId
+      ? saveDashboardSeededFootballEnvelope(requestedGameId, amendedEnvelope) : amendedEnvelope;
+    if (!persisted) throw new Error('Team abbreviations could not be saved.');
+    setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+    if (requestedGameId && dashboardGameId) {
+      enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
   const handlePregameEnvelopeChange = useCallback(async (nextEnvelope) => {
     // Optimistically keep the current workspace responsive; the canonical
     // persisted envelope replaces it as soon as the configured store returns.
@@ -948,6 +982,8 @@ export default function FootballScorerShell() {
             onOpenStarters={openStartersEditor}
             onSubmitAccepted={replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
+            onTeamAliasesChange={saveTeamAliases}
+            onOpenTeamAliases={openTeamAliasesEditor}
             replacementPlay={replacementPlay}
             submitAdapter={replacementPlay
               ? replacementSubmitAdapter
@@ -998,6 +1034,7 @@ export default function FootballScorerShell() {
         onClose={closeDriveSummary}
         summary={driveSummary}
       />
+      {teamAliasesEditorOpen && <FootballTeamAliasesModal envelope={envelope} onClose={closeTeamAliasesEditor} onSave={saveTeamAliases} />}
       <FootballPenaltyCodeEditorModal
         onClose={closePenaltyCodeEditor}
         open={penaltyCodeEditorOpen}
@@ -1241,6 +1278,8 @@ export const FootballInputSlot = ({
   onCancelReplacement,
   onFcqiStateChange,
   onOpenPenaltyEditor,
+  onOpenTeamAliases,
+  onTeamAliasesChange,
   onOpenStarters,
   onPregameEnvelopeChange,
   onSubmitAccepted,
@@ -1248,11 +1287,7 @@ export const FootballInputSlot = ({
   submitAdapter,
 }) => {
   const showPregameWorkspace = envelope.game.status === 'pregame';
-  const [teamAliases, setTeamAliases] = useState(() => envelope.operatorTeamAliases || null);
-
-  useEffect(() => {
-    setTeamAliases(envelope.operatorTeamAliases || null);
-  }, [envelope.gameId, envelope.operatorTeamAliases?.H, envelope.operatorTeamAliases?.V]);
+  const teamAliases = footballTeamAliasesForEnvelope(envelope);
 
   return (
     <div className="space-y-4 p-4">
@@ -1280,7 +1315,7 @@ export const FootballInputSlot = ({
         <FootballPregameWorkspace
           envelope={envelope}
           onEnvelopeChange={onPregameEnvelopeChange}
-          onTeamAliasesChange={setTeamAliases}
+          onTeamAliasesChange={onTeamAliasesChange}
           teamAliases={teamAliases}
         />
       )}
@@ -1289,6 +1324,7 @@ export const FootballInputSlot = ({
         envelope={envelope}
         key={fcqiResetKey}
         onOpenPenaltyEditor={onOpenPenaltyEditor}
+        onOpenTeamAliases={onOpenTeamAliases}
         onOpenStarters={onOpenStarters}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
@@ -1429,6 +1465,18 @@ const isEditableGameLogEvent = (event) => (
 const gameLogPeriodForEvent = (event) => {
   const control = event.result?.gameControl;
   return Number(control?.action === 'startQuarter' ? control.period || event.period || 1 : event.period || 1);
+};
+
+const gameLogContextLabel = (envelope, event, periodLabel) => {
+  const context = event.preState || {};
+  const side = context.possession ?? event.possession;
+  const team = footballTeamAliasesForEnvelope(envelope)[side] || side || '—';
+  const distance = context.goalToGo ? 'Goal' : context.distance ?? '—';
+  const possession = context.down ? `${team} - ${context.down} & ${distance}` : team;
+  const periodAndTime = [periodLabel(gameLogPeriodForEvent(event)), formatFootballClockDisplay(event.clock)]
+    .filter(Boolean).join(' ');
+  const spot = formatFootballSpotForDisplay(context.yardLine, envelope) || '—';
+  return `${periodAndTime} · ${possession} · ${spot}`;
 };
 
 const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
@@ -1580,7 +1628,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
-                  {periodLabel(gameLogPeriodForEvent(item.event))} {formatFootballClockDisplay(item.event.clock, '--:--')} · {item.event.possession || '-'}
+                  {gameLogContextLabel(envelope, item.event, periodLabel)}
                 </div>
               </li>
             )

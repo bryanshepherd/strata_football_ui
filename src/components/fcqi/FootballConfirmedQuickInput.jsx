@@ -141,6 +141,7 @@ export default function FootballConfirmedQuickInput({
   debug = false,
   envelope,
   onOpenPenaltyEditor,
+  onOpenTeamAliases,
   onOpenStarters,
   onSubmitAccepted,
   onStateChange,
@@ -157,6 +158,7 @@ export default function FootballConfirmedQuickInput({
     seed: 'fcqi-rush-1',
     startedAt: envelope.updatedAt,
   });
+  const [settingsOnlyMenuOpen, setSettingsOnlyMenuOpen] = useState(false);
   const [penaltyMessage, setPenaltyMessage] = useState('');
   const [penaltyReviewOpen, setPenaltyReviewOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({
@@ -173,6 +175,7 @@ export default function FootballConfirmedQuickInput({
     [envelope, startMeta, teamAliases],
   );
   const gamePhase = gamePhaseForEnvelope(envelope);
+  const canEditFinalSettings = gamePhase === 'final' && Boolean(onOpenTeamAliases) && !replacementMode;
   const kickoffContextReady = isCanonicalSpot(envelope.liveState?.yardLine)
     && envelope.liveState.yardLine !== 'goal';
   const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
@@ -318,6 +321,8 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startGameControl = (startedBy) => {
+    // Final games expose only game-label settings; scoring transitions stay locked.
+    if (canEditFinalSettings) { setSettingsOnlyMenuOpen(true); return; }
     if (!familyAvailable('gameControl')) return;
     const nextStartMeta = createStartMeta('game-control', startedBy, 'G');
     const nextContext = buildQuickInputContext(envelope, nextStartMeta, teamAliases);
@@ -381,6 +386,14 @@ export default function FootballConfirmedQuickInput({
     setPenaltyMessage('');
     clearSubmitStatus();
     const normalizedValue = String(value || '').trim().toUpperCase();
+    if ((settingsOnlyMenuOpen || currentState.currentStep === 'gameControlMenu') && normalizedValue === 'A' && onOpenTeamAliases) {
+      setSettingsOnlyMenuOpen(false);
+      clearModalStepHistory();
+      publishState(createInitialFootballQuickInputState());
+      onOpenTeamAliases();
+      return;
+    }
+    if (settingsOnlyMenuOpen) return;
     if (currentState.currentStep === 'gameControlMenu' && normalizedValue === 'R' && onOpenStarters) {
       clearModalStepHistory();
       publishState(createInitialFootballQuickInputState());
@@ -546,6 +559,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const cancelFlow = () => {
+    setSettingsOnlyMenuOpen(false);
     setPenaltyReviewOpen(false);
     clearModalStepHistory();
     setPenaltyMessage('');
@@ -608,7 +622,7 @@ export default function FootballConfirmedQuickInput({
                   ? 'rush'
                   : button.label.toLowerCase();
             const enabled = button.enabled
-              && familyAvailable(family)
+              && (familyAvailable(family) || (family === 'gameControl' && canEditFinalSettings))
               && (family !== 'kickoff' || kickoffContextReady);
             return (
             <button
@@ -748,7 +762,9 @@ export default function FootballConfirmedQuickInput({
         prePlaySpot={envelope.liveState.yardLine}
         penaltyRuleset={footballPenaltyRulesetFromRules(envelope.game.rules)}
         progressSteps={progressSteps}
-        state={currentState}
+        gameControlSettingsOnly={settingsOnlyMenuOpen}
+        teamAliasesEditable={Boolean(onOpenTeamAliases)}
+        state={settingsOnlyMenuOpen ? { ...fallbackState, flow: 'gameControl', currentStep: 'gameControlMenu', status: 'token.awaiting' } : currentState}
         teamAliases={teamAliases}
         teamNames={{ H: envelope.game.teams.H.name, V: envelope.game.teams.V.name }}
       />
