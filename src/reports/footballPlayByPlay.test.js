@@ -7,6 +7,17 @@ import {
 } from './footballPlayByPlay';
 
 describe('football Play-by-Play projection', () => {
+  it('repairs existing unknown-player placeholders from the roster without rewriting saved plays', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const play = envelope.events.find((event) => event.sequence === 2);
+    play.description = 'WVSU unknown player pass incomplete intended for unknown player.';
+    const before = JSON.stringify(envelope);
+    const report = buildFootballPlayByPlayReport(envelope);
+    expect(report.quarters[0].rows.find((row) => row.id === 'play-2').text)
+      .toBe('#10 Kaleb Jackson pass incomplete intended for #23 Jojo Restall.');
+    expect(JSON.stringify(envelope)).toBe(before);
+  });
+
   it('builds chronological quarter sections with quarter-only Quickies', () => {
     const report = buildFootballPlayByPlayReport(baselineRecord.envelope);
 

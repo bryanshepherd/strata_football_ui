@@ -1,5 +1,6 @@
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
+import { resolveFootballUnknownPlayerText } from '../utils/footballUnknownPlayerReadout';
 import { isFootballTryReplayEvent } from '../scoring/footballDriveSummary';
 import { buildFootballQuickieStatsReport } from './footballQuickieStats';
 import { formatFootballReportDate } from './footballScoringSummary';
@@ -221,8 +222,9 @@ const labelDeadBallPenalties = (text, penalties) => {
   });
 };
 
-export const formatFootballPlayText = (event, teams) => {
+export const formatFootballPlayText = (event, teams, rosterTeams = {}) => {
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
+  text = resolveFootballUnknownPlayerText(event, text, rosterTeams);
   text = formatFootballFumbleReadout(event, text);
   text = labelDeadBallPenalties(text, event?.penalties);
   const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
@@ -349,7 +351,7 @@ const eventRows = (envelope, events, period, drives, scores) => {
         sequence,
         downAndDistance: formatDownAndDistance(event),
         spot: formatFootballPlaySpot(event?.preState?.yardLine, teams),
-        text: formatFootballPlayText(event, teams),
+        text: formatFootballPlayText(event, teams, envelope.rosters?.teams),
       });
       const score = scores.get(sequence);
       if (score) {
