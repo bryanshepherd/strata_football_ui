@@ -152,7 +152,8 @@ export type FieldGoalTokenStep =
   | 'fieldGoalResult'
   | 'fieldGoalMissedReason'
   | 'fieldGoalBlockedByJersey'
-  | 'fieldGoalReturnAttempted';
+  | 'fieldGoalReturnAttempted'
+  | 'fieldGoalNextSpot';
 export type PatTokenStep =
   | 'patType'
   | 'patKickResult'
@@ -291,6 +292,7 @@ export type KickFlowTokens = PuntFlowTokens & {
   fieldGoalResult?: FieldGoalResultSelection;
   fieldGoalMissedReason?: KickMissedReasonSelection;
   fieldGoalReturnAttempted?: boolean;
+  fieldGoalNextSpot?: Spot;
   patType?: PatTypeSelection;
   patKickResult?: PatKickResultSelection;
   patKickMissedReason?: KickMissedReasonSelection;
@@ -1582,13 +1584,16 @@ function commitKickToken(
     if (!fieldGoalMissedReason) {
       return { state: tokenError(state, 'INVALID_MISSED_REASON', 'Missed field goal reason must be R, L, S, E, I, or C.', 'result.kick.missedReason') };
     }
-    return advanceAfterReturnEligibility({
+    return { state: {
       ...baseActiveState(state),
+      status: 'token.awaiting',
+      currentStep: 'fieldGoalReturnAttempted',
+      currentToken: '',
       tokens: {
         ...cloneTokens(state.tokens),
         fieldGoalMissedReason,
       },
-    }, context, 'fieldGoal');
+    } };
   }
 
   if (state.currentStep === 'fieldGoalBlockedByJersey') {
@@ -1596,12 +1601,23 @@ function commitKickToken(
       role: 'blocker',
       teamScope: opposingTeam(context.play.possession ?? context.play.actionTeam),
       actionContext: 'defense',
-      nextStep: context.game.rules?.fgReturn ? 'fieldGoalReturnAttempted' : undefined,
+      nextStep: 'fieldGoalReturnAttempted',
     });
   }
 
   if (state.currentStep === 'fieldGoalReturnAttempted') {
     return commitReturnAttempted(state, context, 'fieldGoal');
+  }
+
+  if (state.currentStep === 'fieldGoalNextSpot') {
+    const spot = parseSpot(state.currentToken, context);
+    if (!spot || spot === 'goal' || spot === 'H00' || spot === 'V00') {
+      return { state: tokenError(state, 'INVALID_SPOT', 'Enter the next possession’s ball spot between the goal lines.', 'result.endYardLine') };
+    }
+    return { state: makeReadyState({
+      ...baseActiveState(state),
+      tokens: { ...cloneTokens(state.tokens), fieldGoalNextSpot: spot },
+    }, context) };
   }
 
   if (state.currentStep === 'patType') {
@@ -3351,39 +3367,25 @@ function commitPatPassResult(
   return { state: makeReadyState(nextState, context) };
 }
 
-function advanceAfterReturnEligibility(
-  state: FootballConfirmedQuickInputState,
-  context: FootballQuickInputContext,
-  kind: 'fieldGoal',
-): FootballQuickInputTransitionResult {
-  if (kind === 'fieldGoal' && context.game.rules?.fgReturn) {
-    return {
-      state: {
-        ...state,
-        status: 'token.awaiting',
-        currentStep: 'fieldGoalReturnAttempted',
-        currentToken: '',
-      },
-    };
-  }
-
-  return { state: makeReadyState(state, context) };
-}
-
 function commitReturnAttempted(
   state: FootballConfirmedQuickInputState,
   context: FootballQuickInputContext,
   kind: 'fieldGoal' | 'pat',
 ): FootballQuickInputTransitionResult {
-  const attempted = parseBooleanToken(state.currentToken);
+  const selection = state.currentToken.trim().toUpperCase();
+  const attempted = kind === 'fieldGoal'
+    ? selection === 'R' ? true : selection === 'S' ? false : null
+    : parseBooleanToken(state.currentToken);
   if (attempted === null) {
-    return { state: tokenError(state, 'INVALID_RETURN_ATTEMPTED', 'Choose Return (Y) or No Return (N).', 'result.return') };
+    return { state: tokenError(state, 'INVALID_RETURN_ATTEMPTED', kind === 'fieldGoal'
+      ? 'Choose Returned (R) or Spot the ball (S).'
+      : 'Choose Return (Y) or No Return (N).', 'result.return') };
   }
 
   const tokens = {
     ...cloneTokens(state.tokens),
     ...(kind === 'fieldGoal'
-      ? { fieldGoalReturnAttempted: attempted }
+      ? { fieldGoalReturnAttempted: attempted, fieldGoalNextSpot: undefined }
       : state.currentStep === 'patKickReturnAttempted'
         ? { patKickReturnAttempted: attempted }
         : state.currentStep === 'patRushReturnAttempted'
@@ -3407,6 +3409,16 @@ function commitReturnAttempted(
         },
       },
     };
+  }
+
+  if (kind === 'fieldGoal') {
+    return { state: {
+      ...baseActiveState(state),
+      status: 'token.awaiting',
+      currentStep: 'fieldGoalNextSpot',
+      currentToken: '',
+      tokens,
+    } };
   }
 
   return { state: makeReadyState({ ...baseActiveState(state), tokens }, context) };
@@ -3941,6 +3953,7 @@ function editPlay(state: FootballConfirmedQuickInputState): FootballQuickInputTr
     tokens.fieldGoalResult = undefined;
     tokens.fieldGoalMissedReason = undefined;
     tokens.fieldGoalReturnAttempted = undefined;
+    tokens.fieldGoalNextSpot = undefined;
     tokens.tacklers = [];
 
     return {
@@ -5087,7 +5100,9 @@ function buildFieldGoalResult(tokens: FootballFlowTokens, context: FootballQuick
 
   return {
     code,
-    endYardLine: tokens.fieldGoalSpot,
+    // The kick spot measures the attempt; the operator supplies the next ball spot.
+    endYardLine: tokens.fieldGoalResult === 'good' ? tokens.fieldGoalSpot : tokens.fieldGoalNextSpot,
+    nextPossession: tokens.fieldGoalResult === 'good' ? undefined : opposingTeam(context.play.actionTeam),
     driveEnds: true,
     kick: {
       kickSpot: tokens.fieldGoalSpot,
@@ -7081,6 +7096,7 @@ function isKickSpecificTokenStep(step: FootballTokenStep): step is KickTokenStep
     'fieldGoalMissedReason',
     'fieldGoalBlockedByJersey',
     'fieldGoalReturnAttempted',
+    'fieldGoalNextSpot',
     'patType',
     'patKickResult',
     'patKickMissedReason',
@@ -7283,6 +7299,7 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     fieldGoalResult: tokens.fieldGoalResult,
     fieldGoalMissedReason: tokens.fieldGoalMissedReason,
     fieldGoalReturnAttempted: tokens.fieldGoalReturnAttempted,
+    fieldGoalNextSpot: tokens.fieldGoalNextSpot,
     patType: tokens.patType,
     patKickResult: tokens.patKickResult,
     patKickMissedReason: tokens.patKickMissedReason,
