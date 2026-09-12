@@ -14,7 +14,7 @@ export default function ScorerLayoutShell({
   return (
     <section
       aria-label="Scorer layout"
-      className={`flex min-h-0 flex-1 flex-col ${className}`.trim()}
+      className={`flex min-h-0 flex-1 flex-col lg:overflow-hidden ${className}`.trim()}
       data-testid="scorer-layout-shell"
     >
       <div className="shrink-0" data-scorer-slot="scoreboard">
@@ -22,25 +22,25 @@ export default function ScorerLayoutShell({
       </div>
 
       <div
-        className="flex min-h-0 flex-1 flex-col lg:flex-row"
+        className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden"
         data-testid="scorer-layout-middle"
       >
         <aside
-          className="min-h-0 w-full overflow-y-auto border-b border-zinc-300 bg-zinc-100 lg:w-1/5 lg:border-b-0 lg:border-r"
+          className="min-h-0 w-full overflow-y-auto overscroll-contain border-b border-zinc-300 bg-zinc-100 lg:w-1/5 lg:border-b-0 lg:border-r"
           data-scorer-slot="stats"
         >
           {stats}
         </aside>
 
         <section
-          className="min-h-0 w-full overflow-y-auto bg-zinc-100 lg:w-[65%]"
+          className="min-h-0 w-full overflow-y-auto overscroll-contain bg-zinc-100 lg:w-[65%]"
           data-scorer-slot="input"
         >
           {input}
         </section>
 
         <aside
-          className="min-h-0 w-full overflow-y-auto border-t border-zinc-300 bg-zinc-100 lg:w-[15%] lg:border-l lg:border-t-0"
+          className="min-h-0 w-full overflow-hidden border-t border-zinc-300 bg-zinc-100 lg:w-[15%] lg:border-l lg:border-t-0"
           data-scorer-slot="event-log"
         >
           {eventLog}
