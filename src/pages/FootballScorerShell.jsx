@@ -25,6 +25,7 @@ import {
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
 import { deleteFootballPlayFromEnvelope } from '../play-editor/footballPlayDeletion';
+import { footballContextEventKey, recalculateFootballPlayContext, reviewFootballPlayContexts } from '../play-editor/footballPlayContext';
 import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import {
   deleteFootballBallContextRevision,
@@ -522,6 +523,42 @@ export default function FootballScorerShell() {
   }, []);
 
   const closePlayEditor = useCallback(() => setEditingPlay(null), []);
+
+  const editingContextReview = useMemo(() => {
+    if (!editingPlay) return null;
+    const review = reviewFootballPlayContexts(envelope).reviews.get(footballContextEventKey(editingPlay));
+    return review ? {
+      ...review,
+      recordedLabel: playContextLabel(envelope, review.recorded),
+      expectedLabel: playContextLabel(envelope, review.expected),
+    } : null;
+  }, [editingPlay, envelope]);
+
+  const recalculatePlay = useCallback((play) => {
+    try {
+      const amended = recalculateFootballPlayContext(envelope, play);
+      const persisted = requestedGameId ? saveDashboardSeededFootballEnvelope(requestedGameId, amended) || amended : amended;
+      setLocalUndoStack((current) => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setPossessionClockChange(null);
+      setDriveSummary(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey((current) => current + 1);
+      setPlayEditFeedback({ tone: 'success', message: `Play #${play.sequence} was recalculated.` });
+      if (requestedGameId && dashboardGameId) {
+        try {
+          enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+          void flushServerSync();
+        } catch (error) {
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `The recalculation was saved locally, but server sync could not be prepared: ${error.message}` });
+        }
+      }
+    } catch (error) {
+      setPlayEditFeedback({ tone: 'error', message: error instanceof Error ? error.message : 'The play context could not be recalculated.' });
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
   const saveBallContextRevision = useCallback((revision) => {
     try {
@@ -1055,9 +1092,11 @@ export default function FootballScorerShell() {
         saving={wrapUpSaveState.saving}
       />
       <FootballPlayEditorModal
+        contextReview={editingContextReview}
         isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay)}
         onClose={closePlayEditor}
         onDelete={deletePlay}
+        onRecalculate={recalculatePlay}
         onReplace={requestPlayReplacement}
         onSave={savePlayEditor}
         play={editingPlay}
@@ -1479,7 +1518,15 @@ const gameLogContextLabel = (envelope, event, periodLabel) => {
   return `${periodAndTime} · ${possession} · ${spot}`;
 };
 
+const playContextLabel = (envelope, context) => {
+  if (!context) return 'Unavailable';
+  const team = footballTeamAliasesForEnvelope(envelope)[context.possession] || context.possession;
+  const spot = formatFootballSpotForDisplay(context.yardLine, envelope) || '—';
+  return `${team ? `${team} ball` : 'No possession'}${context.down ? `, ${context.down} & ${context.goalToGo ? 'Goal' : context.distance ?? '—'}` : ''} on ${spot}`;
+};
+
 const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
+  const contextReviews = useMemo(() => reviewFootballPlayContexts(envelope).reviews, [envelope]);
   const regulationPeriods = Math.max(1, Number(envelope.game?.rules?.periods) || 4);
   const currentPeriod = Math.max(1, Number(envelope.clock?.period || envelope.game?.period) || 1);
   const lastPeriod = Math.max(regulationPeriods, currentPeriod,
@@ -1534,7 +1581,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
       </div>
       {editFeedback?.message && (
         <div
-          className={`mt-2 rounded border px-3 py-2 text-xs font-semibold ${
+          className={`mt-2 max-h-20 overflow-y-auto rounded border px-3 py-2 text-xs font-semibold ${
             editFeedback.tone === 'error'
               ? 'border-red-300 bg-red-50 text-red-900'
               : editFeedback.tone === 'warning'
@@ -1630,6 +1677,11 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                 <div className="mt-2 text-xs text-zinc-500">
                   {gameLogContextLabel(envelope, item.event, periodLabel)}
                 </div>
+                {contextReviews.get(footballContextEventKey(item.event))?.fields.length > 0 && (
+                  <div className="mt-2 inline-block rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900" aria-label={`Context mismatch for play ${item.event.sequence}`}>
+                    Context mismatch
+                  </div>
+                )}
               </li>
             )
           ))}

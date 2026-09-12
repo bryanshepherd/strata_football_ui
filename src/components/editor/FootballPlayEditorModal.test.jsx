@@ -9,6 +9,23 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('shows the mismatch and prevents recalculation from discarding unsaved detail edits', () => {
+    const onRecalculate = vi.fn();
+    renderEditor({ onRecalculate, contextReview: {
+      expected: { down: 1, distance: 10 }, fields: ['distance'], previousSequence: 128,
+      recordedLabel: 'H ball, 1 & 5 on V43', expectedLabel: 'H ball, 1 & 10 on V43',
+    } });
+    const review = screen.getByLabelText('Play context review');
+    expect(review).toHaveTextContent('Context mismatch');
+    expect(review).toHaveTextContent('Recorded: H ball, 1 & 5 on V43');
+    expect(review).toHaveTextContent('Expected after #128: H ball, 1 & 10 on V43');
+    fireEvent.change(screen.getByLabelText(/End spot/i), { target: { value: 'H40' } });
+    expect(within(review).getByRole('button', { name: 'Recalculate this play' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(within(review).getByRole('button', { name: 'Recalculate this play' }));
+    expect(onRecalculate).toHaveBeenCalledExactlyOnceWith(footballPlayEditorSandboxPlays[0]);
+  });
+
   it('requires confirmation before deleting the original play and cancels deletion with Escape', () => {
     const onDelete = vi.fn();
     const onSave = vi.fn();
@@ -161,6 +178,8 @@ function renderEditor({
   play = footballPlayEditorSandboxPlays[0],
   onClose = vi.fn(),
   onDelete = vi.fn(),
+  onRecalculate,
+  contextReview,
   onReplace = vi.fn(),
   onSave = vi.fn(),
 } = {}) {
@@ -169,6 +188,8 @@ function renderEditor({
       isOpen
       onClose={onClose}
       onDelete={onDelete}
+      onRecalculate={onRecalculate}
+      contextReview={contextReview}
       onReplace={onReplace}
       onSave={onSave}
       play={play}

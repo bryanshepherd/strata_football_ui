@@ -417,6 +417,61 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('flags and repairs consecutive contexts, mirrors both sides, supports undo, and retains repairs after reload', async () => {
+    const submitMock = mockSubmitSuccess();
+    const game = finalEnvelopeWithBallContextRevision('FB-CONTEXT-RECALCULATE');
+    const state = { possession: 'H', down: 1, distance: 10, yardLine: 'V43', lineToGain: 'V33', goalToGo: false, driveId: 'DRV-0001', driveNumber: 1 };
+    game.events[0].postState = state;
+    game.events[1] = {
+      ...game.events[0], eventId: 'REPAIR-2', clientEventId: 'repair-2', sequence: 2,
+      preState: { ...state, distance: 5, lineToGain: 'V38' }, postState: undefined,
+      penalties: [], result: { code: 'tackle', yards: 2, endYardLine: 'V41' },
+    };
+    game.events[2] = {
+      ...game.events[1], eventId: 'REPAIR-3', clientEventId: 'repair-3', sequence: 3,
+      preState: { ...state, down: 2, distance: 3, yardLine: 'V41', lineToGain: 'V38' },
+      result: { code: 'tackle', yards: 3, endYardLine: 'V38', firstDown: true },
+    };
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    let view;
+    try {
+      view = renderScorer('/scorer?dashboardGameId=DASH-RECALCULATE&envelopeGameId=FB-CONTEXT-RECALCULATE');
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      expect(screen.getByLabelText('Context mismatch for play 2')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Context mismatch for play 3')).not.toBeInTheDocument();
+      const repair = (sequence) => {
+        fireEvent.click(screen.getByRole('button', { name: `Edit play ${sequence}` }));
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Recalculate this play' }));
+      };
+      repair(2);
+      expect(screen.getByRole('status')).toHaveTextContent('Play #2 was recalculated.');
+      expect(screen.queryByLabelText('Context mismatch for play 2')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Context mismatch for play 3')).toBeInTheDocument();
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events[1].postState).toMatchObject({ down: 2, distance: 8 }));
+      const afterTwo = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(afterTwo.events[2].preState).toEqual(game.events[2].preState);
+      fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+      expect(screen.getByLabelText('Context mismatch for play 2')).toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events[1].preState.distance).toBe(5);
+      repair(2);
+      repair(3);
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events[2].postState).toMatchObject({ down: 3, distance: 5 }));
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.events[2].preState).toMatchObject({ down: 2, distance: 8 });
+      expect(saved.events[2].result.firstDown).toBe(false);
+      expect(saved.game.status).toBe('final');
+      expect(saved.clock).toEqual(game.clock);
+      view.unmount();
+      view = renderScorer('/scorer?dashboardGameId=DASH-RECALCULATE&envelopeGameId=FB-CONTEXT-RECALCULATE');
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      expect(screen.queryByLabelText(/Context mismatch for play/)).not.toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events[2].postState).toMatchObject({ down: 3, distance: 5 });
+    } finally {
+      view?.unmount();
+      submitMock.restore();
+    }
+  });
+
   it('edits a ball context revision in a final game without rewriting the next play context', async () => {
     const finalEnvelope = finalEnvelopeWithBallContextRevision('FB-FINAL-CONTEXT-EDIT');
     const nextPlayContext = structuredClone(finalEnvelope.events[2].preState);
