@@ -1,5 +1,6 @@
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { footballOffensivePlayYards } from '../scoring/footballReturnTouchdown';
+import { footballYardsAfterCatch } from '../utils/footballReceivingYardage';
 import {
   buildFootballScoringSummary,
   formatFootballReportDate,
@@ -106,27 +107,6 @@ const passYards = (envelope, event) => {
   const start = relativeSpot(event?.preState?.yardLine, team, length);
   const terminal = relativeSpot(event?.result?.pass?.terminalYardLine, team, length);
   return Number.isFinite(start) && Number.isFinite(terminal) ? terminal - start : recorded;
-};
-
-const passYardsAfterCatch = (envelope, event) => {
-  const explicit = event?.result?.pass?.yardsAfterCatch ?? event?.result?.pass?.yac;
-  if (explicit !== undefined && explicit !== null) return finiteNumber(explicit);
-
-  const team = event?.possession;
-  const length = fieldLength(envelope);
-  const catchSpot = relativeSpot(
-    event?.result?.pass?.catchYardLine ?? event?.result?.pass?.caughtAtYardLine,
-    team,
-    length,
-  );
-  const terminalSpot = relativeSpot(
-    event?.result?.pass?.terminalYardLine ?? event?.result?.endYardLine,
-    team,
-    length,
-  );
-  return Number.isFinite(catchSpot) && Number.isFinite(terminalSpot)
-    ? terminalSpot - catchSpot
-    : null;
 };
 
 const clockSeconds = (clock) => {
@@ -393,7 +373,7 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
           receiver.receivingYards += correction;
           receiver.receivingLong = Math.max(receiver.receivingLong, yards);
           if (event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === event.possession) receiver.receivingTouchdowns += 1;
-          const yac = passYardsAfterCatch(envelope, event);
+          const yac = footballYardsAfterCatch(event, fieldLength(envelope));
           if (yac !== null) {
             receiver.yac += yac;
             receiver.yacStated = true;

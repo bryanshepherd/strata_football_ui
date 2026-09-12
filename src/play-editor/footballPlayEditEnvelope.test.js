@@ -57,6 +57,28 @@ const envelope = {
 };
 
 describe('football play edit envelope', () => {
+  it('keeps roster names when a saved pass contains only participant IDs', () => {
+    const source = structuredClone(envelope);
+    source.rosters.teams.V.players['V-7'] = { playerId: 'V-7', team: 'V', jersey: '7', displayName: 'Davyn Reid' };
+    const play = {
+      ...baseEvent, type: 'pass', subtype: 'complete', penalties: [],
+      participants: {
+        primary: { playerId: 'V-11', team: 'V', role: 'passer' },
+        secondary: { playerId: 'V-7', team: 'V', role: 'intendedReceiver' },
+        receiver: { playerId: 'V-7', team: 'V', role: 'receiver' },
+      },
+      result: { code: 'complete', yards: 39, endYardLine: 'goal', scoring: { team: 'V', type: 'touchdown', points: 6 }, pass: { outcome: 'complete', catchYardLine: 'V14', receivingYards: 39 } },
+    };
+    source.events = [play];
+    const before = JSON.stringify(source);
+    const edited = structuredClone(play);
+    edited.result.pass.catchYardLine = 'H14';
+    const updated = applyFootballPlayEditToEnvelope(source, edited);
+    expect(updated.events[0].description).toBe('FAIR #11 Nino Marzullo pass complete to #7 Davyn Reid for 39 yards for a touchdown.');
+    expect(updated.events[0].participants).toEqual(play.participants);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
   it('rebuilds the natural description and keeps contextual fields locked', () => {
     const edited = JSON.parse(JSON.stringify(baseEvent));
     edited.result.endYardLine = 'H41';

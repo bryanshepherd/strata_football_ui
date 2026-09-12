@@ -192,6 +192,32 @@ describe('FootballPlayEditorModal', () => {
     expect(onSave.mock.calls[0][0].result).toEqual({ ...play.result, pass: { ...play.result.pass, [field]: 'H14' } });
     expect(play.result.pass[field]).toBe('V14');
   });
+
+  it('flags excessive YAC immediately, permits saving it, and clears the flag after correcting the catch side', () => {
+    const play = structuredClone(footballPlayEditorSandboxPlays[1]);
+    play.subtype = 'complete';
+    play.possession = 'V';
+    play.preState = { ...play.preState, possession: 'V', yardLine: 'H39' };
+    play.result = {
+      code: 'complete', yards: 39, endYardLine: 'goal',
+      scoring: { team: 'V', type: 'touchdown', points: 6 },
+      pass: { outcome: 'complete', catchYardLine: 'V14', terminalYardLine: 'goal', passingYards: 39, receivingYards: 39 },
+    };
+    const onSave = vi.fn();
+    renderEditor({ play, onSave });
+    const warning = screen.getByRole('alert', { name: 'Receiving yardage warning' });
+    expect(warning).toHaveTextContent('86 YAC is 47 yards more than the 39 receiving yards');
+    expect(warning).toHaveTextContent('Catch: Fairmont State 14. End: goal line.');
+    fireEvent.change(screen.getByLabelText(/Caught at/i), { target: { value: 'V15' } });
+    expect(warning).toHaveTextContent('85 YAC');
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].result.pass.catchYardLine).toBe('V15');
+    fireEvent.change(screen.getByLabelText(/Caught at/i), { target: { value: 'H14' } });
+    expect(screen.queryByRole('alert', { name: 'Receiving yardage warning' })).not.toBeInTheDocument();
+    expect(play.result.pass.catchYardLine).toBe('V14');
+  });
 });
 
 function renderEditor({

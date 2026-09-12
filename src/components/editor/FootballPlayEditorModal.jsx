@@ -5,6 +5,7 @@ import {
 } from '../../play-editor/footballPlayEditPolicy';
 import { recalculatePlayEditorPenaltyYards } from '../../play-editor/footballPlayEditYardage';
 import { calculateYardsGained } from '../../utils/footballRulesEngine';
+import { footballReceivingYardageWarning } from '../../utils/footballReceivingYardage';
 
 const RESULT_LABELS = {
   accepted: 'Accepted',
@@ -100,6 +101,14 @@ const familyName = (play) => {
   return play?.subtype ? `${type} · ${humanize(play.subtype)}` : type;
 };
 
+const warningSpotLabel = (spot, teamNames) => {
+  const value = String(spot || '').trim();
+  if (/^goal$/i.test(value)) return 'goal line';
+  if (/^(50|midfield)$/i.test(value)) return 'midfield';
+  const match = value.match(/^([HV])(\d{1,2})$/i);
+  return match ? `${teamNames[match[1].toUpperCase()]} ${Number(match[2])}` : value || 'not entered';
+};
+
 export default function FootballPlayEditorModal({
   isOpen,
   onClose,
@@ -111,6 +120,7 @@ export default function FootballPlayEditorModal({
   play,
   roster = [],
   saveError = '',
+  fieldLength = 100,
   teamNames = { H: 'Home', V: 'Visitor' },
 }) {
   const [draft, setDraft] = useState(() => prepareDraft(play));
@@ -132,6 +142,7 @@ export default function FootballPlayEditorModal({
   const changedPaths = useMemo(() => collectChangedPaths(baselinePlay, draft), [baselinePlay, draft]);
   const editDecision = useMemo(() => classifyPlayEdit(baselinePlay, draft), [baselinePlay, draft]);
   const hasChanges = changedPaths.length > 0;
+  const receivingWarning = footballReceivingYardageWarning(draft, fieldLength);
 
   const update = (path, value) => setDraft((current) => (
     recalculatePlayEditorPenaltyYards(setAtPath(current, path, value))
@@ -223,6 +234,14 @@ export default function FootballPlayEditorModal({
 
         <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           <div className="mx-auto max-w-5xl space-y-4">
+            {receivingWarning && (
+              <section aria-label="Receiving yardage warning" className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-amber-950" role="alert">
+                <h2 className="text-sm font-black">Check the catch spot</h2>
+                <p className="mt-2 text-sm"><strong>{receivingWarning.yac} YAC</strong> is {receivingWarning.excess} yards more than the <strong>{receivingWarning.receivingYards} receiving yards</strong> on this play.</p>
+                <p className="mt-1 text-sm">Catch: <strong>{warningSpotLabel(receivingWarning.catchSpot, teamNames)}</strong>. End: <strong>{warningSpotLabel(receivingWarning.endSpot, teamNames)}</strong>.</p>
+                <p className="mt-2 text-xs">Check the team side and yardline. You can still save if these spots are correct.</p>
+              </section>
+            )}
             {contextReview?.expected && onRecalculate && (
               <section aria-label="Play context review" className={`rounded-lg border p-4 ${contextReview.fields.length ? 'border-amber-400 bg-amber-50' : 'border-zinc-300 bg-white'}`}>
                 <h2 className="text-sm font-black text-zinc-950">{contextReview.fields.length ? 'Context mismatch' : 'Recalculate play context'}</h2>

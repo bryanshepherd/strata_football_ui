@@ -1094,6 +1094,7 @@ export default function FootballScorerShell() {
       />
       <FootballPlayEditorModal
         contextReview={editingContextReview}
+        fieldLength={envelope.game.rules?.fieldLength}
         isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay)}
         onClose={closePlayEditor}
         onDelete={deletePlay}

@@ -72,23 +72,28 @@ const penaltyParticipant = (envelope, penalty) => {
 
 const summaryParticipants = (envelope, event) => {
   const participants = event.participants || {};
+  const players = allEnvelopePlayers(envelope);
+  const resolve = (participant) => participantForSummary(participant && {
+    ...players.find((player) => player.playerId === participant.playerId),
+    ...participant,
+  });
   const penalizedPlayers = (event.penalties || [])
     .map((penalty) => penaltyParticipant(envelope, penalty))
     .filter(Boolean);
   return {
     ...participants,
-    primary: participantForSummary(participants.primary),
-    secondary: participantForSummary(participants.secondary),
-    defenders: (participants.defenders || []).map(participantForSummary),
-    returner: participantForSummary(participants.returner),
-    kicker: participantForSummary(participants.kicker),
-    punter: participantForSummary(participants.punter),
-    holder: participantForSummary(participants.holder),
-    fumbler: participantForSummary(participants.fumbler),
-    forcedBy: participantForSummary(participants.forcedBy),
-    recoveredBy: participantForSummary(participants.recoveredBy),
+    primary: resolve(participants.primary),
+    secondary: resolve(participants.secondary),
+    defenders: (participants.defenders || []).map(resolve),
+    returner: resolve(participants.returner),
+    kicker: resolve(participants.kicker),
+    punter: resolve(participants.punter),
+    holder: resolve(participants.holder),
+    fumbler: resolve(participants.fumbler),
+    forcedBy: resolve(participants.forcedBy),
+    recoveredBy: resolve(participants.recoveredBy),
     penalizedPlayers,
-    others: (participants.others || []).map(participantForSummary),
+    others: (participants.others || []).map(resolve),
   };
 };
 
