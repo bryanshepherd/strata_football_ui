@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { resolvePlayerByJersey } from '../../quick-input/playerResolution';
 import { otherTeam, resolveToss } from '../../pregame/footballPregame';
+import { normalizeFootballTeamAlias as normalizeTeamAlias, normalizeFootballTeamAliases as normalizeTeamAliases, validateFootballTeamAliases as validateTeamAliases } from '../../utils/footballTeamAliases';
 
 const TEAM_LABEL = { H: 'Home', V: 'Away' };
 const CHOICE_LABEL = {
@@ -126,8 +127,12 @@ export default function FootballCoinTossModal({
     }
     const aliases = normalizeTeamAliases(draftAliases);
     setDraftAliases(aliases);
-    onTeamAliasesChange?.(aliases);
-    advance('captains');
+    try {
+      onTeamAliasesChange?.(aliases);
+      advance('captains');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Abbreviations could not be saved.');
+    }
   };
 
   const chooseInitialOption = (winnerInitialChoice) => {
@@ -407,7 +412,7 @@ export default function FootballCoinTossModal({
   );
 }
 
-function TeamAliasesScreen({ aliases, onChange, teams }) {
+export function TeamAliasesScreen({ aliases, onChange, teams }) {
   return (
     <section>
       <h3 className="text-lg font-semibold text-zinc-950">Team Abbreviations</h3>
@@ -568,14 +573,6 @@ function initialScreenFor(coinToss) {
   return coinToss.status === 'complete' ? 'summary' : 'aliases';
 }
 
-function normalizeTeamAlias(value) {
-  return String(value || '').replace(/[^a-z]/gi, '').slice(0, 1).toUpperCase();
-}
-
-function normalizeTeamAliases(aliases) {
-  return { H: normalizeTeamAlias(aliases?.H), V: normalizeTeamAlias(aliases?.V) };
-}
-
 function suggestedTeamAlias(team, teams) {
   return normalizeTeamAlias(teams?.[team]?.name) || team;
 }
@@ -587,14 +584,6 @@ function initialTeamAliases(aliases, teams) {
     V: configured.V || suggestedTeamAlias('V', teams),
   };
   return initial.H === initial.V ? { H: 'H', V: 'V' } : initial;
-}
-
-function validateTeamAliases(aliases) {
-  const normalized = normalizeTeamAliases(aliases);
-  if (!normalized.H || !normalized.V) return { ok: false, message: 'Enter one letter for each team.' };
-  if (normalized.H === normalized.V) return { ok: false, message: 'Team abbreviations must be different.' };
-  if (normalized.H === 'V' || normalized.V === 'H') return { ok: false, message: 'H and V remain reserved for their canonical Home and Visitor teams.' };
-  return { ok: true };
 }
 
 function directionChoiceTeam(toss) {
