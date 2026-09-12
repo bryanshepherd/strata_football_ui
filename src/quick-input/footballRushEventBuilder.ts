@@ -102,6 +102,8 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
   if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
   if (intent.result.return) result.return = { ...intent.result.return };
   if (intent.result.nextPossession) result.nextPossession = intent.result.nextPossession;
+  if (intent.result.possessionChanges) result.possessionChanges = [...intent.result.possessionChanges];
+  if (intent.result.penaltyContext) result.penaltyContext = { ...intent.result.penaltyContext };
   if (intent.result.scoring) {
     result.scoring = { ...intent.result.scoring };
   } else if (intent.result.code === 'touchdown') {

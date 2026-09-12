@@ -5,6 +5,7 @@ import type {
   TeamCode,
 } from '../quick-input/footballIntentSchema';
 import { calculateFootballPenaltyFinalSpot } from './footballPenaltyEnforcement';
+import { validPenaltyBallContext } from './footballPenaltyPossession';
 
 export type FootballPenaltyOfficialState = {
   possession: TeamCode;
@@ -44,7 +45,9 @@ export function resolveFootballDraftPenaltyOutcome(
 
   const penalties = orderPenalties(draft.penalties, options.enforcementOrder).map(clonePenalty);
   const accepted = penalties.filter((penalty) => penalty.status === 'accepted');
-  if (accepted.length === 0) {
+  const confirmedContext = validPenaltyBallContext(draft.result.penaltyContext)
+    ? draft.result.penaltyContext : undefined;
+  if (accepted.length === 0 || confirmedContext?.setupContext) {
     return {
       ...draft,
       penalties,
@@ -154,6 +157,18 @@ export function resolveFootballDraftPenaltyOutcome(
 
   const verified = options.verified
     ? verifiedOfficialState(calculated, options.verified, yardsToFirst)
+    : confirmedContext
+      ? {
+          possession: confirmedContext.possession,
+          down: confirmedContext.down,
+          distance: confirmedContext.distance,
+          yardLine: confirmedContext.yardLine,
+          lineToGain: lineToGainFromDistance(confirmedContext.yardLine, confirmedContext.possession, confirmedContext.distance),
+          firstDownAwarded: !confirmedContext.startNewDrive && confirmedContext.down === 1 && calculated.firstDownAwarded,
+          ...(!confirmedContext.startNewDrive && confirmedContext.down === 1 && calculated.firstDownAwarded
+            ? { firstDownAwardedTo: confirmedContext.possession, firstDownSource: calculated.firstDownSource }
+            : {}),
+        }
     : undefined;
   if (verified && verified.yardLine !== currentSpot) {
     const lastAccepted = [...penalties].reverse().find((penalty) => penalty.status === 'accepted');
@@ -175,6 +190,9 @@ export function resolveFootballDraftPenaltyOutcome(
     result: {
       ...draft.result,
       officialOutcome,
+      ...(confirmedContext && verified ? {
+        penaltyContext: { ...confirmedContext, down: verified.down, distance: verified.distance, yardLine: verified.yardLine },
+      } : {}),
     },
   };
 }

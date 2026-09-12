@@ -582,7 +582,7 @@ describe('FootballFlowModal team aliases', () => {
     expect(screen.queryByLabelText('Returner jersey')).not.toBeInTheDocument();
   });
 
-  it('offers Down Counts only for a succeeding-spot foul by the offensive team', () => {
+  it('removes Down Counts for both teams', () => {
     const baseState = {
       status: 'token.awaiting',
       flow: 'rush',
@@ -607,8 +607,7 @@ describe('FootballFlowModal team aliases', () => {
       />,
     );
 
-    expect(screen.getByText('Down Counts')).toBeInTheDocument();
-    expect(screen.getByText('The completed play stands. Apply the normal next-down or series result, then enforce the foul from the succeeding spot.')).toBeInTheDocument();
+    expect(screen.queryByText('Down Counts')).not.toBeInTheDocument();
 
     rerender(
       <FootballFlowModal
@@ -624,6 +623,33 @@ describe('FootballFlowModal team aliases', () => {
     );
 
     expect(screen.queryByText('Down Counts')).not.toBeInTheDocument();
+  });
+
+  it('asks the exact possession question and accepts Yes and No hotkeys', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{ status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyAfterPossession', tokens: {} }} />);
+    expect(screen.getByText('Did the foul happen after the change of possession?')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'y' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('N');
+  });
+
+  it('asks who currently has the ball for multiple changes and uses team aliases', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} teamNames={{ H: 'Home State', V: 'Visitor Tech' }} teamAliases={{ H: 'W', V: 'F' }} state={{ status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyPossessionTeam', tokens: {} }} />);
+    expect(screen.getByText('Who currently has the ball?')).toBeInTheDocument();
+    expect(screen.queryByText('Did the foul happen after the change of possession?')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('V');
+  });
+
+  it('shows the calculated ball context and offers correction before committing', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} teamNames={{ H: 'Home State', V: 'Visitor Tech' }} state={{ status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyConfirmContext', tokens: { penaltyContext: { possession: 'V', down: 1, distance: 10, yardLine: 'V21' } } }} />);
+    expect(screen.getByText('Please confirm: Visitor Tech ball, 1st and 10 on the Visitor Tech 21.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('No, correct context'));
+    expect(onTokenCommit).toHaveBeenCalledWith('N');
   });
 
   it('capitalizes team aliases immediately in yardline fields', () => {

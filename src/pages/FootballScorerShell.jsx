@@ -272,11 +272,18 @@ export default function FootballScorerShell() {
 
   const flushServerSync = useCallback(async () => {
     if (!requestedGameId || !dashboardGameId) return;
-    const result = await flushFootballServerSync({ gameId: requestedGameId });
-    setSyncState({
-      pending: getPendingFootballSyncCount(requestedGameId),
-      error: result.error || '',
-    });
+    try {
+      const result = await flushFootballServerSync({ gameId: requestedGameId });
+      setSyncState({
+        pending: getPendingFootballSyncCount(requestedGameId),
+        error: result.error || '',
+      });
+    } catch (error) {
+      setSyncState({
+        pending: getPendingFootballSyncCount(requestedGameId),
+        error: `Server sync could not be saved: ${error?.message || 'Browser storage is unavailable.'}`,
+      });
+    }
   }, [dashboardGameId, requestedGameId]);
 
   const handleFetchFromServer = useCallback(async () => {
@@ -319,24 +326,40 @@ export default function FootballScorerShell() {
 
   useEffect(() => {
     if (!requestedGameId || !dashboardGameId || !baseEnvelope) return undefined;
-    const authoritativeEnvelope = getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope
-      || baseEnvelope;
-    const migratedSync = migratePendingFootballSyncToEnvelopeMirror({
-      gameId: requestedGameId,
-      dashboardGameId,
-      envelope: authoritativeEnvelope,
-    });
-    if (!migratedSync && getPendingFootballSyncCount(requestedGameId) === 0) {
-      enqueueFootballEnvelopeMirror({
-        gameId: requestedGameId,
-        dashboardGameId,
-        envelope: authoritativeEnvelope,
-      });
-    }
-    setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
-    void flushServerSync();
-    const retry = window.setInterval(() => void flushServerSync(), 15_000);
-    const onOnline = () => void flushServerSync();
+    let needsInitialMirror = true;
+    const retrySync = async () => {
+      if (needsInitialMirror) {
+        try {
+          // Read again on retry so a failed initial queue write cannot later
+          // mirror an older envelope over the operator's newer local work.
+          const authoritativeEnvelope = getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope
+            || baseEnvelope;
+          const migratedSync = migratePendingFootballSyncToEnvelopeMirror({
+            gameId: requestedGameId,
+            dashboardGameId,
+            envelope: authoritativeEnvelope,
+          });
+          if (!migratedSync && getPendingFootballSyncCount(requestedGameId) === 0) {
+            enqueueFootballEnvelopeMirror({
+              gameId: requestedGameId,
+              dashboardGameId,
+              envelope: authoritativeEnvelope,
+            });
+          }
+          needsInitialMirror = false;
+        } catch (error) {
+          setSyncState({
+            pending: getPendingFootballSyncCount(requestedGameId),
+            error: `Server sync could not be prepared: ${error?.message || 'Browser storage is unavailable.'} The game remains open; sync will retry automatically.`,
+          });
+          return;
+        }
+      }
+      await flushServerSync();
+    };
+    void retrySync();
+    const retry = window.setInterval(() => void retrySync(), 15_000);
+    const onOnline = () => void retrySync();
     window.addEventListener('online', onOnline);
     return () => {
       window.clearInterval(retry);
@@ -1574,21 +1597,23 @@ function createEmptyAcceptedScorerState() {
 }
 
 function reduceAcceptedScorerState(current, result) {
-  if (result?.contractMode === 'canonicalRush' && result?.gameEnvelope) {
+  const gameEnvelope = result?.gameEnvelope ?? result?.envelope ?? null;
+  if (gameEnvelope) {
+    // A complete accepted envelope already includes the operator's correction.
+    // Never layer a calculation from this or a previous submission over it.
     return {
-      gameEnvelope: result.gameEnvelope,
+      gameEnvelope,
       projection: null,
       acceptedEvents: [],
     };
   }
 
-  const gameEnvelope = result?.gameEnvelope ?? result?.envelope ?? null;
   const projection = result?.projection ?? null;
 
-  if (gameEnvelope || projection) {
+  if (projection) {
     return {
-      gameEnvelope: gameEnvelope ?? current.gameEnvelope,
-      projection: projection ?? current.projection,
+      gameEnvelope: current.gameEnvelope,
+      projection,
       acceptedEvents: [],
     };
   }

@@ -305,6 +305,8 @@ function copyPreState(preState: DraftPrePlayContext): DraftPrePlayContext {
 function copyResult(result: DraftResult): DraftResult {
   return {
     ...result,
+    possessionChanges: result.possessionChanges ? [...result.possessionChanges] : undefined,
+    penaltyContext: result.penaltyContext ? { ...result.penaltyContext } : undefined,
     pass: result.pass ? { ...result.pass } : undefined,
     kick: result.kick ? { ...result.kick } : undefined,
     return: result.return ? { ...result.return } : undefined,
