@@ -491,6 +491,7 @@ describe('FootballScorerShell', () => {
     saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
 
     renderScorer('/scorer?envelopeGameId=FB-FINAL-REPLACE-UI');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Q4' }));
 
     fireEvent.click(await screen.findByRole('button', { name: /edit play 2/i }));
     const editor = screen.getByRole('dialog', { name: /edit play 2/i });
@@ -502,6 +503,7 @@ describe('FootballScorerShell', () => {
     expect(screen.getByText('Replacing play #2')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^rush/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /game control/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Q1' }));
     expect(screen.getByRole('button', { name: /edit play 1/i })).toBeDisabled();
     expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
     expect(finalEnvelope.events).toHaveLength(2);
@@ -578,6 +580,7 @@ describe('FootballScorerShell', () => {
     saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
 
     renderScorer('/scorer?envelopeGameId=FB-FINAL-REPLACE-SUBMIT');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Q4' }));
     fireEvent.click(await screen.findByRole('button', { name: /edit play 2/i }));
     const editor = screen.getByRole('dialog', { name: /edit play 2/i });
     fireEvent.click(within(editor).getAllByRole('button', { name: /replace this play/i })[0]);
@@ -1678,7 +1681,8 @@ describe('FootballScorerShell', () => {
       fireEvent.click(within(choiceDialog).getByRole('button', { name: 'Start Third Quarter' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Second-Half Choice' })).not.toBeInTheDocument());
-      expect(screen.getByText('Q3')).toBeInTheDocument();
+      expect(within(document.querySelector('[data-scorer-slot="scoreboard"]')).getByText('Q3')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Q3' })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByText('15:00')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
       expect(screen.getByRole('button', { name: /^kick k$/i })).toBeEnabled();

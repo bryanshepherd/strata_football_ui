@@ -113,6 +113,37 @@ describe('FootballScoreboard', () => {
     expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
   });
 
+  it.each([
+    { allowChallenges: false, numberOfChallenges: 2 },
+    { allowChallenges: true, numberOfChallenges: 0 },
+  ])('hides challenge indicators when the saved rules provide no challenges: %j', (challenge) => {
+    const envelope = structuredClone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules = { ...envelope.game.rules, challenge, challenges: 2 };
+    envelope.liveState.challenges = { H: 2, V: 2 };
+
+    render(<FootballScoreboard envelope={envelope} />);
+
+    expect(screen.queryByLabelText(/challenges?\b/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('H timeouts')).toBeInTheDocument();
+    expect(screen.getByLabelText('V timeouts')).toBeInTheDocument();
+  });
+
+  it('uses the saved challenge count ahead of legacy defaults and preserves spent indicators', () => {
+    const envelope = structuredClone(getGameEnvelopeFixture('normal'));
+    envelope.game.rules = {
+      ...envelope.game.rules,
+      challenge: { allowChallenges: true, numberOfChallenges: 1 },
+      challenges: 2,
+    };
+    envelope.liveState.challenges = { H: 0, V: 1 };
+
+    render(<FootballScoreboard envelope={envelope} />);
+
+    expect(screen.getByLabelText('H challenge 1 unavailable')).toBeInTheDocument();
+    expect(screen.getByLabelText('V challenge 1 available')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/challenge 2/)).not.toBeInTheDocument();
+  });
+
   it('shows timeout ovals and challenge circles as filled availability or empty spent indicators', () => {
     const fixture = getGameEnvelopeFixture('normal');
     const envelope = {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
 import FootballBallContextRevisionModal from '../components/editor/FootballBallContextRevisionModal';
@@ -916,7 +916,7 @@ export default function FootballScorerShell() {
   };
 
   return (
-    <main className={`flex min-h-screen flex-col bg-zinc-100 text-zinc-950 ${debugMode ? 'pb-[42vh]' : ''}`}>
+    <main className={`flex min-h-screen flex-col bg-zinc-100 text-zinc-950 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden ${debugMode ? 'pb-[42vh]' : ''}`}>
       <ScorerHeader
         debugMode={debugMode}
         dashboardGameId={dashboardGameId}
@@ -1096,7 +1096,7 @@ const ScorerHeader = ({
   }));
 
   return (
-    <header className="border-b border-zinc-300 bg-white">
+    <header className="shrink-0 border-b border-zinc-300 bg-white">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded bg-emerald-800 text-sm font-black text-white">
@@ -1302,7 +1302,7 @@ export const FootballInputSlot = ({
 };
 
 export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onUndoLastEvent }) => (
-  <div className="h-full p-4">
+  <div className="h-[65vh] min-h-[18rem] p-4 lg:h-full lg:min-h-0">
     <GameLogColumn
       canUndo={canUndo}
       editFeedback={editFeedback}
@@ -1424,12 +1424,53 @@ const isEditableGameLogEvent = (event) => (
   EDITABLE_EVENT_TYPES.has(event?.type) || isFootballBallContextRevision(event)
 );
 
+// Quarter-start controls are recorded against the previous play context, but
+// belong with the quarter they open. All other records keep their entered period.
+const gameLogPeriodForEvent = (event) => {
+  const control = event.result?.gameControl;
+  return Number(control?.action === 'startQuarter' ? control.period || event.period || 1 : event.period || 1);
+};
+
 const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
-  const logItems = buildGameLogItems(envelope);
+  const regulationPeriods = Math.max(1, Number(envelope.game?.rules?.periods) || 4);
+  const currentPeriod = Math.max(1, Number(envelope.clock?.period || envelope.game?.period) || 1);
+  const lastPeriod = Math.max(regulationPeriods, currentPeriod,
+    ...(envelope.events || []).map(gameLogPeriodForEvent));
+  const periods = Array.from({ length: lastPeriod }, (_, index) => index + 1);
+  const periodLabel = (period) => period <= regulationPeriods ? `Q${period}` : `OT${period - regulationPeriods}`;
+  const [selection, setSelection] = useState(null);
+  // A new game or quarter follows live play; ordinary updates preserve the
+  // operator's selected historical quarter while they review or edit it.
+  const selectedPeriod = selection?.gameId === envelope.gameId && selection?.currentPeriod === currentPeriod
+    ? selection.period : currentPeriod;
+  const logId = useId();
+  const tabsRef = useRef(null);
+  const panelRef = useRef(null);
+  const selectPeriod = (period) => setSelection({ gameId: envelope.gameId, currentPeriod, period });
+  useEffect(() => {
+    if (panelRef.current) panelRef.current.scrollTop = 0;
+    const tabs = tabsRef.current;
+    const activeTab = tabs?.querySelector('[aria-selected="true"]');
+    if (tabs && activeTab) tabs.scrollLeft = Math.max(0, activeTab.offsetLeft - (tabs.clientWidth - activeTab.offsetWidth) / 2);
+  }, [selectedPeriod, envelope.gameId]);
+  const onTabKeyDown = (event, period) => {
+    const index = periods.indexOf(period);
+    const nextIndex = event.key === 'ArrowRight' ? (index + 1) % periods.length
+      : event.key === 'ArrowLeft' ? (index + periods.length - 1) % periods.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? periods.length - 1 : null;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectPeriod(periods[nextIndex]);
+    tabsRef.current?.querySelector(`[data-quarter="${periods[nextIndex]}"]`)?.focus({ preventScroll: true });
+  };
+  const logItems = buildGameLogItems(envelope).filter((item) => (
+    (item.kind === 'event' ? gameLogPeriodForEvent(item.event) : item.period) === selectedPeriod
+  ));
   return (
-    <section className="flex h-full min-h-0 flex-col rounded border border-zinc-300 bg-white">
-    <div className="border-b border-zinc-200 px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-zinc-300 bg-white">
+    <div className="shrink-0 border-b border-zinc-200 px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold">Game Log</h2>
         {onUndoLastEvent && (
           <button
@@ -1458,9 +1499,35 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
         </div>
       )}
     </div>
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div aria-label="Game Log quarters" className="relative flex shrink-0 gap-1 overflow-x-auto overscroll-contain border-b border-zinc-300 bg-zinc-50 px-1" ref={tabsRef} role="tablist">
+      {periods.map((period) => (
+        <button
+          aria-controls={`${logId}-panel`}
+          aria-selected={selectedPeriod === period}
+          className={`shrink-0 border-b-2 px-2 py-2 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 ${selectedPeriod === period ? 'border-emerald-700 bg-white text-emerald-800' : 'border-transparent text-zinc-600 hover:bg-white hover:text-zinc-900'}`}
+          data-quarter={period}
+          id={`${logId}-tab-${period}`}
+          key={period}
+          onClick={() => selectPeriod(period)}
+          onKeyDown={(event) => onTabKeyDown(event, period)}
+          role="tab"
+          tabIndex={selectedPeriod === period ? 0 : -1}
+          type="button"
+        >
+          {periodLabel(period)}
+        </button>
+      ))}
+    </div>
+    <div
+      aria-labelledby={`${logId}-tab-${selectedPeriod}`}
+      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
+      id={`${logId}-panel`}
+      ref={panelRef}
+      role="tabpanel"
+      tabIndex={0}
+    >
       {logItems.length === 0 ? (
-        <div className="p-4 text-sm text-zinc-600">No accepted events.</div>
+        <div className="p-4 text-sm text-zinc-600">No accepted events in {periodLabel(selectedPeriod)}.</div>
       ) : (
         <ol className="divide-y divide-zinc-200">
           {logItems.map((item, index) => (
@@ -1513,7 +1580,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-zinc-500">
-                  Q{item.event.period || '-'} {formatFootballClockDisplay(item.event.clock, '--:--')} · {item.event.possession || '-'}
+                  {periodLabel(gameLogPeriodForEvent(item.event))} {formatFootballClockDisplay(item.event.clock, '--:--')} · {item.event.possession || '-'}
                 </div>
               </li>
             )
@@ -1547,6 +1614,7 @@ const buildGameLogItems = (envelope) => {
     const team = envelope.game?.teams?.[teamCode]?.name || envelope.game?.teams?.[teamCode]?.abbr || teamCode || 'Unknown Team';
     return {
       kind: 'driveStart',
+      period: Number(drive.startPeriod || firstEvent?.period || envelope.clock?.period || 1),
       driveId,
       team,
       time: drive.startClock || firstEvent?.clock || '--:--',

@@ -66,8 +66,10 @@ const resolveTeamTimeoutLimit = (envelope) => {
 
 const resolveChallengeLimit = (envelope) => {
   const rules = envelope.game.rules || {};
+  if (rules.challenge?.allowChallenges === false) return 0;
   const configured = Number(
-    rules.challenges
+    rules.challenge?.numberOfChallenges
+    ?? rules.challenges
     ?? rules.challengesPerGame
     ?? rules.challengeCount
     ?? rules.replayChallenges,
@@ -199,7 +201,7 @@ const TeamStatusChips = ({
       ))}
     </div>
   );
-  const challengeChips = (
+  const challengeChips = challengeLimit > 0 && (
     <div className="flex items-center gap-1" aria-label={`${side} challenges`}>
       {Array.from({ length: challengeLimit }, (_, index) => (
         <span
