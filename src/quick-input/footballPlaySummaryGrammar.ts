@@ -12,7 +12,7 @@ import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
 import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
-import { findFootballPenaltyDefinition, footballPenaltyRulesetFromRules } from './penaltyTable';
+import { footballPenaltyDisplayName, footballPenaltyRulesetFromRules } from './penaltyTable';
 
 export type FootballPlaySummaryWarning = DraftWarning;
 
@@ -668,7 +668,7 @@ function penaltyEnforcementText(context: SummaryContext, penalty: DraftPenalty):
 }
 
 function penaltyBasicText(context: SummaryContext, penalty: DraftPenalty): string {
-  const name = penalty.name || findFootballPenaltyDefinition(penalty.code || '', footballPenaltyRulesetFromRules(context.intent.game.rules))?.name || penalty.code || 'Penalty';
+  const name = footballPenaltyDisplayName(penalty, footballPenaltyRulesetFromRules(context.intent.game.rules));
   const playerId = penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
   const participant = participantByPlayerId(context.intent, playerId);
   const playerText = participant ? ` (${formatPlayer(participant)})` : '';

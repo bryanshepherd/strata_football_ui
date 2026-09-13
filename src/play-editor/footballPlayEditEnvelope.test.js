@@ -58,6 +58,32 @@ const envelope = {
 };
 
 describe('football play edit envelope', () => {
+  it('resolves a changed penalty code instead of retaining its previous name', () => {
+    const edited = structuredClone(baseEvent);
+    edited.penalties[0].code = 'RTK';
+    const saved = applyFootballPlayEditToEnvelope(envelope, edited).events[0];
+    expect(saved.penalties[0]).toMatchObject({ code: 'RTK', name: 'Roughing the Kicker', yards: 15 });
+    expect(saved.description).toContain('PENALTY WVSU Roughing the Kicker');
+    expect(saved.description).not.toContain('Personal Foul');
+    expect(saved.preState).toEqual(baseEvent.preState);
+    expect(saved.postState).toEqual(baseEvent.postState);
+    edited.penalties[0].code = 'NEWCODE';
+    expect(applyFootballPlayEditToEnvelope(envelope, edited).events[0].description).toContain('PENALTY WVSU NEWCODE');
+    edited.penalties[0].name = 'Operator wording';
+    expect(applyFootballPlayEditToEnvelope(envelope, edited).events[0].description).toContain('Operator wording');
+  });
+
+  it('keeps historical custom penalty names when an actor is edited', () => {
+    const source = structuredClone(envelope);
+    source.events[0].penalties[0] = { ...baseEvent.penalties[0], code: 'XYZ', name: undefined };
+    source.events[0].description = 'Run, PENALTY WVSU Custom recorded foul, 15 yards to the H27.';
+    const edited = structuredClone(source.events[0]);
+    edited.penalties[0].notes = 'Confirmed';
+    const saved = applyFootballPlayEditToEnvelope(source, edited).events[0];
+    expect(saved.penalties[0].name).toBe('Custom recorded foul');
+    expect(saved.description).toContain('Custom recorded foul');
+  });
+
   it('updates existing challenge descriptions and confirmations without changing the ruling or context', () => {
     const source = structuredClone(envelope);
     source.events = [{

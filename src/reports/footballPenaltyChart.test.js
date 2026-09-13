@@ -9,6 +9,18 @@ const section = (report, team, sectionId) => (
 describe('football penalty chart report projection', () => {
   const report = buildFootballPenaltyChartReport(baselineRecord.envelope);
 
+  it('expands stored codes in both the foul column and play text', () => {
+    const game = structuredClone(baselineRecord.envelope);
+    game.events = [{ sequence: 1, type: 'punt', possession: 'V', penalties: [
+      { code: 'RTK', name: 'RTK', team: 'H', status: 'accepted', yards: 15 },
+      { code: 'BSB', team: 'V', status: 'declined' },
+    ], description: 'Punt, PENALTY WVSU RTK, 15 yards; PENALTY FAIR BSB, declined.' }];
+    const result = buildFootballPenaltyChartReport(game);
+    expect(section(result, 'H', 'specialTeams').penalties[0].foulName).toBe('Roughing the Kicker');
+    expect(section(result, 'V', 'specialTeams').penalties[0].foulName).toBe('Illegal Blind-Side Block');
+    expect(section(result, 'H', 'specialTeams').penalties[0].play).toContain('PENALTY WVSU Roughing the Kicker');
+  });
+
   it('uses the completed example game and creates three ordered sections per team', () => {
     expect(report.gameId).toBe('FB-ca7d777b-a8aa-4a26-bd20-b10f7bb621a7');
     expect(report.reportTitle).toBe('Penalty Chart');

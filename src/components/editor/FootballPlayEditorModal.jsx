@@ -1,3 +1,4 @@
+import { findFootballPenaltyDefinition, footballPenaltyDisplayName } from '../../quick-input/penaltyTable';
 import { formatFootballSafetyReadout } from '../../utils/footballSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -277,7 +278,10 @@ export default function FootballPlayEditorModal({
                     <PenaltyEditor
                       index={index}
                       key={penalty.penaltyId || index}
-                      onChange={(key, value) => update(['penalties', index, key], value)}
+                      onChange={(key, value) => key === 'code' ? updateMany([
+                        [['penalties', index, 'code'], value],
+                        [['penalties', index, 'name'], findFootballPenaltyDefinition(value)?.name || ''],
+                      ]) : update(['penalties', index, key], value)}
                       penalty={penalty}
                       roster={roster}
                       teamNames={teamNames}
@@ -667,12 +671,12 @@ const ExistingLateralFields = ({ draft, roster, update }) => {
 const PenaltyEditor = ({ index, onChange, penalty, roster, teamNames }) => (
   <div className="rounded-lg border border-zinc-300 bg-zinc-50">
     <div className="border-b border-zinc-200 px-4 py-3">
-      <div className="text-sm font-black text-zinc-950">Penalty {index + 1}: {penalty.name || penalty.code || 'Unnamed'}</div>
+      <div className="text-sm font-black text-zinc-950">Penalty {index + 1}: {footballPenaltyDisplayName(penalty)}</div>
       <div className="mt-0.5 text-xs text-zinc-500">Existing penalty · cannot be removed here</div>
     </div>
     <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
       <TextField label="Code" onChange={(value) => onChange('code', value)} value={penalty.code || ''} />
-      <TextField label="Name" onChange={(value) => onChange('name', value)} value={penalty.name || ''} />
+      <TextField label="Name" onChange={(value) => onChange('name', value)} value={penalty.name || findFootballPenaltyDefinition(penalty.code || '')?.name || ''} />
       <SelectField label="Team" onChange={(value) => onChange('team', value)} options={teamOptions(teamNames)} value={penalty.team || ''} />
       <RosterSelect label="Penalized player" noneLabel="Team penalty / not recorded" onChange={(value) => onChange('playerId', value || null)} roster={roster} value={penalty.playerId || ''} />
       <SelectField label="Timing" onChange={(value) => onChange('timing', value)} options={[['liveBall', 'Live Ball'], ['deadBall', 'Dead Ball']]} value={penalty.timing || 'liveBall'} />

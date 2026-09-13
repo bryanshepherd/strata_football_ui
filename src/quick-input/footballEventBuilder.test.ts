@@ -74,6 +74,7 @@ describe('footballEventBuilder', () => {
     expect(result.event.penalties).toEqual([{
       penaltyId: `pen-${family}`,
       code: 'HOLD',
+      name: 'Holding',
       team: 'H',
       timing: 'liveBall',
       status: 'accepted',
@@ -435,6 +436,7 @@ describe('footballEventBuilder', () => {
       {
         penaltyId: 'pen-1',
         code: 'OFF',
+        name: 'Offside',
         team: 'V',
         status: 'accepted',
         yards: 5,

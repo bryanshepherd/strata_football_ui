@@ -11,7 +11,7 @@ import {
 afterEach(() => resetFootballPenaltyTableForTests());
 
 describe('penaltyTable', () => {
-  it('loads the agreed catalog schema without inventing pending codes', () => {
+  it('loads the agreed catalog with the two confirmed additional codes', () => {
     const catalog = listFootballPenaltyCatalog();
     const allowedEntryKeys = ['code', 'name', 'team', 'NFHS', 'NCAA'];
     const allowedRuleKeys = ['yards', 'down', 'enforcement', 'eject'];
@@ -19,7 +19,9 @@ describe('penaltyTable', () => {
     expect(catalog).toHaveLength(59);
     expect(catalog.filter((entry) => entry.NCAA)).toHaveLength(58);
     expect(catalog.filter((entry) => entry.NFHS)).toHaveLength(54);
-    expect(catalog.every((entry) => entry.code === '')).toBe(true);
+    expect(catalog.filter(entry => entry.code).map(entry => [entry.code, entry.name])).toEqual([
+      ['RTK', 'Roughing the Kicker'], ['BSB', 'Illegal Blind-Side Block'],
+    ]);
     expect(catalog.some((entry) => entry.name === 'Sideline Warning')).toBe(false);
     catalog.forEach((entry) => {
       expect(Object.keys(entry).every((key) => allowedEntryKeys.includes(key))).toBe(true);

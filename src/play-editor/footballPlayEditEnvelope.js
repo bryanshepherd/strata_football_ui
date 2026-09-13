@@ -1,3 +1,5 @@
+import { repairFootballPenaltyNames } from '../utils/footballPenaltyNames';
+import { footballPenaltyDisplayName, footballPenaltyRulesetFromRules } from '../quick-input/penaltyTable';
 import { generateFootballPlaySummary } from '../quick-input/footballPlaySummaryGrammar';
 import { classifyPlayEdit } from './footballPlayEditPolicy';
 import { repairFootballEditedActorReferences, synchronizeFootballEditedActors } from './footballActorReferences';
@@ -208,7 +210,16 @@ export function applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt
     ...original,
     participants: clone(synchronizedPlay.participants || original.participants || {}),
     result: clone(synchronizedPlay.result || original.result || {}),
-    penalties: clone(editedPlay.penalties || []),
+    penalties: clone(editedPlay.penalties || []).map((penalty, index) => {
+      const previous = original.penalties?.[index];
+      const codeChanged = penalty.code !== previous?.code;
+      const name = footballPenaltyDisplayName(
+        codeChanged && penalty.name === previous?.name ? { ...penalty, name: '' } : penalty,
+        footballPenaltyRulesetFromRules(envelope.game?.rules),
+        codeChanged ? '' : repairFootballPenaltyNames(envelope, original).penalties?.[index]?.name,
+      );
+      return { ...penalty, name };
+    }),
   };
   const description = buildFootballEditedPlaySummary(envelope, amendedEvent);
   amendedEvent.description = description;
@@ -235,7 +246,7 @@ export function repairFootballEditedActorsInEnvelope(envelope) {
     changed = true;
     // Filling missing actor references does not require rewriting historical text.
     if (repaired === withPassDefense) return repaired;
-    const description = buildFootballEditedPlaySummary(envelope, repaired);
+    const description = buildFootballEditedPlaySummary(envelope, repairFootballPenaltyNames(envelope, repaired));
     return {
       ...repaired, description,
       ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}),
@@ -248,8 +259,10 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
   const repaired = repairFootballEditedActorsInEnvelope(envelope);
   if (!Array.isArray(repaired?.events)) return repaired;
   let changed = false;
-  const events = repaired.events.map(event => {
-    if (!event || (event.status && event.status !== 'accepted')) return event;
+  const events = repaired.events.map(original => {
+    if (!original || (original.status && original.status !== 'accepted')) return original;
+    const event = repairFootballPenaltyNames(repaired, original);
+    if (event !== original) changed = true;
     let missingYardsRepaired = false;
     const penalties = (event.penalties || []).map((penalty, index) => {
       if (penalty.status !== 'accepted' || penalty.yards !== null && penalty.yards !== undefined) return penalty;

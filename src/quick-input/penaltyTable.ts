@@ -97,6 +97,21 @@ export function findFootballPenaltyDefinition(
   return match ? clonePenaltyEntry(match) : null;
 }
 
+/** Keep a selected/custom name with the play; a bare code is not a display name. */
+export function footballPenaltyDisplayName(
+  penalty: { code?: string; name?: string },
+  options: PenaltyTableOptions | FootballPenaltyRuleset = {},
+  historicalName = '',
+): string {
+  const code = String(penalty.code || '').trim();
+  const name = [penalty.name, historicalName].map(value => String(value || '').trim())
+    .find(value => value && value.toUpperCase() !== code.toUpperCase());
+  return name || findFootballPenaltyDefinition(code, options)?.name
+    || legacySeedTable.find(entry => entry.code === code.toUpperCase())?.name
+    || ({ BBW: 'Block Below the Waist', SUB: 'Substitution Infraction (Illegal Substitution)' } as Record<string, string>)[code.toUpperCase()]
+    || code || 'Penalty';
+}
+
 export function searchFootballPenaltyTable(
   value: string,
   limit = 8,

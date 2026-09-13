@@ -1,3 +1,4 @@
+import { footballPenaltyDisplayName } from './penaltyTable';
 import type { Penalty as CanonicalPenalty } from '../contracts/football/SubmitEventRequest';
 import type { DraftPenalty, DraftPenaltyEnforcementSpot } from './footballIntentSchema';
 
@@ -11,7 +12,7 @@ const ENFORCEMENT_SPOTS: Record<DraftPenaltyEnforcementSpot, NonNullable<Canonic
 };
 
 /** Converts FCQI penalty detail into the public submit-event contract. */
-export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): CanonicalPenalty {
+export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): CanonicalPenalty & { name?: string } {
   const playerId = penalty.playerId ?? penalty.penalizedPlayerId;
   const replayDown = penalty.source === 'immediate' || penalty.replayDown || penalty.downConsequence === 'REPEAT' ||
     (penalty.status === 'offsetting' && penalty.offsetting?.previousPlayCounts === false);
@@ -28,6 +29,7 @@ export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): Canonica
   return {
     penaltyId: penalty.penaltyId,
     code: penalty.code,
+    name: footballPenaltyDisplayName(penalty),
     team: penalty.team,
     ...(playerId !== undefined ? { playerId } : {}),
     ...(typeof penalty.liveBall === 'boolean' ? { timing: penalty.liveBall ? 'liveBall' : 'deadBall' } : {}),

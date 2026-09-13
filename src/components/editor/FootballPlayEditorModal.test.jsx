@@ -10,6 +10,19 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('refreshes the penalty name when its code is edited and permits explicit name corrections', () => {
+    const onSave = vi.fn();
+    renderEditor({ onSave });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'RTK' } });
+    expect(screen.getByLabelText('Name')).toHaveValue('Roughing the Kicker');
+    expect(screen.getByText('Penalty 1: Roughing the Kicker')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'BSB' } });
+    expect(screen.getByLabelText('Name')).toHaveValue('Illegal Blind-Side Block');
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Custom foul name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSave.mock.calls[0][0].penalties[0]).toMatchObject({ code: 'BSB', name: 'Custom foul name' });
+  });
+
   it('saves a changed punter into the play description and every punter reference', () => {
     const play = structuredClone(footballPlayEditorSandboxPlays[0]);
     Object.assign(play, {

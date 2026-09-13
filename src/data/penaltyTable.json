@@ -696,7 +696,7 @@
       }
     },
     {
-      "code": "",
+      "code": "RTK",
       "name": "Roughing the Kicker",
       "team": "defense",
       "NFHS": {
@@ -866,7 +866,7 @@
       }
     },
     {
-      "code": "",
+      "code": "BSB",
       "name": "Illegal Blind-Side Block",
       "team": "both",
       "NFHS": {
