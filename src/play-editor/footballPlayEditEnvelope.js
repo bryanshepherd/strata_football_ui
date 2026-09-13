@@ -4,6 +4,7 @@ import { repairFootballEditedActorReferences, synchronizeFootballEditedActors } 
 import { calculateEditedPenaltyYards } from './footballPlayEditYardage';
 import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
 import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
+import { repairFootballPassDefense } from '../utils/footballPassDefense';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -228,9 +229,12 @@ export function repairFootballEditedActorsInEnvelope(envelope) {
   if (!Array.isArray(envelope?.events)) return envelope;
   let changed = false;
   const events = envelope.events.map(event => {
-    const repaired = repairFootballEditedActorReferences(envelope, event);
+    const withPassDefense = repairFootballPassDefense(envelope, event);
+    const repaired = repairFootballEditedActorReferences(envelope, withPassDefense);
     if (repaired === event) return event;
     changed = true;
+    // Filling missing actor references does not require rewriting historical text.
+    if (repaired === withPassDefense) return repaired;
     const description = buildFootballEditedPlaySummary(envelope, repaired);
     return {
       ...repaired, description,

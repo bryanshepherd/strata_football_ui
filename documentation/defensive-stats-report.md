@@ -9,6 +9,16 @@ stat, ordered by total tackles descending, then solo tackles, jersey number, and
 name. Missing numbers do not exclude players. Columns are #, Name, Solo, Ast,
 Total, Sacks-Yds, TFL-Yds, FF, FR-Yds, Int-Yds, BrUp, Blks, QBH. Totals appear
 under each team. Blks includes punts, field goals, and extra points.
+BrUp is pass breakups; QBH is quarterback hurries.
+
+Incomplete passes retain breakup/hurry player IDs and defender roles through the
+canonical event builder. Older plays whose descriptions contain these credits
+recover the missing references only when the defending roster's number and name
+uniquely match. Explicit replacements and cleared credits take precedence over
+old descriptions. The same recovery serves the standalone report, Report Packet,
+MaxPreps export, participation and play editing; no saved game is rewritten just
+to display a report. Editing hurries keeps the participant list, statistic IDs
+and play description aligned. A player can receive one of each credit on a play.
 
 Attribution reuses the MaxPreps defensive event calculation. Sack and TFL yardage
 shares retain fractional credit; display rounds to at most two decimal places.

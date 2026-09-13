@@ -58,6 +58,13 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     if (intent.result.return) result.return = { ...intent.result.return };
     if (intent.result.laterals) result.laterals = intent.result.laterals.map((lateral) => ({ ...lateral }));
     if (intent.result.nextPossession) result.nextPossession = intent.result.nextPossession;
+  } else if (outcome === 'incomplete' && !isSpike) {
+    const hurriedByPlayerIds = [...(intent.result.pass?.hurriedByPlayerIds || [])];
+    participants.defenders = intent.participants.defenders.map(({ playerId, team, role }) => ({
+      playerId, team, role: role === 'other' && hurriedByPlayerIds.includes(playerId) ? 'qbHurry' : role,
+    }));
+    pass.brokenUpByPlayerId = intent.result.pass?.brokenUpByPlayerId ?? null;
+    pass.hurriedByPlayerIds = hurriedByPlayerIds;
   } else if (outcome === 'interception') {
     const interceptor = intent.participants.defenders.find((player) => player.role === 'interceptor') ?? intent.participants.defenders[0];
     requirePlayer(interceptor, 'interceptor', 'participants.defenders', errors);

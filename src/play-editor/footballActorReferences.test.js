@@ -3,6 +3,7 @@ import baseline from '../data/footballCompletedBaselineGameRecord.json';
 import { applyFootballPlayEditToEnvelope, repairFootballEditedActorsInEnvelope } from './footballPlayEditEnvelope';
 import { buildFootballPlayByPlayReport } from '../reports/footballPlayByPlay';
 import { normalizeFootballScoringSetupEnvelope } from '../services/footballDashboardService';
+import { buildFootballDefensiveStatsReport } from '../reports/footballDefensiveStats';
 
 const player = (playerId, jersey, displayName, team = 'V') => ({ playerId, team, jersey, displayName, position: 'P' });
 const oldPlayer = player('OLD', '48', 'Hezekiah Adams');
@@ -29,6 +30,28 @@ const edit = (envelope, update) => {
 };
 
 describe('edited actor reference consistency', () => {
+  it.each(['result', 'actor', 'clear'])('keeps edited hurry credit and readout aligned when changed through %s', (field) => {
+    const envelope = fixture('pass', 'incomplete');
+    Object.assign(envelope.events[0], {
+      possession: 'H',
+      participants: { primary: actor('OTHER', 'passer'), defenders: [actor('OLD', 'hurry'), actor('OTHER', 'passBreakup')] },
+      result: { code: 'incomplete', pass: { outcome: 'incomplete', hurriedByPlayerIds: ['OLD'], brokenUpByPlayerId: 'OTHER' } },
+      description: 'Pass incomplete, hurried by #48 Hezekiah Adams.',
+    });
+    const updated = edit(envelope, event => {
+      if (field === 'actor') event.participants.defenders[0] = { ...newPlayer, role: 'hurry' };
+      else event.result.pass.hurriedByPlayerIds = field === 'clear' ? [] : ['NEW'];
+    });
+    const saved = updated.events[0];
+    expect(saved.result.pass.hurriedByPlayerIds).toEqual(field === 'clear' ? [] : ['NEW']);
+    expect(saved.participants.defenders.filter(actor => actor.role === 'hurry').map(actor => actor.playerId)).toEqual(field === 'clear' ? [] : ['NEW']);
+    expect(saved.participants.defenders).toContainEqual(actor('OTHER', 'passBreakup'));
+    expect(saved.description).not.toContain('Hezekiah Adams');
+    if (field !== 'clear') expect(saved.description).toContain('hurried by #82 Wesley Oxce');
+    const reloaded = normalizeFootballScoringSetupEnvelope(JSON.parse(JSON.stringify(updated)));
+    expect(buildFootballDefensiveStatsReport(reloaded).teamReports.V.totals).toMatchObject({ breakups: 1, hurries: field === 'clear' ? 0 : 1 });
+  });
+
   it.each([['punt', 'fairCatch', 'punter'], ['kickoff', 'touchback', 'kicker'], ['fieldGoal', 'missed', 'kicker'], ['try', 'kick', 'kicker']])('saves %s actors to both named and primary fields', (type, subtype, slot) => {
     const envelope = fixture(type, subtype);
     envelope.events[0].participants = { primary: actor('OLD', slot), [slot]: actor('OLD', slot), defenders: [] };

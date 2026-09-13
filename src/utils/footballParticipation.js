@@ -1,3 +1,4 @@
+import { repairFootballPassDefense } from './footballPassDefense';
 const SIDES = ['H', 'V'];
 const record = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const array = (value) => Array.isArray(value) ? value : [];
@@ -23,26 +24,6 @@ function collectActorIds(value, ids, participant = false) {
   }
 }
 
-// Some older defensive plays identify a hurry/breakup actor only in the readout.
-function collectLegacyDefenders(envelope, event, ids) {
-  const offense = event.possession || event.preState?.possession || event.participants?.primary?.team;
-  const team = ['punt', 'kickoff'].includes(event.type) ? offense : offense === 'H' ? 'V' : 'H';
-  const players = Object.entries(record(envelope.rosters?.teams?.[team]?.players));
-  const normalize = (text) => String(text || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  for (const marker of ['broken up by ', 'hurried by ']) {
-    const description = String(event.description || '');
-    const start = description.toLowerCase().indexOf(marker);
-    if (start < 0) continue;
-    const clause = description.slice(start + marker.length).split(/,\s*PENALTY\b/i)[0];
-    for (const match of clause.matchAll(/#([A-Za-z0-9-]+)\s+(.+?)(?=(?:\s+and\s+|\s*,\s*)#[A-Za-z0-9-]+|\.\s*$|$)/g)) {
-      const candidates = players.filter(([, player]) => String(player.jersey ?? '') === match[1]);
-      const named = candidates.filter(([, player]) => [player.displayName, `${player.firstName || ''} ${player.lastName || ''}`, `${player.lastName || ''} ${player.firstName || ''}`].some((name) => normalize(name) === normalize(match[2])));
-      const selected = named.length === 1 ? named[0] : candidates.length === 1 ? candidates[0] : null;
-      if (selected) ids.add(selected[0]);
-    }
-  }
-}
-
 export function footballParticipationForEnvelope(envelope) {
   const actorIds = new Set();
   const penaltyIds = new Set();
@@ -51,7 +32,7 @@ export function footballParticipationForEnvelope(envelope) {
     collectActorIds(event.participants, actorIds, true);
     collectActorIds(event.result, actorIds);
     collectActorIds(event.penalties, penaltyIds);
-    collectLegacyDefenders(envelope, event, actorIds);
+    collectActorIds(repairFootballPassDefense(envelope, event).participants, actorIds, true);
   }
   return Object.fromEntries(SIDES.map((team) => {
     const starters = new Set(Object.values(record(envelope?.pregame?.starters))

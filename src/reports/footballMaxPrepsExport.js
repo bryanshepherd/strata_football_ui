@@ -1,4 +1,5 @@
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
+import { repairFootballPassDefense, isFootballHurryDefender, isFootballBreakupDefender } from '../utils/footballPassDefense';
 import {
   acceptedFootballEvents,
   buildFootballPlayerStats,
@@ -361,8 +362,9 @@ const seedProjectedPlayerStats = (store, players) => {
   });
 };
 
-const creditDefense = (store, event) => {
+const creditDefense = (store, event, envelope) => {
   if (hasAcceptedPreviousSpotPenalty(event)) return;
+  event = repairFootballPassDefense(envelope, event);
   const defenders = uniqueParticipants(event?.participants?.defenders || []);
   const tackleParticipants = defenders.filter((participant) => (
     ['tackler', 'assisttackler', 'sack'].includes(normalizedRole(participant))
@@ -405,7 +407,9 @@ const creditDefense = (store, event) => {
   }
 
   const hurryIds = new Set(event?.result?.pass?.hurriedByPlayerIds || []);
-  defenders.filter((participant) => normalizedRole(participant) === 'qbhurry').forEach((participant) => hurryIds.add(participant.playerId));
+  if (!Object.hasOwn(event?.result?.pass || {}, 'hurriedByPlayerIds')) {
+    (event?.participants?.defenders || []).filter(isFootballHurryDefender).forEach((participant) => hurryIds.add(participant.playerId));
+  }
   hurryIds.forEach((playerId) => {
     const participant = defenders.find((candidate) => candidate.playerId === playerId) || store.identity.get(playerId);
     const row = store.get(playerId, participant?.team, participant);
@@ -415,7 +419,8 @@ const creditDefense = (store, event) => {
 
   const breakupIds = new Set([
     event?.result?.pass?.brokenUpByPlayerId,
-    ...defenders.filter((participant) => normalizedRole(participant) === 'passbreakup').map((participant) => participant.playerId),
+    ...(!Object.hasOwn(event?.result?.pass || {}, 'brokenUpByPlayerId')
+      ? (event?.participants?.defenders || []).filter(isFootballBreakupDefender).map((participant) => participant.playerId) : []),
   ].filter(Boolean));
   breakupIds.forEach((playerId) => {
     const participant = defenders.find((candidate) => candidate.playerId === playerId) || store.identity.get(playerId);
@@ -717,7 +722,7 @@ export const buildFootballMaxPrepsExports = (envelope) => {
 
   seedProjectedPlayerStats(store, players);
   events.forEach((event) => {
-    creditDefense(store, event);
+    creditDefense(store, event, envelope);
     creditSpecialTeams(store, envelope, event);
     creditKickingAndConversions(store, event);
     creditReturnTouchdown(store, event);
@@ -768,7 +773,7 @@ export const buildFootballMaxPrepsExports = (envelope) => {
 export const buildFootballDefensivePlayerStats = (envelope) => {
   const events = acceptedFootballEvents(envelope);
   const store = createRowStore(envelope, events);
-  events.forEach((event) => creditDefense(store, event));
+  events.forEach((event) => creditDefense(store, event, envelope));
   const rows = [...store.rows.values()];
   finalizeRows(rows);
   return rows;

@@ -1,3 +1,5 @@
+import { isFootballHurryDefender } from '../utils/footballPassDefense';
+
 const copy = value => JSON.parse(JSON.stringify(value));
 const get = (value, path) => path.reduce((current, key) => current?.[key], value);
 const set = (value, path, next) => {
@@ -95,6 +97,29 @@ export const synchronizeFootballEditedActors = (envelope, original, edited) => {
       throw new Error('Conflicting players were selected for the same role. Select the player again.');
     }
     applyGroup(next, group, changed[0], envelope);
+  }
+  const hurryActors = event => (event.participants?.defenders || []).filter(isFootballHurryDefender);
+  const ids = actors => [...new Set(actors.map(actor => actor.playerId).filter(Boolean))];
+  const originalIds = original.result?.pass?.hurriedByPlayerIds || [];
+  const editedIds = edited.result?.pass?.hurriedByPlayerIds || [];
+  const editedActors = hurryActors(edited);
+  const resultChanged = JSON.stringify(originalIds) !== JSON.stringify(editedIds);
+  const actorsChanged = JSON.stringify(ids(hurryActors(original))) !== JSON.stringify(ids(editedActors));
+  if (resultChanged || actorsChanged) {
+    if (resultChanged && actorsChanged && JSON.stringify([...editedIds].sort()) !== JSON.stringify(ids(editedActors).sort())) {
+      throw new Error('Conflicting players were selected for quarterback hurries. Select the players again.');
+    }
+    const selectedIds = resultChanged ? [...new Set(editedIds)] : ids(editedActors);
+    const players = rosterPlayers(envelope);
+    next.result.pass = { ...next.result.pass, hurriedByPlayerIds: selectedIds };
+    next.participants.defenders = [
+      ...(next.participants.defenders || []).filter(actor => !isFootballHurryDefender(actor)),
+      ...selectedIds.map(playerId => ({
+        ...players.find(player => player.playerId === playerId),
+        ...editedActors.find(actor => actor.playerId === playerId),
+        playerId, role: 'hurry',
+      })),
+    ];
   }
   return next;
 };

@@ -10,6 +10,7 @@ import { applyFootballScorerEventToEnvelope, saveDashboardSeededFootballEnvelope
 import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
 import { validateFootballDraftIntent } from './footballIntentSchema';
 import { footballPossessionChanges } from '../utils/footballPenaltyPossession';
+import { buildFootballDefensiveStatsReport } from '../reports/footballDefensiveStats';
 
 describe('footballConfirmedQuickInputMachine', () => {
   it('starts idle', () => {
@@ -2660,6 +2661,24 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.status).toBe('summary.reviewing');
     expect(reviewing.draft?.result.pass?.hurriedByPlayerIds).toEqual(['V-44', 'V-90']);
     expect(reviewing.summary?.summaryText).toContain('hurried by #44 Caleb Moss and #90 Omar King');
+  });
+
+  it('saves breakup and hurry actors through confirmation and credits the serialized event once per role', () => {
+    const reviewing = transition(completeIncompletePassDraft({ brokenUp: true, hurried: ['44', '90'] }), { type: 'GENERATE_SUMMARY' });
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-09-13T06:00:00Z' });
+    expect(confirmed.buildResult?.ok).toBe(true);
+    if (!confirmed.buildResult?.ok) throw new Error('Pass must build');
+    const event = JSON.parse(JSON.stringify(confirmed.buildResult.event));
+    expect(event.result.pass).toMatchObject({ brokenUpByPlayerId: 'V-44', hurriedByPlayerIds: ['V-44', 'V-90'] });
+    expect(event.participants.defenders).toEqual([
+      { playerId: 'V-44', team: 'V', role: 'passBreakup' },
+      { playerId: 'V-44', team: 'V', role: 'qbHurry' },
+      { playerId: 'V-90', team: 'V', role: 'qbHurry' },
+    ]);
+    const envelope = structuredClone(getGameEnvelopeFixture());
+    envelope.events = [event];
+    const report = buildFootballDefensiveStatsReport(envelope);
+    expect(report.teamReports.V.totals).toMatchObject({ breakups: 1, hurries: 2, total: 0 });
   });
 
   it('interception collects interceptor and return terminal state', () => {
