@@ -1,3 +1,4 @@
+import { footballOvertimeNeedsTwo } from '../../utils/footballOvertime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createInitialFootballQuickInputState,
@@ -183,7 +184,8 @@ export default function FootballConfirmedQuickInput({
     && Boolean(envelope.liveState?.pendingTryTeam);
   const showPatPrompt = awaitingPatTry && !isActiveFcqiPlayFlow(currentState);
   const familyAvailable = (family) => (
-    isPlayFamilyAvailable(gamePhase, family)
+    !(envelope.liveState?.overtime && envelope.liveState.overtime.phase !== 'active')
+    && isPlayFamilyAvailable(gamePhase, family)
     && (!replacementMode || family !== 'gameControl')
   );
 
@@ -754,6 +756,8 @@ export default function FootballConfirmedQuickInput({
       </div>
 
       <FootballFlowModal
+        overtime={Boolean(envelope.liveState?.overtime)}
+        twoPointOnly={footballOvertimeNeedsTwo(envelope.game.rules, envelope.game.period)}
         actionTeam={context.play.actionTeam}
         onBackStep={goBackStep}
         onCancel={cancelFlow}

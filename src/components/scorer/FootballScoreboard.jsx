@@ -52,6 +52,7 @@ const completedTouchdownContext = (envelope) => {
 };
 
 const resolveTeamTimeoutLimit = (envelope) => {
+  if (envelope.liveState?.overtime) return 1;
   const rules = envelope.game.rules || {};
   const configured = Number(
     rules.timeouts
@@ -99,10 +100,10 @@ export default function FootballScoreboard({ envelope }) {
             {formatStatus(displayStatus)}
           </div>
           <div className="mt-1 text-4xl font-black tabular-nums">
-            {formatFootballClockDisplay(envelope.clock.clock)}
+            {envelope.liveState?.overtime ? 'Untimed' : formatFootballClockDisplay(envelope.clock.clock)}
           </div>
           <div className="mt-1 text-sm text-zinc-300">
-            Q{envelope.clock.period || '-'}
+            {envelope.liveState?.overtime ? `OT${envelope.liveState.overtime.round}` : `Q${envelope.clock.period || '-'}`}
           </div>
         </div>
         <TeamScoreCard envelope={envelope} teamCode="H" align="right" />

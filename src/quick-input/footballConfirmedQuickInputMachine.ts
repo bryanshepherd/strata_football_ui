@@ -1,3 +1,4 @@
+import { footballOvertimeNeedsTwo } from '../utils/footballOvertime';
 import type {
   DraftParticipant,
   DraftPenalty,
@@ -3240,6 +3241,8 @@ function commitPatType(
     return { state: tokenError(state, 'INVALID_PAT_TYPE', 'PAT type must be R, P, or K.', 'play.subtype') };
   }
 
+  if (patType === 'kick' && footballOvertimeNeedsTwo(context.game.rules, context.play.period)) return { state: tokenError(state, 'OVERTIME_TWO_POINT_REQUIRED', 'Overtime requires a two-point rush or pass.', 'play.subtype') };
+
   const nextStep: FootballTokenStep = patType === 'kick'
     ? 'kickerJersey'
     : patType === 'rush'
@@ -5736,7 +5739,7 @@ function gameControlPeriod(
 ): number {
   const currentPeriod = context.play.period || 1;
   const periods = context.game.rules?.periods || 4;
-  if (action === 'startQuarter' && context.gamePhase !== 'pregame') return Math.min(periods, currentPeriod + 1);
+  if (action === 'startQuarter' && context.gamePhase !== 'pregame') return context.game.rules?.overtimeEnabled ? currentPeriod + 1 : Math.min(periods, currentPeriod + 1);
   return currentPeriod;
 }
 

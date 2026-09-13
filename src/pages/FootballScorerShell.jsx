@@ -1,3 +1,5 @@
+import { footballOvertimePending } from '../utils/footballOvertime';
+import FootballOvertimeModal from '../components/scorer/FootballOvertimeModal';
 import { formatFootballSafetyReadout } from '../utils/footballSafety';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -415,6 +417,11 @@ export default function FootballScorerShell() {
       setWrapUpSaveState({ saving: false, error: '' });
       setWrapUpOpen(true);
     }
+    if (acceptedEnvelope?.liveState?.overtime) {
+      setPossessionClockChange(null);
+      setDriveSummary(null);
+      return;
+    }
     if (acceptedEnvelope && (kickoffReturnTouchdown || sameTeamDriveStart || (
       !isPossessionCorrection
       && !isPeriodInitialization
@@ -458,6 +465,23 @@ export default function FootballScorerShell() {
     }
     return result;
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
+  const confirmOvertime = async ({ team, spot }) => {
+    const pending = footballOvertimePending(envelope);
+    const now = new Date().toISOString();
+    const result = await submitLocalRequest({ event: {
+      clientEventId: `overtime-${crypto.randomUUID()}`, type: 'gameControl', subtype: 'startDrive',
+      period: Number(envelope.game.rules?.periods || 4) + pending.round, clock: '00:00', possession: team,
+      preState: { ...envelope.liveState }, participants: { primary: null, secondary: null, defenders: [] }, penalties: [],
+      description: `Start overtime ${pending.round}, possession ${pending.series}. ${envelope.game.teams[team].abbr} ball on ${spot}.`,
+      result: { code: 'noPlay', gameControl: { action: 'startDrive', possession: team, spot, overtime: true } },
+    }, clientContext: { submittedAt: now } });
+    if (!result.ok) throw new Error(result.errors?.[0]?.message || 'Could not start overtime.');
+    handleSubmitAccepted(result);
+    setWrapUpOpen(false);
+    setFcqiState(createInitialFootballQuickInputState());
+    setFcqiResetKey(value => value + 1);
+  };
 
   const localSubmitAdapter = useCallback(async (submitRequest) => {
     if (!isThirdQuarterStartFromHalftime(envelope, submitRequest)) {
@@ -1011,7 +1035,7 @@ export default function FootballScorerShell() {
         scoreboard={<FootballScoreboardSlot envelope={envelope} />}
         stats={<FootballStatsSlot envelope={envelope} />}
         input={(
-          <FootballInputSlot
+          footballOvertimePending(envelope) ? <p className="p-4 font-semibold">Confirm the overtime possession to continue.</p> : <FootballInputSlot
             debugMode={debugMode}
             envelope={inputEnvelope}
             fcqiResetKey={fcqiResetKey}
@@ -1086,11 +1110,12 @@ export default function FootballScorerShell() {
         open={Boolean(pendingSecondHalfStart)}
         teams={envelope.game.teams}
       />
+      {footballOvertimePending(envelope) && <FootballOvertimeModal key={`${footballOvertimePending(envelope).round}-${footballOvertimePending(envelope).series}`} envelope={envelope} pending={footballOvertimePending(envelope)} onConfirm={confirmOvertime} />}
       <FootballGameWrapUpModal
         envelope={envelope}
         onClose={closeGameWrapUp}
         onSave={saveGameWrapUp}
-        open={wrapUpOpen}
+        open={wrapUpOpen && !footballOvertimePending(envelope)}
         saveError={wrapUpSaveState.error}
         saving={wrapUpSaveState.saving}
       />

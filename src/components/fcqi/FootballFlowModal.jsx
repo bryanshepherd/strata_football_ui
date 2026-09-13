@@ -847,6 +847,8 @@ const challengeStatusButtons = [
 ];
 
 export default function FootballFlowModal({
+  overtime = false,
+  twoPointOnly = false,
   state,
   prePlaySpot,
   onBackStep,
@@ -867,7 +869,7 @@ export default function FootballFlowModal({
   const selectedPrefillRef = useRef(null);
   const aliases = normalizeTeamAliases(teamAliases);
   const activeStep = state.currentStep ? stepCopyForState(state, aliases, teamNames) : null;
-  const stepButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state, actionTeam);
+  const stepButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state, actionTeam)?.filter(button => !(overtime && state.currentStep === 'kickMenu' && button.value === 'O') && !(twoPointOnly && state.currentStep === 'patType' && button.value === 'K'));
   const activeButtons = state.currentStep === 'gameControlMenu'
     ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : !gameControlSettingsOnly)
     : stepButtons;

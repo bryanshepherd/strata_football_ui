@@ -1,3 +1,4 @@
+import { applyFootballOvertimeControl, applyFootballOvertimeOutcome, validateFootballOvertimeEvent } from '../utils/footballOvertime';
 import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
 import {
   defaultFixtureKey,
@@ -1038,7 +1039,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptySt
       latestEvent?.type === 'fieldGoal'
       && (latestEvent.subtype === 'made' || latestEvent.result?.code === 'made')
     );
-  if (!completedScoringSequence || normalizedEnvelope?.liveState?.possession) return normalizedEnvelope;
+  if (normalizedEnvelope?.liveState?.overtime || !completedScoringSequence || normalizedEnvelope?.liveState?.possession) return normalizedEnvelope;
 
   const kickoffTeam = latestEvent?.result?.scoring?.team
     || latestEvent?.participants?.primary?.team
@@ -2560,6 +2561,9 @@ const clockTextToTenths = (clock) => {
 
 export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) {
   const event = normalizeAcceptedEvent(baseEnvelope, acceptedEvent, acceptedEvent.acceptedAt);
+  validateFootballOvertimeEvent(baseEnvelope, event);
+  const overtimeEnvelope = applyFootballOvertimeControl(baseEnvelope, event);
+  if (overtimeEnvelope) return { envelope: overtimeEnvelope, projection: null, diagnostics: [] };
   const gameControlEnvelope = applyGameControlProjection(baseEnvelope, event);
   if (gameControlEnvelope) return { envelope: gameControlEnvelope, projection: null, diagnostics: [] };
 
@@ -2581,7 +2585,7 @@ export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) 
     event.result = { ...event.result, scoring, driveEnds: true };
   }
   return {
-    envelope: {
+    envelope: applyFootballOvertimeOutcome(baseEnvelope, {
       ...baseEnvelope,
       updatedAt: event.acceptedAt,
       game: {
@@ -2594,7 +2598,7 @@ export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) 
       drives: updateDrives(baseEnvelope.drives, projection, event),
       events: appendEvent(baseEnvelope.events, event),
       stats: projectFootballStats(baseEnvelope.stats, event, projection, baseEnvelope.events),
-    },
+    }, event, projection),
     projection,
     diagnostics: [],
   };

@@ -85,6 +85,8 @@ export type DraftRulesSnapshot = {
   ruleset?: 'NFHS' | 'NCAA';
   penaltyRuleset?: 'NFHS' | 'NCAA';
   periods?: number;
+  overtimeEnabled?: boolean;
+  overtimeStyle?: string;
   minutesPerPeriod?: number;
   downs?: number;
   yardsToFirstDown?: number;
