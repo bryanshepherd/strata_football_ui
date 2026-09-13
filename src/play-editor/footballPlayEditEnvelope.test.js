@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyFootballPlayEditToEnvelope,
   buildFootballEditedPlaySummary,
+  repairFootballPlayReadoutsInEnvelope,
 } from './footballPlayEditEnvelope';
 
 const participant = (playerId, team, jersey, displayName, role) => ({
@@ -57,6 +58,34 @@ const envelope = {
 };
 
 describe('football play edit envelope', () => {
+  it('repairs missing kickoff penalty yards and clearly describes the replay without changing its ball context', () => {
+    const source = structuredClone(envelope);
+    const kickoff = {
+      ...baseEvent, type: 'kickoff', subtype: 'returned', possession: null,
+      preState: { possession: null, down: null, distance: null, yardLine: 'V35' },
+      participants: { primary: { playerId: 'V-11', team: 'V', role: 'kicker' }, kicker: { playerId: 'V-11', team: 'V', role: 'kicker' }, returner: { playerId: 'H-8', team: 'H', role: 'returner' }, defenders: [] },
+      result: { code: 'returned', endYardLine: 'H20', nextPossession: 'H', kick: { kickYards: 55, catchYardLine: 'H10' }, return: { returnerPlayerId: 'H-8', returnYards: 10, returnEndYardLine: 'H20' }, penaltyContext: { setupContext: 'awaitingKickoff', startNewDrive: false } },
+      penalties: [{ penaltyId: 'K-OFF', code: 'OFF', team: 'V', status: 'accepted', yards: null, enforcedFrom: 'previousSpot', finalSpot: 'V30', replayDown: true }],
+      description: 'Kickoff, yards pending, replay down.',
+    };
+    source.events = [kickoff];
+    const before = JSON.stringify(source);
+    const repaired = repairFootballPlayReadoutsInEnvelope(source);
+    expect(repaired.events[0].penalties[0].yards).toBe(5);
+    expect(repaired.events[0].description).toContain('No play. PENALTY FAIR Offsides, 5 yards from the V35 to the V30. Re-kick from the V30.');
+    expect(repaired.events[0].confirmation.summaryText).toBe(repaired.events[0].description);
+    expect(repaired.events[0].preState).toEqual(kickoff.preState);
+    expect(repaired.events[0].postState).toEqual(kickoff.postState);
+    expect(repaired.events[0].result).toEqual(kickoff.result);
+    expect(JSON.stringify(source)).toBe(before);
+    expect(repairFootballPlayReadoutsInEnvelope(repaired)).toBe(repaired);
+
+    kickoff.penalties[0] = { ...kickoff.penalties[0], yards: 5, status: 'declined' };
+    expect(buildFootballEditedPlaySummary(source, kickoff)).not.toMatch(/No play|Re-kick/);
+    kickoff.penalties[0] = { ...kickoff.penalties[0], status: 'accepted', enforcedFrom: 'endOfPlay', replayDown: false };
+    expect(buildFootballEditedPlaySummary(source, kickoff)).not.toMatch(/No play|Re-kick/);
+  });
+
   it('keeps roster names when a saved pass contains only participant IDs', () => {
     const source = structuredClone(envelope);
     source.rosters.teams.V.players['V-7'] = { playerId: 'V-7', team: 'V', jersey: '7', displayName: 'Davyn Reid' };

@@ -1,4 +1,4 @@
-import { calculateYardsGained } from '../utils/footballRulesEngine';
+import { calculateYardsGained, parseSpot } from '../utils/footballRulesEngine';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -43,7 +43,7 @@ export const penaltyEnforcementBasisSpot = (play, penalty, penaltyIndex = 0) => 
 
 export const calculateEditedPenaltyYards = (play, penalty, penaltyIndex = 0) => {
   if (penalty?.status === 'declined' || penalty?.status === 'offsetting') return 0;
-  if (penalty?.status !== 'accepted' || penalty?.carryOverToKickoff) return null;
+  if (penalty?.status !== 'accepted' || penalty?.carryOverToKickoff || penalty?.carryOverToKO) return null;
 
   const basisSpot = penaltyEnforcementBasisSpot(play, penalty, penaltyIndex);
   const finalSpot = penalty?.finalSpot;
@@ -51,7 +51,14 @@ export const calculateEditedPenaltyYards = (play, penalty, penaltyIndex = 0) => 
   const possession = ['end', 'endofplay', 'succeeding', 'succeedingspot'].includes(enforcedFrom)
     ? play?.result?.nextPossession ?? play?.possession ?? play?.preState?.possession
     : play?.possession ?? play?.preState?.possession;
-  const yards = calculateYardsGained(basisSpot, finalSpot, possession);
+  // Kickoff setup has no possession team. For explicit field spots, absolute
+  // distance is identical from either team's coordinate system.
+  const actorTeam = play?.participants?.kicker?.team ?? play?.participants?.primary?.team;
+  const start = parseSpot(basisSpot);
+  const end = parseSpot(finalSpot);
+  const coordinateTeam = possession ?? actorTeam
+    ?? (start.valid && end.valid && !start.goal && !end.goal ? 'H' : null);
+  const yards = calculateYardsGained(basisSpot, finalSpot, coordinateTeam);
 
   return typeof yards === 'number' ? Math.abs(yards) : null;
 };

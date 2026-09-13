@@ -1,4 +1,4 @@
-import { repairFootballEditedActorsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
+import { repairFootballPlayReadoutsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { applyFootballOvertimeControl, applyFootballOvertimeOutcome, validateFootballOvertimeEvent } from '../utils/footballOvertime';
 import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
 import {
@@ -1019,7 +1019,7 @@ const repairReplayDownThatReachedLineToGain = (envelope) => {
 };
 
 export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptyStats = false } = {}) {
-  const normalizedRuleEnvelope = normalizeFootballEnvelopeRuleSpots(repairFootballEditedActorsInEnvelope(envelope));
+  const normalizedRuleEnvelope = normalizeFootballEnvelopeRuleSpots(repairFootballPlayReadoutsInEnvelope(envelope));
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);

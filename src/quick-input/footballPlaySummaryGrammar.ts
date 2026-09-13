@@ -10,6 +10,8 @@ import type {
 import { isCanonicalSpot } from './footballIntentSchema';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
+import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
+import { findFootballPenaltyDefinition, footballPenaltyRulesetFromRules } from './penaltyTable';
 
 export type FootballPlaySummaryWarning = DraftWarning;
 
@@ -31,7 +33,11 @@ export function generateFootballPlaySummary(intent: FootballDraftIntent): Footba
 
   const playSummary = summaryForPlay(context);
   const penaltyText = intent.play.family === 'penalty' ? '' : penaltiesSummary(context, intent.penalties, { attached: true });
-  const summaryText = penaltyText
+  const replayedKickoff = isFootballKickoffReplay({ type: intent.play.family, penalties: intent.penalties, result: intent.result });
+  const rekickSpot = [...intent.penalties].reverse().find(penalty => penalty.status === 'accepted' && penalty.finalSpot)?.finalSpot;
+  const summaryText = replayedKickoff
+    ? sentence(`${stripTerminalPunctuation(playSummary)}. No play. ${penaltyText}. Re-kick${rekickSpot ? ` from ${formatSpot(rekickSpot)}` : ''}`)
+    : penaltyText
     ? sentence(`${stripTerminalPunctuation(playSummary)}, ${penaltyText}`)
     : playSummary;
 
@@ -593,7 +599,9 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
 
   if (penalty.status === 'accepted') {
     const yardsText = penaltyDisplayYards(context, penalty);
-    if (penalty.enforcedFrom === 'SPOT' && penalty.spotOfFoul && penalty.finalSpot) {
+    if (isFootballKickoffReplay({ type: context.intent.play.family, penalties: context.intent.penalties, result: context.intent.result })) {
+      parts.push(penaltyEnforcementText(context, penalty));
+    } else if (penalty.enforcedFrom === 'SPOT' && penalty.spotOfFoul && penalty.finalSpot) {
       parts.push(`enforced ${yardsText} from ${formatSpot(penalty.spotOfFoul)} to ${formatSpot(penalty.finalSpot)}`);
     } else if (penalty.finalSpot) {
       parts.push(`${yardsText} to ${formatSpot(penalty.finalSpot)}`);
@@ -604,7 +612,8 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
 
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
-  if (penalty.downConsequence === 'REPEAT' || penalty.replayDown) parts.push('replay down');
+  if ((penalty.downConsequence === 'REPEAT' || penalty.replayDown)
+    && !isFootballKickoffReplay({ type: context.intent.play.family, penalties: context.intent.penalties, result: context.intent.result })) parts.push('replay down');
   if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   appendPenaltyEjection(context, penalty, parts);
@@ -659,7 +668,7 @@ function penaltyEnforcementText(context: SummaryContext, penalty: DraftPenalty):
 }
 
 function penaltyBasicText(context: SummaryContext, penalty: DraftPenalty): string {
-  const name = penalty.name || penalty.code || 'Penalty';
+  const name = penalty.name || findFootballPenaltyDefinition(penalty.code || '', footballPenaltyRulesetFromRules(context.intent.game.rules))?.name || penalty.code || 'Penalty';
   const playerId = penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
   const participant = participantByPlayerId(context.intent, playerId);
   const playerText = participant ? ` (${formatPlayer(participant)})` : '';

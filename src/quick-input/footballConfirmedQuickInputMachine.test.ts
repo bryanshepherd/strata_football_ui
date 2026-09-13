@@ -1868,7 +1868,7 @@ describe('footballConfirmedQuickInputMachine', () => {
       },
     });
 
-    const ready = commitToken(inputToken(review, 'A'));
+    const ready = transition(inputToken(review, 'A'), { type: 'COMMIT_TOKEN' }, makeContext({ prePlay: { yardLine: 'H35' } }));
     expect(ready).toMatchObject({ status: 'draft.ready' });
     expect(ready.draft?.result).toMatchObject({
       code: 'outOfBounds',
@@ -1895,7 +1895,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     ]);
 
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
-    expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark kickoff out-of-bounds at the V08, PENALTY HOM Free Kick Infraction (#9 Owen Clark), 5 yards to the H30, replay down.');
+    expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark kickoff out-of-bounds at the V08. No play. PENALTY HOM Free Kick Infraction (#9 Owen Clark), 5 yards from the H35 to the H30. Re-kick from the H30.');
     const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
     expect(confirmed.buildResult?.ok).toBe(true);
     if (confirmed.buildResult?.ok) {

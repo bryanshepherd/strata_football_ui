@@ -13,6 +13,18 @@ const play = {
 };
 
 describe('footballPlayEditYardage', () => {
+  it.each(['H', 'V'])('retains five-yard previous-spot enforcement when a %s kickoff has no possession', (team) => {
+    const kickoff = { type: 'kickoff', possession: null, preState: { possession: null, yardLine: `${team}35` }, participants: { kicker: { team } } };
+    const penalty = { status: 'accepted', enforcedFrom: 'previousSpot', finalSpot: `${team}30`, yards: 5 };
+    expect(calculateEditedPenaltyYards(kickoff, penalty)).toBe(5);
+    expect(recalculatePlayEditorPenaltyYards({ ...kickoff, penalties: [penalty] }).penalties[0].yards).toBe(5);
+  });
+
+  it('measures explicit spots across midfield without possession but leaves ambiguous goal-line enforcement unresolved', () => {
+    expect(calculateEditedPenaltyYards({ preState: { yardLine: 'H45' } }, { status: 'accepted', enforcedFrom: 'previousSpot', finalSpot: 'V45' })).toBe(10);
+    expect(calculateEditedPenaltyYards({ preState: { yardLine: 'H05' } }, { status: 'accepted', enforcedFrom: 'previousSpot', finalSpot: 'goal' })).toBeNull();
+  });
+
   it('derives end-of-play penalty yards from the play end spot', () => {
     expect(calculateEditedPenaltyYards(play, {
       status: 'accepted',

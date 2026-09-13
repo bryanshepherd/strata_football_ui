@@ -1,6 +1,8 @@
 import { generateFootballPlaySummary } from '../quick-input/footballPlaySummaryGrammar';
 import { classifyPlayEdit } from './footballPlayEditPolicy';
 import { repairFootballEditedActorReferences, synchronizeFootballEditedActors } from './footballActorReferences';
+import { calculateEditedPenaltyYards } from './footballPlayEditYardage';
+import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -235,4 +237,28 @@ export function repairFootballEditedActorsInEnvelope(envelope) {
     };
   });
   return changed ? { ...envelope, events } : envelope;
+}
+
+export function repairFootballPlayReadoutsInEnvelope(envelope) {
+  const repaired = repairFootballEditedActorsInEnvelope(envelope);
+  if (!Array.isArray(repaired?.events)) return repaired;
+  let changed = false;
+  const events = repaired.events.map(event => {
+    if (!event || (event.status && event.status !== 'accepted')) return event;
+    let missingYardsRepaired = false;
+    const penalties = (event.penalties || []).map((penalty, index) => {
+      if (penalty.status !== 'accepted' || penalty.yards !== null && penalty.yards !== undefined) return penalty;
+      const yards = calculateEditedPenaltyYards(event, penalty, index);
+      if (yards === null) return penalty;
+      missingYardsRepaired = true;
+      return { ...penalty, yards };
+    });
+    const missingRekickReadout = isFootballKickoffReplay(event) && !/\bNo play\.[\s\S]*\bRe-kick\b/i.test(event.description || '');
+    if (!missingYardsRepaired && !missingRekickReadout) return event;
+    changed = true;
+    const next = { ...event, penalties };
+    const description = buildFootballEditedPlaySummary(repaired, next);
+    return { ...next, description, ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}) };
+  });
+  return changed ? { ...repaired, events } : repaired;
 }
