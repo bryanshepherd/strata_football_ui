@@ -74,8 +74,11 @@ export function buildCanonicalRushEvent(intent: FootballDraftIntent): RushEventB
     } else if (!isAbortedPlay && fumble?.fumblerPlayerId !== rusher?.playerId) {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Rush fumbler must resolve to the rusher.', field: 'result.fumble.fumblerPlayerId' });
     }
-    if (fumble?.recoveredByPlayerId && !participantForPlayer(intent, fumble.recoveredByPlayerId)) {
+    if (fumble?.recoveredByPlayerId && fumble.recoveredByPlayerId !== 'TM' && !participantForPlayer(intent, fumble.recoveredByPlayerId)) {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Rush recovery player must have a stable resolved participant identity.', field: 'result.fumble.recoveredByPlayerId' });
+    }
+    if (fumble?.recoveredByPlayerId === 'TM' && (fumble.returnYards || fumble.returnEndYardLine)) {
+      errors.push({ code: 'INVALID_TEAM_RECOVERY', message: 'A team recovery cannot have a player return.', field: 'result.fumble.recoveredByPlayerId' });
     }
     if (fumble?.forcedByPlayerId && !participantForPlayer(intent, fumble.forcedByPlayerId)) {
       errors.push({ code: 'UNRESOLVED_PLAYER', message: 'Rush forced-fumble defender must have a stable resolved participant identity.', field: 'result.fumble.forcedByPlayerId' });

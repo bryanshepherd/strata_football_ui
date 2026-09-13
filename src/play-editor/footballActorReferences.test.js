@@ -30,6 +30,24 @@ const edit = (envelope, update) => {
 };
 
 describe('edited actor reference consistency', () => {
+  it('can change a recovery to the team and back without retaining the old recovery actor', () => {
+    const envelope = fixture('rush', null);
+    Object.assign(envelope.events[0], {
+      participants: { primary: actor('OLD', 'rusher'), defenders: [actor('NEW', 'recoverer')] },
+      result: { code: 'fumble', yards: -2, endYardLine: 'V28', fumble: { fumblerPlayerId: 'OLD', recoveredByPlayerId: 'NEW', recoveredByTeam: 'V', recoverySpot: 'V28', spot: 'V28', turnover: false } },
+    });
+    const updated = edit(envelope, event => { event.result.fumble.recoveredByPlayerId = 'TM'; });
+    const saved = updated.events[0];
+    expect(saved.result.fumble.recoveredByPlayerId).toBe('TM');
+    expect(saved.participants.defenders).toEqual([]);
+    expect(saved.participants.recoveredBy).toBeNull();
+    expect(saved.description).toContain('recovered by FAIR team at the V28');
+    expect(saved.description).not.toMatch(/Wesley Oxce|unknown player|#TM/);
+    expect(saved.participants.primary.playerId).toBe('OLD');
+    const restored = edit(updated, event => { event.result.fumble.recoveredByPlayerId = 'NEW'; });
+    expect(restored.events[0].participants.recoveredBy.playerId).toBe('NEW');
+    expect(restored.events[0].description).toContain('#82 Wesley Oxce');
+  });
   it.each(['result', 'actor', 'clear'])('keeps edited hurry credit and readout aligned when changed through %s', (field) => {
     const envelope = fixture('pass', 'incomplete');
     Object.assign(envelope.events[0], {

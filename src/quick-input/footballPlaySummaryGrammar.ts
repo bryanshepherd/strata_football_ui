@@ -91,7 +91,7 @@ function abortedPlaySummary(context: SummaryContext): string {
   const clauses = [`Aborted play, fumbled ${spotPhrase(context, 'at', fumble?.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`];
   if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
   if (recoveredBy || fumble?.recoveredByTeam) {
-    clauses.push(`recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, fumble?.recoveredByTeam)} ${spotPhrase(context, 'at', fumble?.recoverySpot, 'result.fumble.recoverySpot')}`);
+    clauses.push(`recovered by ${formatFumbleRecovery(intent, recoveredBy)} ${spotPhrase(context, 'at', fumble?.recoverySpot, 'result.fumble.recoverySpot')}`);
   }
   return sentence(joinClauses(clauses));
 }
@@ -125,7 +125,7 @@ function rushSummary(context: SummaryContext): string {
     const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, intent.result.fumble.recoveredByPlayerId);
     clauses.push(`fumbled ${spotPhrase(context, 'at', intent.result.fumble.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`);
     if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
-    clauses.push(`recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, intent.result.fumble.recoveredByTeam)} ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
+    clauses.push(`recovered by ${formatFumbleRecovery(intent, recoveredBy)} ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
   }
 
   return sentence(joinClauses(clauses));
@@ -180,7 +180,7 @@ function passSummary(context: SummaryContext): string {
     clauses.push(`fumbled ${spotPhrase(context, 'at', fumbleSpot, 'result.fumble.spot')}`);
     if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
     if (recoveredBy || recoveryTeam) {
-      clauses.push(`recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, recoveryTeam)} ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
+      clauses.push(`recovered by ${formatFumbleRecovery(intent, recoveredBy)} ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
     }
   }
 
@@ -263,7 +263,7 @@ function fumbleSummary(context: SummaryContext): string {
   if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
 
   if (recoveredBy || recoveringTeam) {
-    const recovery = `recovered by ${formatPlayer(recoveredBy)} for ${teamAbbr(intent, recoveringTeam)}`;
+    const recovery = `recovered by ${formatFumbleRecovery(intent, recoveredBy)}`;
     const recoverySpot = intent.result.fumble?.recoverySpot
       ? ` ${spotPhrase(context, 'at', intent.result.fumble.recoverySpot, 'result.fumble.recoverySpot')}`
       : '';
@@ -377,7 +377,7 @@ function kickoffSummary(context: SummaryContext): string {
 
   if (intent.play.subtype === 'onside') {
     const recovery = intent.participants.recoveredBy ?? participantByPlayerId(intent, intent.result.fumble?.recoveredByPlayerId);
-    clauses.push(`recovered by ${formatPlayer(recovery)} for ${teamAbbr(intent, intent.result.fumble?.recoveredByTeam ?? intent.result.nextPossession ?? intent.play.actionTeam)} ${spotPhrase(context, 'at', intent.result.fumble?.recoverySpot ?? intent.result.endYardLine, 'result.fumble.recoverySpot')}`);
+    clauses.push(`recovered by ${intent.result.fumble?.recoveredByPlayerId === 'TM' ? formatFumbleRecovery(intent, recovery) : `${formatPlayer(recovery)} for ${teamAbbr(intent, intent.result.fumble?.recoveredByTeam ?? intent.result.nextPossession ?? intent.play.actionTeam)}`} ${spotPhrase(context, 'at', intent.result.fumble?.recoverySpot ?? intent.result.endYardLine, 'result.fumble.recoverySpot')}`);
   } else if (intent.result.code === 'fairCatch' || intent.play.subtype === 'fairCatch') {
     clauses.push(returner ? `fair catch by ${formatPlayer(returner)}` : 'fair catch');
     if (intent.result.endYardLine && intent.result.endYardLine !== catchSpot) {
@@ -715,7 +715,7 @@ function appendRecoveryClause(context: SummaryContext, clauses: string[]): void 
   if (!fumble) return;
   const recovery = intent.participants.recoveredBy ?? participantByPlayerId(intent, fumble.recoveredByPlayerId);
   if (recovery || fumble.recoveredByTeam) {
-    clauses.push(`recovered by ${formatPlayer(recovery)} for ${teamAbbr(intent, fumble.recoveredByTeam)} ${spotPhrase(context, 'at', fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
+    clauses.push(`recovered by ${formatFumbleRecovery(intent, recovery)} ${spotPhrase(context, 'at', fumble.recoverySpot, 'result.fumble.recoverySpot')}`);
   }
   if (fumble.returnEndYardLine || typeof fumble.returnYards === 'number') {
     clauses.push(`returned ${yardagePhrase(context, fumble.returnYards, 'result.fumble.returnYards')} ${spotPhrase(context, 'to', fumble.returnEndYardLine, 'result.fumble.returnEndYardLine')}`);
@@ -764,6 +764,13 @@ function requiredPlayer(context: SummaryContext, participant: DraftParticipant |
     addWarning(context, 'UNRESOLVED_PLAYER', 'Required player is missing', field);
   }
   return participant;
+}
+
+function formatFumbleRecovery(intent: FootballDraftIntent, participant: DraftParticipant | undefined): string {
+  const team = teamAbbr(intent, intent.result.fumble?.recoveredByTeam);
+  return intent.result.fumble?.recoveredByPlayerId === 'TM'
+    ? `${team} team`
+    : `${formatPlayer(participant)} for ${team}`;
 }
 
 function formatPlayer(participant: DraftParticipant | undefined): string {

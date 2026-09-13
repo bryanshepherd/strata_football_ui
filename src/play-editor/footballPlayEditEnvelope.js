@@ -206,6 +206,11 @@ export function applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt
   }
 
   const synchronizedPlay = synchronizeFootballEditedActors(envelope, original, editedPlay);
+  if (synchronizedPlay.result?.fumble?.recoveredByPlayerId === 'TM'
+    && (synchronizedPlay.result.fumble.returnYards || synchronizedPlay.result.fumble.returnEndYardLine
+      || synchronizedPlay.result.return?.returnerPlayerId === 'TM')) {
+    throw new Error('A team recovery cannot have a player return. Replace the play to remove the return.');
+  }
   const amendedEvent = {
     ...original,
     participants: clone(synchronizedPlay.participants || original.participants || {}),

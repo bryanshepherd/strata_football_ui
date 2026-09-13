@@ -1513,6 +1513,13 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         fumblesLost: finiteNumber(current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
       }));
     }
+    if (result.fumble.recoveredByPlayerId === 'TM') teams = updateTeamStat(teams, result.fumble.recoveredByTeam, (current) => ({
+      ...current,
+      fumbles: {
+        ...(typeof current.fumbles === 'object' ? current.fumbles : {}),
+        teamRecoveries: finiteNumber(current.fumbles?.teamRecoveries) + 1,
+      },
+    }));
   }
 
   const kickoffReturn = kickoffReturnStat(event);

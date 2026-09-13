@@ -268,6 +268,27 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it.each(['T', 'TM'])('credits a team recovery with %s and retains the offense without a player return', (token) => {
+    let state = startRush();
+    for (const value of ['22', 'F', '', 'H', token, 'H40']) state = commitToken(inputToken(state, value));
+    expect(state.status).toBe('draft.ready');
+    expect(state.draft?.participants.recoveredBy).toBeUndefined();
+    expect(state.draft?.result.fumble).toMatchObject({ recoveredByPlayerId: 'TM', recoveredByTeam: 'H', recoverySpot: 'H40', turnover: false });
+    expect(state.draft?.result.return).toBeUndefined();
+    const ready = transition(state, { type: 'GENERATE_SUMMARY' });
+    expect(ready.summary?.summaryText).toContain('recovered by HOM team at the H40');
+    expect(ready.summary?.summaryText).not.toMatch(/unknown player|#TM/);
+    const built = transition(ready, { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) throw new Error(JSON.stringify(built.buildResult));
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'H', yardLine: 'H40', down: 3, distance: 10 });
+    expect(projected.projection.driveTransition.shouldStartNew).toBe(false);
+    expect(projected.envelope.stats.teams.H.fumbles).toMatchObject({ num: 1, lost: 0, teamRecoveries: 1 });
+    expect(projected.envelope.stats.players['H-22']).toMatchObject({ fumbles: 1, fumblesLost: 0 });
+    expect(projected.envelope.stats.players.TM).toBeUndefined();
+  });
+
   it('recovered fumbles can be returned through a terminal result', () => {
     const returned = completeFumbleDraft({ returned: 'yes' });
     const terminal = commitToken(inputToken(returned, 'T'));

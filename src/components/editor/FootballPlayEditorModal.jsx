@@ -640,7 +640,7 @@ const FumbleFields = ({ draft, roster, teamNames, update }) => {
         <RosterSelect label="Fumbler" onChange={(value) => update(['result', 'fumble', 'fumblerPlayerId'], value || null)} roster={roster} value={fumble.fumblerPlayerId || ''} />
         <RosterSelect label="Forced by" onChange={(value) => update(['result', 'fumble', 'forcedByPlayerId'], value || null)} roster={roster} value={fumble.forcedByPlayerId || ''} />
         <TextField label="Fumble spot" onChange={(value) => update(['result', 'fumble', 'spot'], value)} value={fumble.spot || ''} />
-        <RosterSelect label="Recovered by" onChange={(value) => update(['result', 'fumble', 'recoveredByPlayerId'], value || null)} roster={roster} value={fumble.recoveredByPlayerId || ''} />
+        <RosterSelect label="Recovered by" teamRecovery onChange={(value) => update(['result', 'fumble', 'recoveredByPlayerId'], value || null)} roster={roster} value={fumble.recoveredByPlayerId || ''} />
         <SelectField label="Recovery team" onChange={(value) => update(['result', 'fumble', 'recoveredByTeam'], value)} options={teamOptions(teamNames)} value={fumble.recoveredByTeam || ''} />
         <TextField label="Recovery spot" onChange={(value) => update(['result', 'fumble', 'recoverySpot'], value)} value={fumble.recoverySpot || ''} />
         <NumberField label="Return yards" onChange={(value) => update(['result', 'fumble', 'returnYards'], value)} value={fumble.returnYards ?? ''} />
@@ -754,8 +754,8 @@ const ParticipantField = ({ label, onChange, participant, roster }) => (
   <RosterSelect label={label} onChange={onChange} roster={roster} value={participant?.playerId || ''} />
 );
 
-const RosterSelect = ({ label, noneLabel = 'Not recorded', onChange, roster, value }) => (
-  <SelectField label={label} onChange={onChange} options={[['', noneLabel], ...roster.map((player) => [player.playerId, playerLabel(player)])]} value={value || ''} />
+const RosterSelect = ({ label, noneLabel = 'Not recorded', onChange, roster, value, teamRecovery = false }) => (
+  <SelectField label={label} onChange={onChange} options={[['', noneLabel], ...(teamRecovery ? [['TM', 'Team recovery (no player)']] : []), ...roster.map((player) => [player.playerId, playerLabel(player)])]} value={value || ''} />
 );
 
 const EditorSection = ({ children, subtitle, title }) => (

@@ -4,6 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('offers a team recovery button and hotkey alongside the player jersey input', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{
+      status: 'token.awaiting', flow: 'rush', currentStep: 'recoverPlayerJersey', currentToken: '',
+      tokens: { recoverTeam: 'H', laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+    }} />);
+    expect(screen.getByLabelText('Recovery player jersey')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Team recovery/ }));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('TM');
+    fireEvent.keyDown(window, { key: 't' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('TM');
+  });
   it('offers Spike, Kneel Down, and Aborted Play as team-charged choices', () => {
     const onTokenCommit = vi.fn();
     render(

@@ -1011,6 +1011,11 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
   if (isRecord(result.fumble) && result.fumble.recoveredByTeam !== undefined && !isTeamCode(result.fumble.recoveredByTeam)) {
     errors.push(error('INVALID_TEAM_CODE', 'result.fumble.recoveredByTeam must be H or V', 'result.fumble.recoveredByTeam'));
   }
+  if (isRecord(result.fumble) && result.fumble.recoveredByPlayerId === 'TM'
+    && (result.fumble.returnYards || result.fumble.returnEndYardLine
+      || (isRecord(result.return) && result.return.returnerPlayerId === 'TM'))) {
+    errors.push(error('INVALID_RESULT', 'A team recovery cannot have a player return.', 'result.fumble.recoveredByPlayerId'));
+  }
 
   if (isRecord(result.turnover)) {
     if (!['interception', 'fumble', 'downs', 'muffedKick', 'blockedKick'].includes(String(result.turnover.type))) {

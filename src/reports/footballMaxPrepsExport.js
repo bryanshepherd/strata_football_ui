@@ -465,7 +465,9 @@ const creditDefense = (store, event, envelope) => {
       increment(row, 'CausedFumbles');
     }
 
-    const recoveredBy = event?.participants?.recoveredBy
+    const recoveredBy = fumble.recoveredByPlayerId === 'TM'
+      ? { playerId: `TEAM:${fumble.recoveredByTeam}`, team: fumble.recoveredByTeam, jersey: 'TM', displayName: 'TEAM' }
+      : event?.participants?.recoveredBy
       || eventParticipants(event).find((participant) => (
         participant.playerId === fumble.recoveredByPlayerId || normalizedRole(participant) === 'recoverer'
       ))
@@ -474,11 +476,12 @@ const creditDefense = (store, event, envelope) => {
       || eventParticipants(event).find((participant) => participant.playerId === fumble.fumblerPlayerId)
       || store.identity.get(fumble.fumblerPlayerId);
     const recoveryTeam = fumble.recoveredByTeam || recoveredBy?.team;
-    if (recoveredBy?.playerId && recoveryTeam && recoveryTeam !== fumbler?.team) {
+    const fumblerTeam = fumbler?.team || event.preState?.possession || event.possession;
+    if (recoveredBy?.playerId && recoveryTeam && recoveryTeam !== fumblerTeam) {
       const row = store.get(recoveredBy.playerId, recoveryTeam, recoveredBy);
       initializeDefense(row);
       increment(row, 'FumbleRecoveries');
-      increment(row, 'FumbleRecoveryYards', fumble.returnYards ?? event?.result?.return?.returnYards);
+      increment(row, 'FumbleRecoveryYards', fumble.recoveredByPlayerId === 'TM' ? 0 : fumble.returnYards ?? event?.result?.return?.returnYards ?? 0);
     }
   }
 

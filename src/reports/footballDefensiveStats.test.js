@@ -16,6 +16,18 @@ const fixture = (events) => ({
 const tackle = (defenders, yards = 4) => ({ type: 'rush', participants: { defenders }, result: { yards } });
 
 describe('Defensive Stats report', () => {
+  it('puts a defensive team recovery on TEAM and excludes retained offensive fumbles', () => {
+    const envelope = fixture(['H', 'V'].map(recoveredByTeam => ({
+      type: 'rush', participants: { primary: actor('home', 'rusher', 'H') },
+      result: { fumble: { fumblerPlayerId: 'home', recoveredByPlayerId: 'TM', recoveredByTeam } },
+    })));
+    const before = structuredClone(envelope);
+    const report = buildFootballDefensiveStatsReport(envelope);
+    expect(report.teamReports.H.players).toEqual([]);
+    expect(report.teamReports.V.players).toHaveLength(1);
+    expect(report.teamReports.V.players[0]).toMatchObject({ name: 'TEAM', jersey: 'TM', recoveries: 1, recoveryYards: 0 });
+    expect(envelope).toEqual(before);
+  });
   it('sorts all qualifying players by tackles and keeps zero-tackle defenders and missing numbers', () => {
     const envelope = fixture([
       tackle([actor('solo', 'tackler')]),

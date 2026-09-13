@@ -109,7 +109,7 @@ const stepCopy = {
   recoverPlayerJersey: {
     title: 'Fumble recovery',
     label: 'Recovery player jersey',
-    helper: 'Enter the player who recovered the fumble.',
+    helper: 'Enter the player who recovered the fumble, or choose T for a team recovery with no player.',
     placeholder: '22',
   },
   recoverSpot: {
@@ -875,7 +875,7 @@ export default function FootballFlowModal({
   const activeButtons = state.currentStep === 'gameControlMenu'
     ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : button.value === 'I' ? participationEditable : !gameControlSettingsOnly)
     : stepButtons;
-  const buttonOnly = Boolean(activeButtons);
+  const buttonOnly = Boolean(activeButtons) && state.currentStep !== 'recoverPlayerJersey';
   const questionFirst = ['penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
@@ -1143,6 +1143,7 @@ const ModalFrame = ({ children, eyebrow, miscFumbleActive, onCancel, onStepClick
 );
 
 function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
+  if (step === 'recoverPlayerJersey') return [{ label: 'Team recovery (no player)', hotkey: 'T', value: 'TM' }];
   if (step === 'teamPlayMenu') return teamPlayButtons;
   if (step === 'result') return rushResultButtons;
   if (step === 'passResult') return passResultButtons;

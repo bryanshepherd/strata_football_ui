@@ -60,6 +60,7 @@ const referenceGroups = event => {
     if (defender.role === 'blocker') groups.push([reference, resultId('kick', 'blockedByPlayerId')]);
     if (['passBreakup', 'breakup'].includes(defender.role)) groups.push([reference, resultId('pass', 'brokenUpByPlayerId')]);
     if (defender.role === 'forcedFumble') groups.find(group => group[0].path[1] === 'forcedBy').push(reference);
+    if (['recoverer', 'fumbleRecovery'].includes(defender.role)) groups.find(group => group.some(item => item.actor && item.path[1] === 'recoveredBy')).push(reference);
   });
   return groups;
 };
@@ -75,11 +76,12 @@ const applyGroup = (event, group, selected, envelope) => {
     if (reference.actor && typeof reference.path.at(-1) === 'number'
       && get(event, reference.path)?.role !== reference.role) continue;
     // Do not invent optional result objects or unused participant roles.
-    if (get(event, reference.path) === undefined && reference !== selected) continue;
+    const recoveryActor = reference.actor && reference.path[1] === 'recoveredBy';
+    if (get(event, reference.path) === undefined && reference !== selected && !recoveryActor) continue;
     if (!reference.actor) set(event, reference.path, playerId);
     else {
       const previous = get(event, reference.path);
-      set(event, reference.path, playerId ? {
+      set(event, reference.path, playerId && playerId !== 'TM' ? {
         playerId, team: player?.team || selectedActor?.team || previous?.team,
         ...(player ? { jersey: player.jersey, displayName: player.displayName, position: player.position } : selectedActor),
         role: previous?.role || reference.role,
@@ -98,6 +100,7 @@ export const synchronizeFootballEditedActors = (envelope, original, edited) => {
     }
     applyGroup(next, group, changed[0], envelope);
   }
+  if (next.participants?.defenders) next.participants.defenders = next.participants.defenders.filter(Boolean);
   const hurryActors = event => (event.participants?.defenders || []).filter(isFootballHurryDefender);
   const ids = actors => [...new Set(actors.map(actor => actor.playerId).filter(Boolean))];
   const originalIds = original.result?.pass?.hurriedByPlayerIds || [];

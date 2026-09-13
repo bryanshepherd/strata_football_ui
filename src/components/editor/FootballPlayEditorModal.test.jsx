@@ -10,6 +10,23 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('saves a team recovery from the fumble editor without assigning it to a player', () => {
+    const play = structuredClone(footballPlayEditorSandboxPlays[0]);
+    const rusher = { playerId: 'RUSHER', team: 'H', jersey: '22', displayName: 'Jordan Smith' };
+    const recoverer = { playerId: 'RECOVERER', team: 'H', jersey: '77', displayName: 'Old Recoverer' };
+    Object.assign(play, { type: 'rush', subtype: null, penalties: [],
+      participants: { primary: { playerId: rusher.playerId, team: 'H', role: 'rusher' }, defenders: [{ playerId: recoverer.playerId, team: 'H', role: 'recoverer' }] },
+      result: { code: 'fumble', yards: -2, endYardLine: 'H28', fumble: { fumblerPlayerId: rusher.playerId, recoveredByPlayerId: recoverer.playerId, recoveredByTeam: 'H', recoverySpot: 'H28', spot: 'H28', turnover: false } },
+    });
+    const envelope = { gameId: 'FB-EDIT', game: { teams: { H: { abbr: 'HOM' }, V: { abbr: 'VIS' } } }, rosters: { teams: { H: { players: { RUSHER: rusher, RECOVERER: recoverer } } } }, events: [play] };
+    let saved;
+    render(<FootballPlayEditorModal isOpen play={play} roster={[rusher, recoverer]} onSave={edited => { saved = applyFootballPlayEditToEnvelope(envelope, edited); }} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Recovered by'), { target: { value: 'TM' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(saved.events[0].result.fumble.recoveredByPlayerId).toBe('TM');
+    expect(saved.events[0].description).toContain('recovered by HOM team at the H28');
+    expect(saved.events[0].description).not.toMatch(/Old Recoverer|unknown player/);
+  });
   it('refreshes the penalty name when its code is edited and permits explicit name corrections', () => {
     const onSave = vi.fn();
     renderEditor({ onSave });

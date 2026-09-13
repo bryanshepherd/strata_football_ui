@@ -228,6 +228,7 @@ export type RushFlowTokens = {
   forcedBy?: DraftParticipant;
   recoverTeam?: TeamCode;
   recoverPlayer?: DraftParticipant;
+  recoverAsTeam?: boolean;
   recoverSpot?: Spot;
   fumbleReturned?: boolean;
   returnFlow?: RushReturnFlowDraft;
@@ -1018,7 +1019,13 @@ function commitCurrentToken(
     if (!state.tokens.recoverTeam) {
       return { state: tokenError(state, 'MISSING_RECOVER_TEAM', 'Recovering team is required before recovery player', 'result.fumble.recoveredByTeam') };
     }
-    return resolveJerseyToken(state, context, {
+    if (['T', 'TM', 'TEAM'].includes(state.currentToken.trim().toUpperCase())) {
+      return { state: {
+        ...baseActiveState(state), status: 'token.awaiting', currentStep: 'recoverSpot', currentToken: '',
+        tokens: { ...cloneTokens(state.tokens), recoverPlayer: undefined, recoverAsTeam: true, fumbleReturned: false },
+      } };
+    }
+    return resolveJerseyToken({ ...state, tokens: { ...state.tokens, recoverAsTeam: false } }, context, {
       role: 'recoverer',
       teamScope: state.tokens.recoverTeam,
       actionContext: state.tokens.returnFumble || state.tokens.puntReceiveResult === 'muffed' || state.tokens.kickReceiveResult === 'muffed'
@@ -1032,6 +1039,13 @@ function commitCurrentToken(
     const recoverSpot = parseSpot(state.currentToken, context);
     if (!recoverSpot) {
       return { state: tokenError(state, 'INVALID_SPOT', 'Recovery spot must use canonical spot format', 'result.fumble.recoverySpot') };
+    }
+
+    if (state.tokens.recoverAsTeam) {
+      return finishReturnAtSpotOrClarifyOwnGoal({
+        ...state,
+        tokens: { ...cloneTokens(state.tokens), recoverSpot, fumbleReturned: false },
+      }, context, recoverSpot, state.tokens.recoverTeam);
     }
 
     return {
@@ -3641,6 +3655,7 @@ function commitReturnEndSpot(
           returnFumbleSpot: returnEndSpot,
           recoverTeam: undefined,
           recoverPlayer: undefined,
+          recoverAsTeam: false,
           recoverSpot: undefined,
           fumbleReturned: undefined,
         },
@@ -4664,7 +4679,7 @@ function attachFumbleToResult(
       fumblerPlayerId: fumbler?.playerId ?? '',
       forcedByPlayerId: tokens.forcedBy?.playerId ?? tokens.sackDefenders[0]?.playerId,
       spot: fumbleSpot,
-      recoveredByPlayerId: tokens.recoverPlayer?.playerId,
+      recoveredByPlayerId: tokens.recoverAsTeam ? 'TM' : tokens.recoverPlayer?.playerId,
       recoveredByTeam: tokens.recoverTeam,
       recoverySpot: tokens.recoverSpot,
       returnYards,
@@ -4880,7 +4895,7 @@ function buildPuntResult(tokens: FootballFlowTokens, context: FootballQuickInput
       fumble: {
         fumblerPlayerId: tokens.muffingPlayer?.playerId ?? tokens.returner?.playerId ?? '',
         spot: tokens.puntSpot,
-        recoveredByPlayerId: tokens.recoverPlayer?.playerId,
+        recoveredByPlayerId: tokens.recoverAsTeam ? 'TM' : tokens.recoverPlayer?.playerId,
         recoveredByTeam: nextPossession,
         recoverySpot: tokens.recoverSpot,
         returnYards,
@@ -5425,7 +5440,7 @@ function buildKickoffResult(tokens: FootballFlowTokens, context: FootballQuickIn
       fumble: {
         fumblerPlayerId: tokens.muffingPlayer?.playerId ?? tokens.returner?.playerId ?? '',
         spot: tokens.recoverSpot,
-        recoveredByPlayerId: tokens.recoverPlayer?.playerId,
+        recoveredByPlayerId: tokens.recoverAsTeam ? 'TM' : tokens.recoverPlayer?.playerId,
         recoveredByTeam: nextPossession,
         recoverySpot: tokens.recoverSpot,
         returnYards,
@@ -5974,7 +5989,7 @@ function buildReturnFumble(tokens: FootballFlowTokens): FootballDraftIntent['res
     fumblerPlayerId: tokens.returnFumblePlayer.playerId,
     forcedByPlayerId: tokens.forcedBy?.playerId,
     spot: tokens.returnFumbleSpot,
-    recoveredByPlayerId: tokens.recoverPlayer?.playerId,
+    recoveredByPlayerId: tokens.recoverAsTeam ? 'TM' : tokens.recoverPlayer?.playerId,
     recoveredByTeam: tokens.recoverTeam,
     recoverySpot: tokens.recoverSpot,
     returnYards,
@@ -6914,7 +6929,7 @@ function buildRushResult(tokens: RushFlowTokens, context: FootballQuickInputCont
       fumblerPlayerId: tokens.rusher?.playerId ?? '',
       forcedByPlayerId: tokens.forcedBy?.playerId,
       spot: tokens.fumbleSpot ?? tokens.recoverSpot,
-      recoveredByPlayerId: tokens.recoverPlayer?.playerId,
+      recoveredByPlayerId: tokens.recoverAsTeam ? 'TM' : tokens.recoverPlayer?.playerId,
       recoveredByTeam: tokens.recoverTeam,
       recoverySpot: tokens.recoverSpot,
       returnYards: tokens.fumbleReturned && tokens.recoverSpot && tokens.returnEndSpot && tokens.recoverTeam
@@ -7263,6 +7278,7 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     forcedBy: tokens.forcedBy ? cloneParticipant(tokens.forcedBy) : undefined,
     recoverTeam: tokens.recoverTeam,
     recoverPlayer: tokens.recoverPlayer ? cloneParticipant(tokens.recoverPlayer) : undefined,
+    recoverAsTeam: tokens.recoverAsTeam,
     recoverSpot: tokens.recoverSpot,
     fumbleReturned: tokens.fumbleReturned,
     returnFlow: tokens.returnFlow ? { ...tokens.returnFlow } : undefined,
