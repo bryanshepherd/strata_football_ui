@@ -103,12 +103,11 @@ const periodLabel = (period) => {
 };
 
 const teamRecord = (envelope, team) => {
-  if (envelope?.gameId === FOOTBALL_REPORT_BASELINE_GAME_ID) {
-    return BASELINE_TEAM_RECORDS[team];
-  }
-  const record = envelope?.game?.teamRecords?.[team]
-    || envelope?.game?.wrapUp?.previousRecords?.[team]
-    || {};
+  const record = {
+    ...(envelope?.gameId === FOOTBALL_REPORT_BASELINE_GAME_ID ? BASELINE_TEAM_RECORDS[team] : {}),
+    ...envelope?.game?.teamRecords?.[team],
+    ...envelope?.game?.wrapUp?.previousRecords?.[team],
+  };
   return {
     overall: String(record.overall || '—'),
     conference: String(record.conference || '—'),

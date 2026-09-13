@@ -12,7 +12,37 @@ describe('football scoring summary projection', () => {
   it('uses the completed Fairmont State at West Virginia State example game', () => {
     expect(report.gameId).toBe('FB-ca7d777b-a8aa-4a26-bd20-b10f7bb621a7');
     expect(report.reportMatchup).toBe('Fairmont St. vs. West Virginia St. (September 27, 2025)');
-    expect(report.matchup).toBe('Fairmont St. (2-2, 0-2 MEC) vs. West Virginia St. (3-1, 2-0 MEC)');
+    expect(report.matchup).toBe('Fairmont St. (2-2, 0-1 MEC) vs. West Virginia St. (3-1, 1-0 MEC)');
+  });
+
+  it('uses saved wrap-up records over setup and baseline records without changing the game', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.game.teamRecords = {
+      H: { overall: '0-2', conference: '0-0', conferenceName: 'CIAA' },
+      V: { overall: '1-1', conference: '0-0', conferenceName: 'CIAA' },
+    };
+    envelope.game.wrapUp.previousRecords = {
+      H: { overall: '1-2', conference: '1-0' },
+      V: { overall: '1-2', conference: '0-1' },
+    };
+    const before = JSON.stringify(envelope);
+    expect(buildFootballScoringSummary(envelope).matchup)
+      .toBe('Fairmont St. (1-2, 0-1 CIAA) vs. West Virginia St. (1-2, 1-0 CIAA)');
+    expect(JSON.stringify(envelope)).toBe(before);
+  });
+
+  it('falls back to setup records for missing fields but respects a deliberately cleared wrap-up value', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    envelope.gameId = 'FB-RECORD-FALLBACK';
+    envelope.game.teamRecords = {
+      H: { overall: '2-1', conference: '1-0' }, V: { overall: '0-3', conference: '0-1' },
+    };
+    delete envelope.game.wrapUp.previousRecords;
+    expect(buildFootballScoringSummary(envelope).matchup)
+      .toBe('Fairmont St. (0-3, 0-1) vs. West Virginia St. (2-1, 1-0)');
+    envelope.game.wrapUp.previousRecords = { H: { overall: '' } };
+    expect(buildFootballScoringSummary(envelope).matchup)
+      .toBe('Fairmont St. (0-3, 0-1) vs. West Virginia St. (—, 1-0)');
   });
 
   it('projects score by quarter and omits unused overtime columns', () => {

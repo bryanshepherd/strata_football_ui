@@ -19,7 +19,7 @@ describe('FootballScoringSummaryReport', () => {
     expect(screen.getByRole('img', { name: 'StrataSportsSuite' })).toHaveAttribute('src', '/strata-sports-suite.png');
     expect(screen.getByRole('heading', { level: 1, name: 'Scoring Summary' })).toBeInTheDocument();
     expect(screen.getByText('Fairmont St. vs. West Virginia St. (September 27, 2025)')).toBeInTheDocument();
-    expect(screen.getByText('Fairmont St. (2-2, 0-2 MEC) vs. West Virginia St. (3-1, 2-0 MEC)')).toBeInTheDocument();
+    expect(screen.getByText('Fairmont St. (2-2, 0-1 MEC) vs. West Virginia St. (3-1, 1-0 MEC)')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'StrataFootball' })).toHaveAttribute('src', '/strata-football.png');
     ['SCORE BY QUARTERS', 'SCORING SUMMARY', 'GAME DETAILS', 'OFFICIALS'].forEach((heading) => {
       expect(screen.getByRole('heading', { level: 2, name: heading })).toBeInTheDocument();
