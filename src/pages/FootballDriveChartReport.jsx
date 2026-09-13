@@ -106,6 +106,25 @@ const TeamDriveSection = ({ team }) => (
   </section>
 );
 
+export const FootballDriveChartReportPages = ({ report }) => (
+  <>
+    <article className="football-report-page football-drive-chart-page" data-football-report="drive-chart-teams">
+      <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
+      <TeamDriveSection team={report.teams.V} />
+      <TeamDriveSection team={report.teams.H} />
+      <FootballReportFooterBrand />
+    </article>
+    <article className="football-report-page football-drive-chart-page football-drive-chart-page-break" data-football-report="drive-chart-chronological">
+      <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
+      <section className="football-drive-chronological-section">
+        <h2>Chronological Drive Chart</h2>
+        <DriveTable drives={report.chronological} label="Chronological drive chart" />
+      </section>
+      <FootballReportFooterBrand />
+    </article>
+  </>
+);
+
 function FootballDriveChartReportContent({ envelope }) {
   const reportEnvelope = envelope;
   const report = useMemo(() => buildFootballDriveChartReport(reportEnvelope), [reportEnvelope]);
@@ -116,20 +135,7 @@ function FootballDriveChartReportContent({ envelope }) {
         <a href={scorerHref(report.gameId)}>Back to scorer</a>
         <button onClick={() => window.print()} type="button">Print / Save PDF</button>
       </nav>
-      <article className="football-report-page football-drive-chart-page" data-football-report="drive-chart-teams">
-        <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
-        <TeamDriveSection team={report.teams.V} />
-        <TeamDriveSection team={report.teams.H} />
-        <FootballReportFooterBrand />
-      </article>
-      <article className="football-report-page football-drive-chart-page football-drive-chart-page-break" data-football-report="drive-chart-chronological">
-        <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
-        <section className="football-drive-chronological-section">
-          <h2>Chronological Drive Chart</h2>
-          <DriveTable drives={report.chronological} label="Chronological drive chart" />
-        </section>
-        <FootballReportFooterBrand />
-      </article>
+      <FootballDriveChartReportPages report={report} />
     </main>
   );
 }

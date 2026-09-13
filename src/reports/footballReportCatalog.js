@@ -1,4 +1,5 @@
 export const FOOTBALL_REPORT_OPTIONS = Object.freeze([
+  { id: 'report-packet', label: 'Report Packet' },
   { id: 'scoring-summary', label: 'Scoring Summary' },
   { id: 'team-stats', label: 'Team Stats' },
   { id: 'penalty-chart', label: 'Penalty Chart' },

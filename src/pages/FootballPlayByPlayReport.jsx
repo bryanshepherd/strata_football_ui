@@ -69,6 +69,21 @@ const QuarterPage = ({ first, quarter, report }) => (
   </article>
 );
 
+export const FootballPlayByPlayReportPages = ({ report }) => (
+  <>
+    {report.quarters.map((quarter, index) => (
+      <Fragment key={quarter.period}>
+        <QuarterPage first={index === 0} quarter={quarter} report={report} />
+        <FootballQuickieReportPage
+          className="football-play-by-play-quickie-page football-play-by-play-page-break"
+          dataFootballReport="play-by-play-quarter-quickie"
+          report={quarter.quickie}
+        />
+      </Fragment>
+    ))}
+  </>
+);
+
 function FootballPlayByPlayReportContent({ envelope }) {
   const reportEnvelope = envelope;
   const report = useMemo(
@@ -82,16 +97,7 @@ function FootballPlayByPlayReportContent({ envelope }) {
         <a href={scorerHref(report.gameId)}>Back to scorer</a>
         <button onClick={() => window.print()} type="button">Print / Save PDF</button>
       </nav>
-      {report.quarters.map((quarter, index) => (
-        <Fragment key={quarter.period}>
-          <QuarterPage first={index === 0} quarter={quarter} report={report} />
-          <FootballQuickieReportPage
-            className="football-play-by-play-quickie-page football-play-by-play-page-break"
-            dataFootballReport="play-by-play-quarter-quickie"
-            report={quarter.quickie}
-          />
-        </Fragment>
-      ))}
+      <FootballPlayByPlayReportPages report={report} />
     </main>
   );
 }

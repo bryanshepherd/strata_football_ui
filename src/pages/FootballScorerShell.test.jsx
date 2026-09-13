@@ -1083,6 +1083,10 @@ describe('FootballScorerShell', () => {
       await waitFor(() => expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
       expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(0);
       expect(screen.getByText('Reports')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Report Packet' })).toHaveAttribute(
+        'href',
+        '/index.html?report=report-packet&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',
+      );
       expect(screen.getByRole('link', { name: 'Scoring Summary' })).toHaveAttribute(
         'href',
         '/index.html?report=scoring-summary&gameId=FB-SERVER-RECOVERY-UI&source=local&dashboardGameId=DASH-SERVER-RECOVERY-UI',

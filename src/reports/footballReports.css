@@ -860,6 +860,31 @@
 
 .football-participation-print-clearance { display: none; }
 
+@page football-packet {
+  size: letter portrait;
+  margin: .32in .34in .62in;
+}
+
+.football-report-packet .football-report-actions h1 {
+  margin: 0 auto 0 0;
+  align-self: center;
+  font: 700 14px/1 Arial, Helvetica, sans-serif;
+}
+
+.football-report-packet-layout {
+  margin: 0 auto;
+  border-collapse: collapse;
+}
+
+.football-report-packet-layout > tbody > tr > td {
+  padding: 0;
+  vertical-align: top;
+}
+
+.football-report-packet-section + .football-report-packet-section { margin-top: 20px; }
+.football-packet-print-brand,
+.football-packet-print-clearance { display: none; }
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }
@@ -1000,6 +1025,46 @@
 
   .football-participation-print-clearance { display: table-footer-group; }
   .football-participation-print-clearance td { height: .44in; }
+
+  /* One page profile and one brand for the whole packet prevent standalone
+     fixed footers and mixed page sizes from overlapping or adding blank pages. */
+  .football-report-packet,
+  .football-report-packet .football-report-page,
+  .football-report-packet .football-report-brand-footer {
+    page: football-packet !important;
+  }
+
+  .football-report-packet-layout { width: 100%; }
+
+  .football-report-packet .football-report-page {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .football-report-packet-section + .football-report-packet-section {
+    margin-top: 0;
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .football-report-packet-section .football-report-brand-footer,
+  .football-report-packet .football-defense-print-clearance,
+  .football-report-packet .football-participation-print-clearance {
+    display: none !important;
+  }
+
+  .football-packet-print-brand { display: block; }
+  .football-packet-print-brand .football-report-brand-footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+  }
+
+  .football-packet-print-clearance { display: table-footer-group; }
+  .football-packet-print-clearance td { height: .44in; }
 
   .football-penalty-chart-page + .football-penalty-chart-page {
     margin-top: 0;

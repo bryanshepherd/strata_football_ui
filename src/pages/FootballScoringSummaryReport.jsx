@@ -137,6 +137,20 @@ const ReportSection = ({ children, title }) => (
   </section>
 );
 
+export const FootballScoringSummaryReportPage = ({ report }) => (
+  <>
+    <article className="football-report-page" data-football-report="scoring-summary">
+      <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
+      <p className="football-report-matchup-heading">{report.matchup}</p>
+      <ScoreByQuarter report={report} />
+      <ScoringLedger report={report} />
+      <GameDetails details={report.gameDetails} />
+      <Officials officials={report.officials} />
+      <FootballReportFooterBrand />
+    </article>
+  </>
+);
+
 function FootballScoringSummaryReportContent({ envelope }) {
   const reportEnvelope = envelope;
   const report = useMemo(() => buildFootballScoringSummary(reportEnvelope), [reportEnvelope]);
@@ -147,15 +161,7 @@ function FootballScoringSummaryReportContent({ envelope }) {
         <a href={scorerHref(report.gameId)}>Back to scorer</a>
         <button onClick={() => window.print()} type="button">Print / Save PDF</button>
       </nav>
-      <article className="football-report-page" data-football-report="scoring-summary">
-        <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
-        <p className="football-report-matchup-heading">{report.matchup}</p>
-        <ScoreByQuarter report={report} />
-        <ScoringLedger report={report} />
-        <GameDetails details={report.gameDetails} />
-        <Officials officials={report.officials} />
-        <FootballReportFooterBrand />
-      </article>
+      <FootballScoringSummaryReportPage report={report} />
     </main>
   );
 }

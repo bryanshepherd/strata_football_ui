@@ -74,6 +74,30 @@ const PenaltySection = ({ section, team }) => (
   </section>
 );
 
+export const FootballPenaltyChartReportPages = ({ report }) => (
+  <>
+    {['V', 'H'].map((teamCode, teamIndex) => {
+      const team = report.teams[teamCode];
+      return (
+        <Fragment key={teamCode}>
+          <article
+            className={`football-report-page football-penalty-chart-page${teamIndex > 0 ? ' football-penalty-chart-page-break' : ''}`}
+            data-football-report="penalty-chart"
+            data-team={teamCode}
+          >
+            <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
+            <h2 className="football-penalty-team-heading">{team.name}</h2>
+            {team.sections.map((section) => (
+              <PenaltySection key={section.id} section={section} team={team} />
+            ))}
+            <FootballReportFooterBrand />
+          </article>
+        </Fragment>
+      );
+    })}
+  </>
+);
+
 function FootballPenaltyChartReportContent({ envelope }) {
   const reportEnvelope = envelope;
   const report = useMemo(() => buildFootballPenaltyChartReport(reportEnvelope), [reportEnvelope]);
@@ -84,25 +108,7 @@ function FootballPenaltyChartReportContent({ envelope }) {
         <a href={scorerHref(report.gameId)}>Back to scorer</a>
         <button onClick={() => window.print()} type="button">Print / Save PDF</button>
       </nav>
-      {['V', 'H'].map((teamCode, teamIndex) => {
-        const team = report.teams[teamCode];
-        return (
-          <Fragment key={teamCode}>
-            <article
-              className={`football-report-page football-penalty-chart-page${teamIndex > 0 ? ' football-penalty-chart-page-break' : ''}`}
-              data-football-report="penalty-chart"
-              data-team={teamCode}
-            >
-              <FootballReportHeader matchup={report.reportMatchup} title={report.reportTitle} />
-              <h2 className="football-penalty-team-heading">{team.name}</h2>
-              {team.sections.map((section) => (
-                <PenaltySection key={section.id} section={section} team={team} />
-              ))}
-              <FootballReportFooterBrand />
-            </article>
-          </Fragment>
-        );
-      })}
+      <FootballPenaltyChartReportPages report={report} />
     </main>
   );
 }
