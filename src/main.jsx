@@ -8,6 +8,7 @@ import FootballDefensiveStatsReport from './pages/FootballDefensiveStatsReport.j
 import FootballDriveChartReport from './pages/FootballDriveChartReport.jsx'
 import FootballIndividualOffenseReport from './pages/FootballIndividualOffenseReport.jsx'
 import FootballMaxPrepsExportReport from './pages/FootballMaxPrepsExportReport.jsx'
+import FootballParticipationReport from './pages/FootballParticipationReport.jsx'
 import FootballPenaltyChartReport from './pages/FootballPenaltyChartReport.jsx'
 import FootballPlayByPlayReport from './pages/FootballPlayByPlayReport.jsx'
 import FootballQuickieStatsReport from './pages/FootballQuickieStatsReport.jsx'
@@ -36,6 +37,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/reports/individual-offense" element={<FootballIndividualOffenseReport />} />
           <Route path="/reports/maxpreps-export" element={<FootballMaxPrepsExportReport />} />
           <Route path="/reports/team-stats" element={<FootballTeamStatsReport />} />
+          <Route path="/reports/participation" element={<FootballParticipationReport />} />
           <Route path="/reports/penalty-chart" element={<FootballPenaltyChartReport />} />
           <Route path="/reports/play-by-play" element={<FootballPlayByPlayReport />} />
           <Route path="/reports/quickie-stats" element={<FootballQuickieStatsReport />} />
@@ -54,6 +56,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 ? <FootballTeamStatsReport />
                 : requestedReport === 'penalty-chart'
                   ? <FootballPenaltyChartReport />
+                : requestedReport === 'participation'
+                  ? <FootballParticipationReport />
                 : requestedReport === 'play-by-play'
                   ? <FootballPlayByPlayReport />
                 : requestedReport === 'maxpreps-export'

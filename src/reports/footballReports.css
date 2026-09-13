@@ -768,6 +768,98 @@
   font-weight: 700;
 }
 
+@page football-participation {
+  size: letter portrait;
+  margin: .32in .34in .62in;
+}
+
+.football-participation-page { overflow: visible; }
+
+.football-participation-grid {
+  width: calc(100% + 16px);
+  margin: 8px -8px 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.football-participation-team {
+  width: 50%;
+  padding: 0 8px;
+  vertical-align: top;
+}
+
+.football-participation-team h2 {
+  margin: 0 0 5px;
+  padding: 3px;
+  background: #dde5e0;
+  font: 700 8.5pt/1.1 Arial, Helvetica, sans-serif;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.football-participation-team h3 {
+  margin: 0 0 3px;
+  padding: 0 0 2px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 8pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+  break-after: avoid;
+}
+
+.football-participation-starters {
+  margin-bottom: 10px;
+  break-inside: avoid;
+}
+
+.football-participation-position-column { width: 14%; }
+.football-participation-number-column { width: 10%; }
+
+.football-participation-starter-table tbody th,
+.football-participation-starter-table thead th:last-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.football-participation-starter-table tbody th { font-weight: 400; }
+
+.football-participation-others ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 400 7pt/1.25 Arial, Helvetica, sans-serif;
+}
+
+.football-participation-others li {
+  padding: 1px 0;
+  break-inside: avoid;
+  overflow-wrap: anywhere;
+}
+
+.football-participation-others li span {
+  display: inline-block;
+  width: 24px;
+  margin-right: 5px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.football-participation-total {
+  margin: 6px 0 0;
+  padding-top: 3px;
+  border-top: 1px solid #19201c;
+  font: 700 7pt/1.15 Arial, Helvetica, sans-serif;
+  break-before: avoid;
+  break-inside: avoid;
+}
+
+.football-participation-empty {
+  margin: 4px 0;
+  color: #59635e;
+  font: italic 7pt/1.2 Arial, Helvetica, sans-serif;
+}
+
+.football-participation-print-clearance { display: none; }
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }
@@ -888,6 +980,26 @@
     border: 0;
     padding: 0;
   }
+
+  .football-report-screen:has(.football-participation-page),
+  .football-participation-page,
+  .football-participation-page .football-report-brand-footer {
+    page: football-participation;
+  }
+
+  .football-participation-page {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .football-participation-page .football-report-brand-footer {
+    left: 0;
+    bottom: 0;
+  }
+
+  .football-participation-print-clearance { display: table-footer-group; }
+  .football-participation-print-clearance td { height: .44in; }
 
   .football-penalty-chart-page + .football-penalty-chart-page {
     margin-top: 0;
