@@ -5,6 +5,7 @@ export const FOOTBALL_REPORT_OPTIONS = Object.freeze([
   { id: 'drive-chart', label: 'Drive Chart' },
   { id: 'quickie-stats', label: 'Quickie Stats' },
   { id: 'individual-offense', label: 'Individual Offense' },
+  { id: 'defensive-stats', label: 'Defensive Stats' },
   { id: 'play-by-play', label: 'Play-by-Play' },
   { id: 'maxpreps-export', label: 'MaxPreps Export' },
 ]);

@@ -712,6 +712,62 @@
   font-weight: 700 !important;
 }
 
+/* This report flows across pages; only individual rows stay together. */
+@page football-defense {
+  size: letter portrait;
+  margin: .32in .34in .62in;
+}
+
+.football-defensive-stats-page {
+  overflow: visible;
+}
+
+.football-defensive-stats-team {
+  margin-top: 10px;
+}
+
+.football-defensive-stats-team h2 {
+  margin: 0 0 3px;
+  padding-bottom: 3px;
+  border-bottom: 1.5px solid #19201c;
+  font: 700 8.5pt/1.1 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+  break-after: avoid;
+}
+
+.football-defense-number-column { width: 3.5%; }
+.football-defense-name-column { width: 25%; }
+.football-defense-yards-column { width: 8%; }
+.football-defense-print-clearance { display: none; }
+
+.football-defensive-stats-table th,
+.football-defensive-stats-table td {
+  padding: 2px;
+  vertical-align: middle;
+}
+
+.football-defensive-stats-table th:nth-child(2),
+.football-defensive-stats-table tbody th {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.football-defensive-stats-table tbody th {
+  font-weight: 400;
+}
+
+.football-defensive-stats-table thead th,
+.football-defensive-stats-table td:not(:nth-child(2)) {
+  white-space: nowrap;
+}
+
+.football-defensive-stats-table .football-report-total th,
+.football-defensive-stats-table .football-report-total td {
+  border-top: 1px solid #19201c;
+  background: #eef2ef;
+  font-weight: 700;
+}
+
 .football-game-details {
   border-top: 1px solid #c7cfca;
 }
@@ -803,6 +859,34 @@
 
   .football-report-brand-footer {
     position: fixed;
+  }
+
+  .football-report-screen:has(.football-defensive-stats-page) {
+    page: football-defense;
+  }
+
+  .football-defensive-stats-page {
+    page: football-defense;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .football-defensive-stats-page .football-report-brand-footer {
+    page: football-defense;
+    left: 0;
+    bottom: 0;
+  }
+
+  /* Repeated table clearance keeps the fixed brand off continuation rows. */
+  .football-defense-print-clearance {
+    display: table-footer-group;
+  }
+
+  .football-defense-print-clearance td {
+    height: .44in;
+    border: 0;
+    padding: 0;
   }
 
   .football-penalty-chart-page + .football-penalty-chart-page {

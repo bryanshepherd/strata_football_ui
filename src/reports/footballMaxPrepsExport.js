@@ -386,11 +386,11 @@ const creditDefense = (store, event) => {
     || (['rush', 'pass'].includes(event?.type) && finiteNumber(event?.result?.yards) < 0);
   if (loss && tackleParticipants.length > 0) {
     const credit = 1 / tackleParticipants.length;
-    tackleParticipants.forEach((participant) => increment(
-      store.get(participant.playerId, participant.team, participant),
-      'TacklesForLoss',
-      credit,
-    ));
+    tackleParticipants.forEach((participant) => {
+      const row = store.get(participant.playerId, participant.team, participant);
+      increment(row, 'TacklesForLoss', credit);
+      increment(row, 'TacklesForLossYards', Math.abs(finiteNumber(event?.result?.yards)) * credit);
+    });
   }
 
   if (sackers.length > 0) {
@@ -441,10 +441,10 @@ const creditDefense = (store, event) => {
   const blocker = defenders.find((participant) => (
     participant.playerId === blockerId || normalizedRole(participant) === 'blocker'
   )) || store.identity.get(blockerId);
-  if (blocker && ['punt', 'fieldGoal'].includes(event?.type)) {
+  if (blocker && ['punt', 'fieldGoal', 'try'].includes(event?.type)) {
     const row = store.get(blocker.playerId, blocker.team, blocker);
     initializeDefense(row);
-    increment(row, event.type === 'punt' ? 'BlockedPunts' : 'BlockedFG');
+    increment(row, event.type === 'punt' ? 'BlockedPunts' : event.type === 'try' ? 'BlockedPAT' : 'BlockedFG');
   }
 
   const fumble = event?.result?.fumble;
@@ -761,4 +761,15 @@ export const buildFootballMaxPrepsExports = (envelope) => {
     supplierId: MAXPREPS_STAT_SUPPLIER_ID,
     exports,
   };
+};
+
+// The printable defense report shares event attribution with the export, but
+// includes players without jersey numbers and never overlays stale cached totals.
+export const buildFootballDefensivePlayerStats = (envelope) => {
+  const events = acceptedFootballEvents(envelope);
+  const store = createRowStore(envelope, events);
+  events.forEach((event) => creditDefense(store, event));
+  const rows = [...store.rows.values()];
+  finalizeRows(rows);
+  return rows;
 };

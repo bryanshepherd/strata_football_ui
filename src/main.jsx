@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import FootballDashboard from './pages/FootballDashboard.jsx'
 import FootballLayoutPreview from './pages/FootballLayoutPreview.jsx'
 import FootballPlayEditorSandbox from './pages/FootballPlayEditorSandbox.jsx'
+import FootballDefensiveStatsReport from './pages/FootballDefensiveStatsReport.jsx'
 import FootballDriveChartReport from './pages/FootballDriveChartReport.jsx'
 import FootballIndividualOffenseReport from './pages/FootballIndividualOffenseReport.jsx'
 import FootballMaxPrepsExportReport from './pages/FootballMaxPrepsExportReport.jsx'
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/football-play-editor-sandbox" element={<FootballPlayEditorSandbox />} />
           <Route path="/reports" element={<FootballScoringSummaryReport />} />
           <Route path="/reports/scoring-summary" element={<FootballScoringSummaryReport />} />
+          <Route path="/reports/defensive-stats" element={<FootballDefensiveStatsReport />} />
           <Route path="/reports/drive-chart" element={<FootballDriveChartReport />} />
           <Route path="/reports/individual-offense" element={<FootballIndividualOffenseReport />} />
           <Route path="/reports/maxpreps-export" element={<FootballMaxPrepsExportReport />} />
@@ -44,6 +46,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               ? <FootballScoringSummaryReport />
               : requestedReport === 'drive-chart'
                 ? <FootballDriveChartReport />
+              : requestedReport === 'defensive-stats'
+                ? <FootballDefensiveStatsReport />
               : requestedReport === 'individual-offense'
                 ? <FootballIndividualOffenseReport />
               : requestedReport === 'team-stats'
