@@ -3,6 +3,51 @@ import baselineRecord from '../data/footballCompletedBaselineGameRecord.json';
 import { buildFootballIndividualOffenseReport } from './footballIndividualOffense';
 
 describe('football Individual Offense projection', () => {
+  it('includes aborted-play fumbles in the Team row and totals, excluding nullified and deleted plays', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const aborted = (sequence, recoveryTeam = 'V') => ({
+      eventId: `aborted-${sequence}`, sequence, status: 'accepted', type: 'rush', subtype: 'aborted',
+      possession: 'V', period: 2, clock: '04:00',
+      preState: { possession: 'V', down: 1, distance: 10, yardLine: 'H38' },
+      participants: { primary: null, secondary: null, defenders: [] }, penalties: [],
+      result: { code: 'fumble', yards: -4, endYardLine: 'H42', teamCharged: true,
+        fumble: { fumblerPlayerId: 'TM', spot: 'H40', recoveredByPlayerId: 'TM', recoveredByTeam: recoveryTeam, recoverySpot: 'H42', turnover: recoveryTeam !== 'V' } },
+    });
+    const nullified = aborted(3, 'H');
+    nullified.penalties = [{ status: 'accepted', enforcedFrom: 'previousSpot', team: 'H', yards: 5, replayDown: true }];
+    const deleted = { ...aborted(4, 'H'), status: 'deleted' };
+    envelope.events = [aborted(1), aborted(2, 'H'), nullified, deleted];
+    envelope.stats = { teams: {}, players: {} };
+    const before = JSON.stringify(envelope);
+    const report = buildFootballIndividualOffenseReport(envelope);
+    expect(report.teamReports.V.fumbles.players).toEqual([
+      expect.objectContaining({ name: 'Team', teamEntry: true, fumbles: 2, fumblesLost: 1 }),
+    ]);
+    expect(report.teamReports.V.fumbles.totals).toEqual({ fumbles: 2, fumblesLost: 1 });
+    expect(report.teamReports.H.fumbles.players).toEqual([]);
+    expect(JSON.stringify(envelope)).toBe(before);
+  });
+
+  it('keeps the fumble charged to the individual when the team recovers it', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const player = Object.values(envelope.rosters.teams.V.players)[0];
+    envelope.events = [{
+      eventId: 'individual-fumble', sequence: 1, status: 'accepted', type: 'rush', subtype: 'fumble',
+      possession: 'V', period: 1, clock: '12:00',
+      preState: { possession: 'V', down: 1, distance: 10, yardLine: 'V30' },
+      participants: { primary: { playerId: player.playerId, team: 'V', role: 'rusher' }, defenders: [] }, penalties: [],
+      result: { code: 'fumble', yards: -2, endYardLine: 'V28',
+        fumble: { fumblerPlayerId: player.playerId, spot: 'V28', recoveredByPlayerId: 'TM', recoveredByTeam: 'V', recoverySpot: 'V28', turnover: false } },
+    }];
+    envelope.stats = { teams: {}, players: {} };
+    const report = buildFootballIndividualOffenseReport(envelope);
+    expect(report.teamReports.V.fumbles.players).toEqual([
+      expect.objectContaining({ playerId: player.playerId, fumbles: 1, fumblesLost: 0 }),
+    ]);
+    expect(report.teamReports.V.fumbles.players.some((entry) => entry.teamEntry)).toBe(false);
+    expect(report.teamReports.V.fumbles.totals).toEqual({ fumbles: 1, fumblesLost: 0 });
+  });
+
   it('builds all nine ordered team sections from the full event ledger', () => {
     const report = buildFootballIndividualOffenseReport(baselineRecord.envelope);
     expect(report).toMatchObject({

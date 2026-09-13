@@ -303,6 +303,23 @@ const fumbleTotals = (players) => ({
   fumblesLost: sum(players, 'fumblesLost'),
 });
 
+const buildTeamFumbleEntry = (events, team) => {
+  const entry = { ...teamEntry(team, 'fumbles'), fumbles: 0, fumblesLost: 0 };
+  events.forEach((event) => {
+    const fumble = event?.result?.fumble;
+    if (!fumble || event.possession !== team || hasAcceptedPreviousSpotPenalty(event)) return;
+    const chargedToTeam = fumble.fumblerPlayerId === 'TM'
+      || event.result.teamCharged === true
+      || (event.type === 'rush' && event.subtype === 'aborted');
+    if (!chargedToTeam) return;
+    entry.fumbles += 1;
+    entry.fumblesLost += Number(fumble.recoveredByTeam
+      ? fumble.recoveredByTeam !== team
+      : fumble.turnover === true);
+  });
+  return entry.fumbles > 0 ? entry : null;
+};
+
 const buildTeamReport = (envelope, events, projected, players, identity, team, showYac) => {
   const charged = buildTeamChargedEntries(envelope, events, team);
   const rushing = sorted([
@@ -346,8 +363,9 @@ const buildTeamReport = (envelope, events, projected, players, identity, team, s
       .filter((player) => player.allPurposeTotal !== 0),
     (left, right) => right.allPurposeTotal - left.allPurposeTotal,
   );
+  const teamFumbles = buildTeamFumbleEntry(events, team);
   const fumbles = sorted(
-    players.filter((player) => player.team === team && player.fumbles > 0),
+    [...players.filter((player) => player.team === team && player.fumbles > 0), ...(teamFumbles ? [teamFumbles] : [])],
     (left, right) => right.fumbles - left.fumbles || right.fumblesLost - left.fumblesLost,
   );
 
