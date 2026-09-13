@@ -1,4 +1,5 @@
 import { prepareFootballChallengeEvent } from '../utils/footballChallengeRescore';
+import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
 import { repairFootballPlayReadoutsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { applyFootballOvertimeControl, applyFootballOvertimeOutcome, validateFootballOvertimeEvent } from '../utils/footballOvertime';
 import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
@@ -1024,7 +1025,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptySt
   const repairedOpeningEnvelope = repairMissingOpeningKickoffSpot(normalizedRuleEnvelope);
   const repairedSeriesEnvelope = repairReplayDownThatReachedLineToGain(repairedOpeningEnvelope);
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
-  const repairedReturnDriveEnvelope = repairSpecialTeamsReturnTouchdownDrives(repairedHalftimeEnvelope);
+  const repairedReturnDriveEnvelope = repairReturnTouchdownDrives(repairedHalftimeEnvelope);
   const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedReturnDriveEnvelope);
   const repairedMuffClockEnvelope = repairSameTeamMuffedPuntStoppedClock(repairedDriveEnvelope);
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedMuffClockEnvelope, rebuildEmptyStats);
@@ -1163,26 +1164,24 @@ const repairFirstHalfTouchdownClockSeries = (envelope) => {
   };
 };
 
-const repairSpecialTeamsReturnTouchdownDrives = (envelope) => {
+const repairReturnTouchdownDrives = (envelope) => {
   const events = Array.isArray(envelope?.events) ? envelope.events : [];
   let changed = false;
   const completed = (envelope?.drives?.completed || []).map((drive) => {
     if (String(drive?.result || '').toLowerCase() !== 'touchdown' || !drive?.driveId) return drive;
     const returnTouchdown = events.find((event) => (
       (!event?.status || event.status === 'accepted')
-      && event?.type === 'punt'
       && event?.preState?.driveId === drive.driveId
-      && event?.result?.scoring?.type === 'touchdown'
-      && event.result.scoring.team !== drive.team
-      && (event?.participants?.returner || event?.result?.return?.returnerPlayerId)
+      && footballReturnTouchdownDriveEnd(event, drive.team)
     ));
     if (!returnTouchdown) return drive;
-    const endYardLine = returnTouchdown?.preState?.yardLine || drive.endYardLine;
+    const ending = footballReturnTouchdownDriveEnd(returnTouchdown, drive.team);
+    const endYardLine = ending.endYardLine || drive.endYardLine;
     const yards = calculateYardsGained(drive.startYardLine, endYardLine, drive.team);
     changed = true;
     return {
       ...drive,
-      result: 'punt',
+      result: ending.result,
       endYardLine,
       ...(Number.isFinite(yards) ? { yards } : {}),
     };
@@ -1978,6 +1977,8 @@ const acceptedPenaltyFinalSpot = (event) => [...(event?.penalties || [])]
 const driveEndSpot = (current, projection, event) => {
   const transition = projection?.driveTransition;
   const driveResult = transition?.driveResult;
+  const returned = footballReturnTouchdownDriveEnd(event, current?.team);
+  if (returned?.endYardLine) return returned.endYardLine;
   if (driveResult === 'touchdown') return 'goal';
   if (driveResult === 'safety') {
     return acceptedPenaltyFinalSpot(event)
@@ -2053,7 +2054,7 @@ export function recalculateFootballDriveTotals(envelope) {
       const updated = updateDrives({ current, completed: [] }, projection, event);
       const played = updated.completed.find((item) => item.driveId === drive.driveId)
         || (updated.current?.driveId === drive.driveId ? updated.current : current);
-      current = { ...drive, plays: played.plays, yards: played.yards };
+      current = { ...drive, result: played.result ?? drive.result, plays: played.plays, yards: played.yards };
     }
     return current;
   };

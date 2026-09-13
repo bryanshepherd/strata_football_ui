@@ -1,4 +1,5 @@
 import { validPenaltyBallContext } from './footballPenaltyPossession.js';
+import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
 
 const TEAM_CODES = new Set(['H', 'V']);
 const DEFAULT_DOWNS = 4;
@@ -294,7 +295,8 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
     const scoring = event.result?.scoring || { team: possession, points: 6, type: 'touchdown' };
     const scoringTeam = normalizeTeamCode(scoring.team) || possession;
     const patSpot = ruleSpotForTeam(rules.patSpot || 'V03', scoringTeam, 'opponent');
-    return endDriveOnly(envelope, event, preState, statisticalEndYardLine, 'touchdown', trace, patSpot, scoring, {
+    const ending = footballReturnTouchdownDriveEnd(event, possession);
+    return endDriveOnly(envelope, event, preState, ending?.endYardLine || statisticalEndYardLine, ending?.result || 'touchdown', trace, patSpot, scoring, {
       pendingTryTeam: scoringTeam,
       nextPlayContext: 'awaitingTry',
     });
@@ -333,7 +335,8 @@ export function applyFootballEventToEnvelope(envelope, event, options = {}) {
 function applyConfirmedPenaltyContext(envelope, event, preState, options, trace) {
   const context = event.result.penaltyContext;
   if (context.setupContext === 'awaitingTry' || context.setupContext === 'awaitingSafetyKick') {
-    return endDriveOnly(envelope, event, preState, event.result.endYardLine, context.scoring.type, trace, context.yardLine, context.scoring, {
+    const ending = footballReturnTouchdownDriveEnd(event, preState.possession);
+    return endDriveOnly(envelope, event, preState, ending?.endYardLine || event.result.endYardLine, ending?.result || context.scoring.type, trace, context.yardLine, context.scoring, {
       pendingTryTeam: context.setupContext === 'awaitingTry' ? context.possession : null,
       kickoffTeam: context.setupContext === 'awaitingSafetyKick' ? context.possession : null,
       nextPlayContext: context.setupContext,

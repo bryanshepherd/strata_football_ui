@@ -7,8 +7,10 @@ export const footballReturnTouchdown = (event) => {
   const fumble = result.fumble || {};
   const turnover = result.turnover || {};
   const people = event?.participants || {};
-  if (fumble.recoveredByTeam === scoring.team && scoring.team !== offense) {
-    return { type: 'fumble', team: scoring.team, playerId: fumble.recoveredByPlayerId || returned.returnerPlayerId || people.recoveredBy?.playerId, yards: fumble.returnYards ?? returned.returnYards ?? 0 };
+  const fumbleRecoveryTeam = fumble.recoveredByTeam
+    || (String(turnover.type).toLowerCase() === 'fumble' ? turnover.recoveredBy || turnover.team : null);
+  if (fumbleRecoveryTeam === scoring.team && scoring.team !== offense) {
+    return { type: 'fumble', team: scoring.team, playerId: fumble.recoveredByPlayerId || returned.returnerPlayerId || people.recoveredBy?.playerId, yards: fumble.returnYards ?? returned.returnYards ?? turnover.returnYards ?? 0 };
   }
   if ((String(turnover.type).toLowerCase() === 'interception' || ['interception', 'intercepted'].includes(event?.subtype)) && scoring.team !== offense) {
     return { type: 'interception', team: scoring.team, playerId: returned.returnerPlayerId || people.interceptor?.playerId || people.returner?.playerId, yards: returned.returnYards ?? turnover.returnYards ?? 0 };

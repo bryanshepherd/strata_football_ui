@@ -1002,12 +1002,13 @@ describe('footballRulesEngine event application', () => {
         turnover: type === 'rush' || type === 'pass'
           ? { type: type === 'pass' ? 'interception' : 'fumble', team: 'V', returnEndYardLine: 'H00' }
           : undefined,
+        return: { type: type === 'rush' ? 'Fumble' : type === 'pass' ? 'Interception' : type, returnerPlayerId: 'V-10' },
         scoring: { team: 'V', points: 6, type: 'touchdown' },
       },
       penalties: [],
     });
 
-    expect(result.driveTransition.driveResult).toBe('touchdown');
+    expect(result.driveTransition.driveResult).toBe(type === 'kickoff' ? 'returnTouchdown' : type === 'punt' ? 'punt' : 'turnover');
     expect(result.liveState).toMatchObject({
       possession: null,
       yardLine: 'H03',

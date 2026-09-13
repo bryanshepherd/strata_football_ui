@@ -1,5 +1,6 @@
 import { formatFootballReportDate } from './footballScoringSummary';
 import { confirmedPenaltyAfterPossessionChange } from '../utils/footballPenaltyPossession';
+import { footballReturnTouchdownDriveEnd, footballPointsOffTurnovers } from '../scoring/footballTurnoverScoring';
 
 const TEAM_CODES = ['V', 'H'];
 
@@ -339,7 +340,8 @@ const redZoneStats = (envelope, events, team) => {
     event?.preState?.driveId === drive.driveId
     && (event?.preState?.redZone || isRedZoneSpot(event?.preState?.yardLine, team))
   )));
-  const touchdowns = drives.filter((drive) => drive.result === 'touchdown').length;
+  const touchdowns = drives.filter((drive) => drive.result === 'touchdown'
+    && !events.some(event => event.preState?.driveId === drive.driveId && footballReturnTouchdownDriveEnd(event, team))).length;
   const fieldGoals = drives.filter((drive) => drive.result === 'fieldGoal').length;
   return {
     attempts: drives.length,
@@ -347,30 +349,6 @@ const redZoneStats = (envelope, events, team) => {
     touchdowns,
     fieldGoals,
   };
-};
-
-const pointsByDrive = (events) => {
-  const points = new Map();
-  let pendingTouchdown = null;
-  events.forEach((event) => {
-    const scoring = event?.result?.scoring;
-    if (!scoring || finiteNumber(scoring.points) <= 0) return;
-    let driveId = event?.preState?.driveId;
-    if (event.type === 'try' && pendingTouchdown?.team === scoring.team) driveId = pendingTouchdown.driveId;
-    if (driveId) points.set(driveId, finiteNumber(points.get(driveId)) + finiteNumber(scoring.points));
-    pendingTouchdown = scoring.type === 'touchdown' ? { driveId, team: scoring.team } : null;
-  });
-  return points;
-};
-
-const pointsOffTurnovers = (envelope, events, team) => {
-  const drivePoints = pointsByDrive(events);
-  const completed = Array.isArray(envelope?.drives?.completed) ? envelope.drives.completed : [];
-  return completed.filter((drive) => {
-    if (drive.team !== team) return false;
-    const reason = String(drive.startReason || '').toLowerCase();
-    return reason === 'turnover' || reason.includes('fumble') || reason.includes('interception');
-  }).reduce((total, drive) => total + finiteNumber(drivePoints.get(drive.driveId)), 0);
 };
 
 const formatInteger = (value) => String(Math.trunc(finiteNumber(value)));
@@ -451,7 +429,7 @@ const teamProjection = (envelope, events, team) => {
     fourthDownMade,
     fourthDownAttempts,
     redZone,
-    pointsOffTurnovers: pointsOffTurnovers(envelope, events, team),
+    pointsOffTurnovers: footballPointsOffTurnovers(envelope, events)[team],
   };
 };
 

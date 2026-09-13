@@ -1,5 +1,6 @@
 import { formatFootballReportDate } from './footballScoringSummary';
 import { formatFootballClockDisplay } from '../utils/footballClock';
+import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
 
 const TEAM_CODES = ['V', 'H'];
 const PERIODS = [1, 2, 3, 4];
@@ -111,7 +112,14 @@ const driveEvents = (events, driveId) => events.filter((event) => event?.preStat
 const projectDrive = (envelope, events, drive) => {
   const matchingEvents = driveEvents(events, drive.driveId);
   const firstEvent = matchingEvents[0] || null;
-  const terminalEvent = [...matchingEvents].reverse().find((event) => event.type !== 'gameControl') || matchingEvents.at(-1) || null;
+  const terminalEvent = [...matchingEvents].reverse().find((event) => ['rush', 'pass', 'punt', 'fieldGoal'].includes(event.type)) || matchingEvents.at(-1) || null;
+  const ending = footballReturnTouchdownDriveEnd(terminalEvent, drive.team);
+  if (ending) {
+    const length = fieldLength(envelope);
+    const start = relativeSpot(drive.startYardLine, drive.team, length);
+    const end = relativeSpot(ending.endYardLine, drive.team, length);
+    drive = { ...drive, ...ending, ...(start !== null && end !== null ? { yards: end - start } : {}) };
+  }
   const firstIndex = firstEvent ? events.indexOf(firstEvent) : -1;
   const acquisitionEvent = firstIndex > 0 ? events[firstIndex - 1] : null;
   const gameFinal = envelope?.game?.status === 'final';
