@@ -339,6 +339,26 @@ describe('FootballScorerShell', () => {
     window.localStorage.removeItem(FOOTBALL_SYNC_QUEUE_STORAGE_KEY);
   });
 
+  it('leaves the production scorer for the top-level dashboard without a client-side fixture transition', () => {
+    vi.stubEnv('PROD', true);
+    try {
+      renderScorer();
+      const link = screen.getByRole('link', { name: 'Dashboard' });
+      expect(link).toHaveAttribute('href', '/sports/football');
+      expect(link).toHaveAttribute('target', '_top');
+      let intercepted;
+      const stopBrowserNavigation = event => {
+        intercepted = event.defaultPrevented;
+        event.preventDefault();
+      };
+      window.addEventListener('click', stopBrowserNavigation, { once: true });
+      fireEvent.click(link);
+      expect(intercepted).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('renders the main scorer route from the default fixture envelope', () => {
     renderScorer();
 
