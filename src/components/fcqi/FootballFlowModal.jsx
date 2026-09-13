@@ -865,6 +865,7 @@ export default function FootballFlowModal({
   gameControlSettingsOnly = false,
   teamAliasesEditable = false,
   participationEditable = false,
+  startersEditable = false,
 }) {
   const [value, setValue] = useState(() => normalizeVisibleInput(state.currentStep, state.currentToken || ''));
   const inputRef = useRef(null);
@@ -873,7 +874,7 @@ export default function FootballFlowModal({
   const activeStep = state.currentStep ? stepCopyForState(state, aliases, teamNames) : null;
   const stepButtons = resultButtonsForStep(state.currentStep, aliases, teamNames, state, actionTeam)?.filter(button => !(overtime && state.currentStep === 'kickMenu' && button.value === 'O') && !(twoPointOnly && state.currentStep === 'patType' && button.value === 'K'));
   const activeButtons = state.currentStep === 'gameControlMenu'
-    ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : button.value === 'I' ? participationEditable : !gameControlSettingsOnly)
+    ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : button.value === 'I' ? participationEditable : button.value === 'R' && gameControlSettingsOnly ? startersEditable : !gameControlSettingsOnly)
     : stepButtons;
   const buttonOnly = Boolean(activeButtons) && state.currentStep !== 'recoverPlayerJersey';
   const questionFirst = ['penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);

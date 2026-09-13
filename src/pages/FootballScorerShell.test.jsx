@@ -11,9 +11,12 @@ import {
   FOOTBALL_MIRROR_SOURCE_STORAGE_KEY,
   FOOTBALL_SYNC_QUEUE_STORAGE_KEY,
   getDashboardSeededFootballEnvelopeRecord,
+  normalizeFootballScoringSetupEnvelope,
   saveDashboardSeededFootballEnvelope,
 } from '../services/footballDashboardService';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
+import { buildFootballParticipationReport } from '../reports/footballParticipationReport';
+import { footballParticipationForEnvelope } from '../utils/footballParticipation';
 import { getHighestFootballFcqiSeedCounter } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballDashboard from './FootballDashboard';
 import FootballScoringSummaryReport from './FootballScoringSummaryReport';
@@ -1898,6 +1901,57 @@ describe('FootballScorerShell', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save Participation' }));
       await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Participation' })).not.toBeInTheDocument());
       expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.participation.manualPlayed.H).toEqual([]);
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    } finally { submitMock.restore(); }
+  });
+
+  it('corrects final-game starters through Game Control, mirrors them, and retains the correction on reload', async () => {
+    const game = finalEnvelopeWithBallContextRevision('FB-FINAL-STARTERS');
+    for (const [playerId, jersey, displayName] of [
+      ['H-wrong', '96', 'Wrong Starter'], ['H-correct', '97', 'Correct Starter'],
+    ]) game.rosters.teams.H.players[playerId] = { playerId, team: 'H', jersey, displayName, position: 'QB', active: true };
+    game.pregame.starters = { offense: { H: ['H-wrong'], V: [] }, defense: { H: [], V: [] }, specialTeams: { H: [], V: [] } };
+    game.stats = normalizeFootballScoringSetupEnvelope(game, { rebuildEmptyStats: true }).stats;
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const submitMock = mockSubmitSuccess();
+    const route = '/scorer?dashboardGameId=DASH-STARTERS&envelopeGameId=FB-FINAL-STARTERS';
+    try {
+      const first = renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      const beforeEdit = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(screen.getByRole('button', { name: /^starters r$/i })).toBeEnabled();
+      expect(screen.queryByRole('button', { name: /^set ball context/i })).not.toBeInTheDocument();
+      fireEvent.keyDown(window, { key: 'r' });
+      fireEvent.click(screen.getByRole('button', { name: 'Home starters' }));
+      expect(screen.getByLabelText('Home offense starter 1 player')).toHaveValue('Wrong Starter');
+      const jersey = screen.getByLabelText('Home offense starter 1 jersey');
+      fireEvent.change(jersey, { target: { value: '97' } });
+      fireEvent.blur(jersey);
+      expect(screen.getByLabelText('Home offense starter 1 player')).toHaveValue('Correct Starter');
+      fireEvent.click(screen.getByRole('button', { name: 'Save starters' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Home starters editor' })).not.toBeInTheDocument());
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.pregame.starters.offense.H).toEqual(['H-correct']);
+      expect(saved.pregame.starters.defense).toEqual(game.pregame.starters.defense);
+      expect(saved.pregame.starters.offense.V).toEqual([]);
+      expect(saved.game).toEqual(game.game);
+      expect(saved.events).toEqual(game.events);
+      expect(saved.liveState).toEqual(game.liveState);
+      expect(saved.stats).toEqual(beforeEdit.stats);
+      expect(saved.pregame.gamePhase).toBe('final');
+      expect(buildFootballParticipationReport(saved).teamReports.H.starters.offense.map((player) => player.playerId)).toEqual(['H-correct']);
+      const participation = footballParticipationForEnvelope(saved).H;
+      expect(participation['H-correct']).toMatchObject({ played: true, locked: true, reasons: ['Starter'] });
+      expect(participation['H-wrong']).toMatchObject({ played: false, locked: false, reasons: [] });
+      await waitFor(() => expect(submitMock.fetchSpy.mock.calls.some(([, init]) => JSON.parse(init.body).envelope?.pregame?.starters?.offense?.H?.includes('H-correct'))).toBe(true));
+      first.unmount();
+      renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^starters r$/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Home starters' }));
+      expect(screen.getByLabelText('Home offense starter 1 jersey')).toHaveValue('97');
+      expect(screen.getByLabelText('Home offense starter 1 player')).toHaveValue('Correct Starter');
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Home starters editor' })).getByRole('button', { name: 'Cancel' }));
       expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
     } finally { submitMock.restore(); }
   });
