@@ -5,7 +5,7 @@ const outfile = process.argv[2];
 if (!outfile) throw new Error('Pass the dashboard footballEditedActorRepair.mjs output path.');
 await build({
   stdin: {
-    contents: "export { repairFootballEditedActorsInEnvelope, repairFootballPlayReadoutsInEnvelope } from './src/play-editor/footballPlayEditEnvelope.js';",
+    contents: "export { repairFootballEditedActorsInEnvelope, repairFootballPlayReadoutsInEnvelope } from './src/play-editor/footballPlayEditEnvelope.js'; export { formatFootballChallengeReadout } from './src/utils/footballChallengeReadout.js';",
     resolveDir: process.cwd(),
     sourcefile: 'footballEditedActorRepair.entry.js',
   },

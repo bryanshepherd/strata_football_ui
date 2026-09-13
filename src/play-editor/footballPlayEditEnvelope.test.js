@@ -58,6 +58,25 @@ const envelope = {
 };
 
 describe('football play edit envelope', () => {
+  it('updates existing challenge descriptions and confirmations without changing the ruling or context', () => {
+    const source = structuredClone(envelope);
+    source.events = [{
+      ...baseEvent, type: 'gameControl', subtype: 'challenge', possession: 'H', penalties: [],
+      participants: {}, description: 'FAIR challenge call Confirmed.',
+      confirmation: { summaryText: 'FAIR challenge call Confirmed.' },
+      result: { code: 'noPlay', gameControl: { action: 'challenge', teamSide: 'V', challengeStatus: 'callConfirmed' } },
+    }];
+    const before = JSON.stringify(source);
+    const repaired = repairFootballPlayReadoutsInEnvelope(source);
+    expect(repaired.events[0].description).toBe('Challenge by FAIR: the ruling on the field is confirmed.');
+    expect(repaired.events[0].confirmation.summaryText).toBe(repaired.events[0].description);
+    expect(repaired.events[0].result).toEqual(source.events[0].result);
+    expect(repaired.events[0].preState).toEqual(source.events[0].preState);
+    expect(repaired.events[0].postState).toEqual(source.events[0].postState);
+    expect(JSON.stringify(source)).toBe(before);
+    expect(repairFootballPlayReadoutsInEnvelope(repaired)).toBe(repaired);
+  });
+
   it('repairs missing kickoff penalty yards and clearly describes the replay without changing its ball context', () => {
     const source = structuredClone(envelope);
     const kickoff = {

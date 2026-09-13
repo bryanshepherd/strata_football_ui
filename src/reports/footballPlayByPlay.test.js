@@ -7,6 +7,16 @@ import {
 } from './footballPlayByPlay';
 
 describe('football Play-by-Play projection', () => {
+  it('keeps the challenging team in legacy report text even when the opponent has possession', () => {
+    const event = { type: 'gameControl', subtype: 'challenge', possession: 'H', description: 'LIV challenge call Confirmed.', result: { gameControl: { action: 'challenge', teamSide: 'V', challengeStatus: 'callConfirmed' } } };
+    const teams = { H: { abbr: 'BSTATE' }, V: { abbr: 'LIV' } };
+    const expected = 'Challenge by LIV: the ruling on the field is confirmed.';
+    expect(formatFootballPlayText(event, teams)).toBe(expected);
+    expect(formatFootballPlayText({ ...event, description: expected }, teams)).toBe(expected);
+    expect(formatFootballPlayText({ ...event, result: { gameControl: { action: 'challenge', teamSide: 'H', challengeStatus: 'initiated' } } }, teams)).toBe('BSTATE is challenging the previous play.');
+    expect(formatFootballPlayText({ ...event, result: { gameControl: { action: 'challenge', challengeStatus: 'callStands' } } }, teams)).toBe('Challenge: the ruling on the field stands.');
+  });
+
   it('repairs existing unknown-player placeholders from the roster without rewriting saved plays', () => {
     const envelope = structuredClone(baselineRecord.envelope);
     const play = envelope.events.find((event) => event.sequence === 2);

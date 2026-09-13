@@ -3,6 +3,7 @@ import { classifyPlayEdit } from './footballPlayEditPolicy';
 import { repairFootballEditedActorReferences, synchronizeFootballEditedActors } from './footballActorReferences';
 import { calculateEditedPenaltyYards } from './footballPlayEditYardage';
 import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
+import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -254,10 +255,15 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       return { ...penalty, yards };
     });
     const missingRekickReadout = isFootballKickoffReplay(event) && !/\bNo play\.[\s\S]*\bRe-kick\b/i.test(event.description || '');
-    if (!missingYardsRepaired && !missingRekickReadout) return event;
+    const challengeReadout = event.type === 'gameControl'
+      ? formatFootballChallengeReadout(event.result?.gameControl, repaired.game?.teams)
+      : null;
+    const staleChallengeReadout = challengeReadout && (event.description !== challengeReadout
+      || event.confirmation && event.confirmation.summaryText !== challengeReadout);
+    if (!missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
     changed = true;
     const next = { ...event, penalties };
-    const description = buildFootballEditedPlaySummary(repaired, next);
+    const description = challengeReadout || buildFootballEditedPlaySummary(repaired, next);
     return { ...next, description, ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}) };
   });
   return changed ? { ...repaired, events } : repaired;

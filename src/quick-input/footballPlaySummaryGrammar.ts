@@ -11,6 +11,7 @@ import { isCanonicalSpot } from './footballIntentSchema';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
+import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
 import { findFootballPenaltyDefinition, footballPenaltyRulesetFromRules } from './penaltyTable';
 
 export type FootballPlaySummaryWarning = DraftWarning;
@@ -459,8 +460,7 @@ function gameControlSummary(context: SummaryContext): string {
     return sentence(`(${clock}) Timeout called by ${teamName(intent, control.teamSide ?? intent.play.actionTeam)}`);
   }
   if (control.action === 'challenge') {
-    const status = String(control.challengeStatus ?? 'initiated').replace(/([a-z])([A-Z])/g, '$1 $2');
-    return sentence(`${teamAbbr(intent, control.teamSide ?? intent.play.actionTeam)} challenge ${status}`);
+    return formatFootballChallengeReadout(control, intent.game.teams);
   }
   if (control.action === 'startQuarter') return sentence(`Start quarter ${control.period ?? intent.play.period}`);
   if (control.action === 'endQuarter') return sentence(`End quarter ${control.period ?? intent.play.period}`);

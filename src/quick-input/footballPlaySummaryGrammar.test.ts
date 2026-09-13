@@ -10,6 +10,20 @@ import type {
 } from './footballIntentSchema';
 
 describe('footballPlaySummaryGrammar', () => {
+  it.each([
+    ['initiated', 'VIS is challenging the previous play.'],
+    ['successful', 'Challenge by VIS is successful.'],
+    ['unsuccessful', 'Challenge by VIS is unsuccessful.'],
+    ['callStands', 'Challenge by VIS: the ruling on the field stands.'],
+    ['callConfirmed', 'Challenge by VIS: the ruling on the field is confirmed.'],
+    ['callOverturned', 'Challenge by VIS: the ruling on the field is overturned.'],
+  ] as const)('describes a %s challenge with its selected team', (challengeStatus, expected) => {
+    expectSummary(baseIntent({
+      family: 'gameControl', subtype: 'challenge', actionTeam: 'H',
+      result: { code: 'noPlay', gameControl: { action: 'challenge', teamSide: 'V', challengeStatus } },
+    }), expected);
+  });
+
   it('separates the rush from an opponent fumble-return touchdown in the confirmation', () => {
     const intent = baseIntent({
       family: 'rush', subtype: null,

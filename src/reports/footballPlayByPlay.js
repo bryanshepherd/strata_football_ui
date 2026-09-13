@@ -3,6 +3,7 @@ import { formatFootballSafetyReadout, withFootballSafetyScoring } from '../utils
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { resolveFootballUnknownPlayerText } from '../utils/footballUnknownPlayerReadout';
+import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
 import { isFootballTryReplayEvent } from '../scoring/footballDriveSummary';
 import { buildFootballQuickieStatsReport } from './footballQuickieStats';
 import { formatFootballReportDate } from './footballScoringSummary';
@@ -225,6 +226,8 @@ const labelDeadBallPenalties = (text, penalties) => {
 };
 
 export const formatFootballPlayText = (event, teams, rosterTeams = {}) => {
+  const challenge = event?.type === 'gameControl' && formatFootballChallengeReadout(event.result?.gameControl, teams);
+  if (challenge) return challenge;
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
   text = resolveFootballUnknownPlayerText(event, text, rosterTeams);
   text = formatFootballSafetyReadout(event, formatFootballFumbleReadout(event, text));
