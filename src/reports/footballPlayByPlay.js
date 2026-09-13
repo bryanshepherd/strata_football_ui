@@ -1,3 +1,4 @@
+import { formatFootballSafetyReadout, withFootballSafetyScoring } from '../utils/footballSafety';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { resolveFootballUnknownPlayerText } from '../utils/footballUnknownPlayerReadout';
@@ -225,7 +226,7 @@ const labelDeadBallPenalties = (text, penalties) => {
 export const formatFootballPlayText = (event, teams, rosterTeams = {}) => {
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
   text = resolveFootballUnknownPlayerText(event, text, rosterTeams);
-  text = formatFootballFumbleReadout(event, text);
+  text = formatFootballSafetyReadout(event, formatFootballFumbleReadout(event, text));
   text = labelDeadBallPenalties(text, event?.penalties);
   const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
   if (!timeout) {
@@ -377,6 +378,7 @@ export const buildFootballPlayByPlayReport = (envelope, scopeInput = {}) => {
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the Play-by-Play report.');
   }
+  envelope = { ...envelope, events: (envelope.events || []).map(withFootballSafetyScoring) };
   const events = acceptedEvents(envelope);
   const periods = selectedPeriods(envelope, events, scopeInput);
   const drives = driveRows(envelope, events.filter(isDisplayEvent));

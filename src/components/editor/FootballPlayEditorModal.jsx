@@ -1,3 +1,4 @@
+import { formatFootballSafetyReadout } from '../../utils/footballSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   classifyPlayEdit,
@@ -218,7 +219,7 @@ export default function FootballPlayEditorModal({
                 )}
               </div>
               <h1 className="mt-1 text-lg font-black text-zinc-950 sm:text-xl">Edit this play’s recorded details</h1>
-              <p className="mt-1 line-clamp-2 max-w-4xl text-xs text-zinc-600 sm:text-sm">{resolveFootballUnknownPlayerText(draft, draft.description || '', { roster: { players: roster } })}</p>
+              <p className="mt-1 line-clamp-2 max-w-4xl text-xs text-zinc-600 sm:text-sm">{formatFootballSafetyReadout(draft, resolveFootballUnknownPlayerText(draft, draft.description || '', { roster: { players: roster } }))}</p>
             </div>
             <button
               aria-label="Close play editor"

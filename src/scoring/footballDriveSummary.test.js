@@ -193,7 +193,7 @@ describe('football drive summary', () => {
 
     expect(isFootballDriveSummaryTerminalEvent(safety)).toBe(true);
     expect(summary.teamName).toBe('West Virginia St.');
-    expect(summary.scoringPlay).toBe('Hatcher rush for safety');
+    expect(summary.scoringPlay).toBe('Safety');
   });
 
   it('summarizes touchdown passes with passer, yardage, and receiver', () => {

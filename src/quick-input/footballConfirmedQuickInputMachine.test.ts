@@ -2087,8 +2087,8 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toBe('HOM #9 Owen Clark 28-yard field goal blocked by #44 Caleb Moss.');
   });
 
-  it('field goal return prompt appears only when rules allow and builds a return', () => {
-    const fgReturnContext = makeContext({ rules: { fgReturn: true } });
+  it.each([undefined, false, true])('field goal offers a return regardless of legacy fgReturn=%s', (fgReturn) => {
+    const fgReturnContext = makeContext({ rules: { fgReturn } });
     const withKicker = transitionWithContext(commitTokenWithContext(inputToken(startKick(), 'F'), fgReturnContext), { type: 'INPUT_TOKEN', value: '9' }, fgReturnContext);
     const resolvedKicker = commitTokenWithContext(withKicker, fgReturnContext);
     const withSpot = commitTokenWithContext(inputToken(resolvedKicker, 'V18'), fgReturnContext);
@@ -2098,7 +2098,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(withReason.status).toBe('token.awaiting');
     expect(withReason.currentStep).toBe('fieldGoalReturnAttempted');
 
-    const returnPrompt = commitTokenWithContext(inputToken(withReason, 'Y'), fgReturnContext);
+    const returnPrompt = commitTokenWithContext(inputToken(withReason, 'R'), fgReturnContext);
     const returner = selectDuplicateIfNeeded(commitTokenWithContext(inputToken(returnPrompt, '3'), fgReturnContext), 'V-3-PR');
     const startSpot = commitTokenWithContext(inputToken(returner, 'V05'), fgReturnContext);
     const terminal = commitTokenWithContext(inputToken(startSpot, '.'), fgReturnContext);
@@ -2111,6 +2111,75 @@ describe('footballConfirmedQuickInputMachine', () => {
       endYardLine: 'V30',
       return: { type: 'Field Goal', returnerPlayerId: 'V-3-PR', returnYards: 25 },
     });
+    const reviewed = transitionWithContext(state, { type: 'GENERATE_SUMMARY' }, fgReturnContext);
+    const built = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, fgReturnContext);
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
+    expect(projected.diagnostics).toEqual([]);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'V', down: 1, distance: 10, yardLine: 'V30', lineToGain: 'V40' });
+    expect(projected.envelope.events.at(-1).type).toBe('fieldGoal');
+  });
+
+  it.each([
+    ['R', 'V20', 'V30'],
+    ['L', 'V22', 'V32'],
+    ['S', 'V07', 'V17'],
+    ['S', '50', 'H40'],
+    ['C', 'H05', 'goal'],
+  ])('spots a missed FGA (%s) at %s without using the kick spot or adding a correction', (reason, spot, lineToGain) => {
+    const context = makeContext({
+      rules: { fgReturn: false },
+      prePlay: { down: 4, distance: 8, yardLine: 'V22', lineToGain: 'V14' },
+    });
+    const draft = completeFieldGoalDraft({ result: 'M', missedReason: reason, kickSpot: 'V29', nextSpot: spot }, context);
+    expect(draft.status).toBe('draft.ready');
+    expect(draft.draft?.result).toMatchObject({ code: 'missed', endYardLine: spot, nextPossession: 'V', kick: { kickSpot: 'V29', attemptYards: 39 } });
+    const reviewed = transitionWithContext(draft, { type: 'GENERATE_SUMMARY' }, context);
+    const built = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, context);
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const envelope = getGameEnvelopeFixture('normal');
+    const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+    expect(projected.diagnostics).toEqual([]);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'V', down: 1, distance: spot === 'H05' ? 5 : 10, yardLine: spot, lineToGain });
+    expect(projected.envelope.drives.current).toMatchObject({ team: 'V', startYardLine: spot, plays: 0 });
+    expect(projected.envelope.events).toHaveLength(envelope.events.length + 1);
+    expect(projected.envelope.events.at(-1)).toMatchObject({ type: 'fieldGoal', subtype: 'missed', result: { endYardLine: spot } });
+    const serialized = JSON.parse(JSON.stringify(projected.envelope));
+    expect(serialized.events.at(-1).result.kick).toMatchObject({ kickSpot: 'V29', attemptYards: 39 });
+    expect(serialized.liveState.yardLine).toBe(spot);
+  });
+
+  it.each(['V22', 'H34', '50'])('prefills the previous scrimmage spot %s and requires confirmation', (yardLine) => {
+    const context = makeContext({ rules: { rulesPresetId: 'ncaa' }, prePlay: { yardLine } });
+    let state = startKick(context);
+    for (const token of ['F', '9', 'V29', 'M', 'S', 'S']) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+    expect(state).toMatchObject({ currentStep: 'fieldGoalNextSpot', currentToken: yardLine, selectCurrentToken: true });
+    expect(state.draft).toBeUndefined();
+    const ready = commitTokenWithContext(state, context);
+    expect(ready.draft?.result).toMatchObject({ endYardLine: yardLine, nextPossession: 'V', kick: { kickSpot: 'V29', attemptYards: 39 } });
+  });
+
+  it('requires an explicit R/S outcome and a valid spot before a missed field goal is ready', () => {
+    const context = makeContext({ teamAliases: { H: 'W', V: 'S' } });
+    let state = startKick(context);
+    for (const token of ['F', '9', 'V29', 'M', 'S']) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+    expect(state.currentStep).toBe('fieldGoalReturnAttempted');
+    expect(state.draft).toBeUndefined();
+    expect(commitTokenWithContext(inputTokenWithContext(state, 'N', context), context).status).toBe('token.error');
+    const spotting = commitTokenWithContext(inputTokenWithContext(state, 's', context), context);
+    expect(spotting.currentStep).toBe('fieldGoalNextSpot');
+    expect(spotting.draft).toBeUndefined();
+    for (const invalid of ['', 'goal', 'TD', 'V00', 'H00', 'V51']) {
+      expect(commitTokenWithContext(inputTokenWithContext(spotting, invalid, context), context).status).toBe('token.error');
+    }
+    const ready = commitTokenWithContext(inputTokenWithContext(spotting, 's20', context), context);
+    expect(ready.status).toBe('draft.ready');
+    expect(ready.draft?.result.endYardLine).toBe('V20');
+    const edited = transitionWithContext(transitionWithContext(ready, { type: 'GENERATE_SUMMARY' }, context), { type: 'EDIT_PLAY' }, context);
+    expect(edited.tokens.fieldGoalNextSpot).toBeUndefined();
+    expect(edited.tokens.fieldGoalReturnAttempted).toBeUndefined();
   });
 
   it('G starts game control flow', () => {
@@ -2307,6 +2376,49 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it.each([
+    [{ rulesPresetId: 'ncaa' }, true],
+    [{ rulesPresetId: 'ncaa', patReturns: false }, true],
+    [{ penaltyRuleset: 'NCAA' }, true],
+    [{ rulesPresetId: 'nfhs', patReturns: true }, false],
+    [{ patReturns: true }, true],
+    [{}, false],
+  ])('uses the try rules for missed and blocked PAT return prompts: %j', (rules, expected) => {
+    const context = makeContext({ rules });
+    for (const [result, detail] of [['M', 'S'], ['B', '44']]) {
+      let state = startKick(context);
+      for (const token of ['A', 'K', '9', result, detail]) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+      expect(state.currentStep === 'patKickReturnAttempted').toBe(expected);
+      if (expected) {
+        expect(state.draft).toBeUndefined();
+        const ready = commitTokenWithContext(inputTokenWithContext(state, 'N', context), context);
+        expect(ready.status).toBe('draft.ready');
+        expect(ready.draft?.result.scoring).toBeUndefined();
+      } else expect(state.status).toBe('draft.ready');
+    }
+  });
+
+  it.each(['V30', 'goal'])('records an NCAA missed-PAT return to %s and keeps the original kicking team for kickoff', (endSpot) => {
+    const context = makeContext({ rules: { rulesPresetId: 'ncaa' } });
+    let state = startKick(context);
+    for (const token of ['A', 'K', '9', 'M', 'S', 'Y', '3']) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+    state = selectDuplicateIfNeeded(state, 'V-3-PR');
+    for (const token of ['V03', '.', endSpot]) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+    expect(state.status).toBe('draft.ready');
+    expect(state.draft?.result.return).toMatchObject({ type: 'Try', returnerPlayerId: 'V-3-PR', returnEndYardLine: endSpot });
+    expect(state.draft?.result.scoring).toEqual(endSpot === 'goal' ? { team: 'V', points: 2, type: 'defensiveConversion' } : undefined);
+    const reviewed = transitionWithContext(state, { type: 'GENERATE_SUMMARY' }, context);
+    const built = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, context);
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) return;
+    const envelope = getGameEnvelopeFixture('normal');
+    const oldVisitorScore = envelope.game.teams.V.score;
+    const projected = applyFootballScorerEventToEnvelope(envelope, built.buildResult.event);
+    expect(projected.diagnostics).toEqual([]);
+    expect(projected.envelope.game.teams.V.score).toBe(oldVisitorScore + (endSpot === 'goal' ? 2 : 0));
+    expect(projected.envelope.liveState).toMatchObject({ possession: null, down: null, kickoffTeam: 'H', nextPlayContext: 'awaitingKickoff', yardLine: 'H35' });
+  });
+
   it('kick PAT blocked collects blocker and builds', () => {
     const reviewing = transition(completePatKickDraft({ result: 'B', blocker: '44' }), { type: 'GENERATE_SUMMARY' });
 
@@ -2408,6 +2520,18 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
     const reviewing = transition(state, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.summary?.summaryText).toContain('for a touchdown');
+  });
+
+  it('records an own-end-zone sack as two points and explicitly names the safety in its summary', () => {
+    const context = makeContext({ prePlay: { yardLine: 'H03', down: 1, distance: 10, lineToGain: 'H13' } });
+    let state = transitionWithContext(createInitialFootballQuickInputState(), { type: 'START_PASS' }, context);
+    for (const token of ['12', 'S', '44', '', 'H00']) state = commitTokenWithContext(inputTokenWithContext(state, token, context), context);
+    expect(state.draft?.result).toMatchObject({ code: 'sack', yards: -3, driveEnds: true, scoring: { team: 'V', points: 2, type: 'safety' } });
+    const reviewed = transitionWithContext(state, { type: 'GENERATE_SUMMARY' }, context);
+    expect(reviewed.summary?.summaryText).toMatch(/sacked by #44 Caleb Moss.*for a safety\./);
+    const built = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, context);
+    expect(built.buildResult?.ok).toBe(true);
+    if (built.buildResult?.ok) expect(built.buildResult.event.result.scoring).toEqual({ team: 'V', points: 2, type: 'safety' });
   });
 
   it('classifies a completed pass ending at its own goal line as a safety without return clarification', () => {
@@ -3438,24 +3562,24 @@ function completeFieldGoalDraft(options: {
   result: 'G' | 'M' | 'B';
   missedReason?: string;
   blocker?: string;
+  kickSpot?: string;
+  nextSpot?: string;
 }, context = makeContext()): FootballConfirmedQuickInputState {
   const withMenu = commitTokenWithContext(inputTokenWithContext(startKick(context), 'F', context), context);
   const withKicker = commitTokenWithContext(inputTokenWithContext(withMenu, '9', context), context);
-  const withSpot = commitTokenWithContext(inputTokenWithContext(withKicker, 'V18', context), context);
+  const withSpot = commitTokenWithContext(inputTokenWithContext(withKicker, options.kickSpot ?? 'V18', context), context);
   const withResult = commitTokenWithContext(inputTokenWithContext(withSpot, options.result, context), context);
 
   if (options.result === 'M') {
     const withReason = commitTokenWithContext(inputTokenWithContext(withResult, options.missedReason ?? 'R', context), context);
-    return withReason.currentStep === 'fieldGoalReturnAttempted'
-      ? commitTokenWithContext(inputTokenWithContext(withReason, 'N', context), context)
-      : withReason;
+    const spotting = commitTokenWithContext(inputTokenWithContext(withReason, 'S', context), context);
+    return commitTokenWithContext(inputTokenWithContext(spotting, options.nextSpot ?? 'V20', context), context);
   }
 
   if (options.result === 'B') {
     const withBlocker = commitTokenWithContext(inputTokenWithContext(withResult, options.blocker ?? '44', context), context);
-    return withBlocker.currentStep === 'fieldGoalReturnAttempted'
-      ? commitTokenWithContext(inputTokenWithContext(withBlocker, 'N', context), context)
-      : withBlocker;
+    const spotting = commitTokenWithContext(inputTokenWithContext(withBlocker, 'S', context), context);
+    return commitTokenWithContext(inputTokenWithContext(spotting, options.nextSpot ?? 'V20', context), context);
   }
 
   return withResult;

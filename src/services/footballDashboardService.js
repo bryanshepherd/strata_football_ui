@@ -1,3 +1,4 @@
+import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
 import {
   defaultFixtureKey,
   getGameEnvelopeFixture,
@@ -736,7 +737,7 @@ const comparableSubmittedEvent = (event = {}) => {
     acceptedAt: _acceptedAt,
     createdAt: _createdAt,
     ...submittedFields
-  } = event;
+  } = withFootballSafetyScoring(event);
   return submittedFields;
 };
 
@@ -2576,6 +2577,9 @@ export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) 
   }
 
   const scoring = projection.scoringUpdate ?? null;
+  if (scoring?.type === 'safety' && !event.result?.scoring && footballSafetyScoring(event)) {
+    event.result = { ...event.result, scoring, driveEnds: true };
+  }
   return {
     envelope: {
       ...baseEnvelope,

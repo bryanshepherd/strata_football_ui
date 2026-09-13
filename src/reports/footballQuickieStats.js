@@ -1,3 +1,4 @@
+import { withFootballSafetyScoring } from '../utils/footballSafety';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { footballOffensivePlayYards } from '../scoring/footballReturnTouchdown';
 import { footballYardsAfterCatch } from '../utils/footballReceivingYardage';
@@ -548,6 +549,7 @@ export const buildFootballQuickieStatsReport = (envelope, scopeInput = {}) => {
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for Quickie Stats.');
   }
+  envelope = { ...envelope, events: (envelope.events || []).map(withFootballSafetyScoring) };
   const resolvedScope = resolveFootballQuickieScope(scopeInput);
   const maximumPeriod = Math.max(
     4,

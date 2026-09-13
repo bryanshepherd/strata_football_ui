@@ -81,6 +81,8 @@ export type DraftTeamSummary = {
 };
 
 export type DraftRulesSnapshot = {
+  rulesPresetId?: string;
+  ruleset?: 'NFHS' | 'NCAA';
   penaltyRuleset?: 'NFHS' | 'NCAA';
   periods?: number;
   minutesPerPeriod?: number;

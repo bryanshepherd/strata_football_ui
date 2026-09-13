@@ -1,3 +1,4 @@
+import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
 import {
   buildFootballDriveSummary,
   buildFootballScoringPlaySummary,
@@ -132,6 +133,7 @@ const weatherText = (weather) => {
 };
 
 const scoringDriveText = (envelope, terminalEvent) => {
+  if (footballSafetyScoring(terminalEvent)) return '—';
   const drive = buildFootballDriveSummary(envelope, terminalEvent);
   if (!drive) return '—';
   return `${drive.plays} Plays, ${drive.yards} Yards, ${drive.timeOfPossession} TOP`;
@@ -141,6 +143,7 @@ export const buildFootballScoringSummary = (envelope) => {
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the scoring summary.');
   }
+  envelope = { ...envelope, events: (envelope.events || []).map(withFootballSafetyScoring) };
   const teams = envelope.game.teams;
   const events = orderedEvents(envelope);
   const scoringEvents = events.filter(isScoringEvent);

@@ -1,3 +1,4 @@
+import { formatFootballSafetyReadout } from '../utils/footballSafety';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
@@ -1650,7 +1651,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                       {item.event.subtype ? ` · ${item.event.subtype}` : ''}
                     </div>
                     <p className="mt-1 text-sm text-zinc-700">
-                      {formatFootballFumbleReadout(item.event, resolveFootballUnknownPlayerText(item.event, item.event.description || item.event.result?.code || 'Accepted event', envelope.rosters?.teams))}
+                      {formatFootballSafetyReadout(item.event, formatFootballFumbleReadout(item.event, resolveFootballUnknownPlayerText(item.event, item.event.description || item.event.result?.code || 'Accepted event', envelope.rosters?.teams)))}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

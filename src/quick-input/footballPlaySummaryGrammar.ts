@@ -155,7 +155,8 @@ function passSummary(context: SummaryContext): string {
     ? `${yardagePhrase(context, intent.result.yards, 'result.yards')} for a touchdown`
     : `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}`;
 
-  const clauses = [`${team} ${formatPlayer(passer)} pass complete${targetPhrase} ${resultPhrase}`];
+  const safety = intent.result.scoring?.type === 'safety' ? ' for a safety' : '';
+  const clauses = [`${team} ${formatPlayer(passer)} pass complete${targetPhrase} ${resultPhrase}${safety}`];
   clauses.push(...lateralClauses(context));
   if (intent.result.code === 'outOfBounds') clauses.push('out-of-bounds');
   const tacklers = tacklerPhrase(intent.participants.defenders);
@@ -200,7 +201,8 @@ function sackSummary(context: SummaryContext): string {
     ? ', misc. fumble'
     : intent.result.fumble ? ', fumbled' : '';
 
-  return sentence(`${team} ${formatPlayer(passer)} sacked${defenderPhrase} ${yardage}${endSpot}${fumble}`);
+  const safety = intent.result.scoring?.type === 'safety' ? ' for a safety' : '';
+  return sentence(`${team} ${formatPlayer(passer)} sacked${defenderPhrase} ${yardage}${endSpot}${fumble}${safety}`);
 }
 
 function interceptionSummary(context: SummaryContext): string {

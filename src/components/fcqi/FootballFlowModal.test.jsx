@@ -479,6 +479,30 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenCalledWith('S');
   });
 
+  it('shows Returned and Spot the ball for a missed FGA and commits their R/S hotkeys', () => {
+    const onTokenCommit = vi.fn();
+    render(
+      <FootballFlowModal
+        onCancel={vi.fn()}
+        onStepClick={vi.fn()}
+        onTokenCommit={onTokenCommit}
+        state={{
+          status: 'token.awaiting', flow: 'kick', currentStep: 'fieldGoalReturnAttempted', currentToken: '',
+          tokens: { kickMenuSelection: 'fieldGoal', laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] },
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Returned R' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Spot the ball S' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Return')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'r', code: 'KeyR' });
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' });
+    fireEvent.click(screen.getByRole('button', { name: 'Returned R' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Spot the ball S' }));
+    expect(onTokenCommit.mock.calls.map(([value]) => value)).toEqual(['R', 'S', 'R', 'S']);
+  });
+
   it('uses button-only Rekick and Spot the Ball choices with R/S hotkeys', () => {
     const onTokenCommit = vi.fn();
     render(
@@ -533,6 +557,26 @@ describe('FootballFlowModal team aliases', () => {
     expect(screen.getByRole('button', { name: 'Accept Penalty A' })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'a', code: 'KeyA' });
     expect(onTokenCommit).toHaveBeenCalledWith('A');
+  });
+
+  it('shows the previous scrimmage spot selected and accepts it with Enter', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal
+      onCancel={vi.fn()} onStepClick={vi.fn()} onTokenCommit={onTokenCommit}
+      teamAliases={{ H: 'BST', V: 'LIV' }} teamNames={{ H: 'Bluefield State', V: 'Livingstone' }}
+      state={{ status: 'token.awaiting', flow: 'kick', currentStep: 'fieldGoalNextSpot', currentToken: 'V22', selectCurrentToken: true,
+        tokens: { kickMenuSelection: 'fieldGoal', kicker: { team: 'H' }, laterals: [], tacklers: [], hurryDefenders: [], sackDefenders: [] } }}
+    />);
+    const input = screen.getByLabelText('Next ball spot');
+    expect(input).toHaveValue('V22');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(3);
+    expect(screen.getByRole('dialog')).toHaveTextContent('Confirm where Livingstone will begin its possession.');
+    fireEvent.submit(input.closest('form'));
+    expect(onTokenCommit).toHaveBeenCalledWith('V22');
+    fireEvent.change(input, { target: { value: 'LIV20' } });
+    fireEvent.submit(input.closest('form'));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('LIV20');
   });
 
   it('asks whether the defense attempted a return after a missed PAT', () => {

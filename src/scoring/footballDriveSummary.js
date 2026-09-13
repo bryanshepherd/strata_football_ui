@@ -1,3 +1,4 @@
+import { footballSafetyDefender } from '../utils/footballSafety';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { footballReturnTouchdown } from './footballReturnTouchdown';
 
@@ -192,10 +193,8 @@ export const footballScoringPlayText = (envelope, scoringEvent) => {
     0,
   );
   if (scoringType(scoringEvent) === 'safety' || scoringEvent?.result?.code === 'safety') {
-    const player = participantLastName(envelope, scoringEvent, ['primary']);
-    if (scoringEvent?.type === 'rush') return `${player} rush for safety`;
-    if (scoringEvent?.type === 'pass') return `${player} pass play results in safety`;
-    return 'Safety';
+    const defender = footballSafetyDefender(scoringEvent);
+    return defender ? `${participantFullName(envelope, scoringEvent, [], defender.playerId)} safety` : 'Safety';
   }
   if (scoringEvent?.type === 'rush') {
     return `${participantFullName(envelope, scoringEvent, ['primary'])} ${yards} yard rush`;
