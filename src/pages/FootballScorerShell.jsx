@@ -16,6 +16,9 @@ import FootballPossessionClockModal from '../components/scorer/FootballPossessio
 import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
 import FootballTeamAliasesModal from '../components/scorer/FootballTeamAliasesModal';
 import FootballParticipationModal from '../components/scorer/FootballParticipationModal';
+import FootballChallengeRescoreModal from '../components/scorer/FootballChallengeRescoreModal';
+import { pendingFootballChallengeRescore, isOverturnedFootballChallenge, footballChallengeEventKey } from '../utils/footballChallengeRescore';
+import { buildFootballChallengeRescoreEnvelope, rescoreOverturnedFootballPlay } from '../play-editor/footballChallengeRescore';
 import { applyFootballParticipation } from '../utils/footballParticipation';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
 import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
@@ -194,6 +197,11 @@ export default function FootballScorerShell() {
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
   const [editingPlay, setEditingPlay] = useState(null);
   const [replacementPlay, setReplacementPlay] = useState(null);
+  const [challengeReview, setChallengeReview] = useState(null);
+  const [dismissedChallenge, setDismissedChallenge] = useState(null);
+  const [replacementChallenge, setReplacementChallenge] = useState(null);
+  const [challengeWorkingEnvelope, setChallengeWorkingEnvelope] = useState(null);
+  const [challengeBaseEnvelope, setChallengeBaseEnvelope] = useState(null);
   const [playEditFeedback, setPlayEditFeedback] = useState(null);
   const [syncState, setSyncState] = useState(() => ({ pending: 0, error: '' }));
   const [recoveryState, setRecoveryState] = useState(() => ({ recovering: false, error: '' }));
@@ -204,9 +212,20 @@ export default function FootballScorerShell() {
   );
   const inputEnvelope = useMemo(() => (
     envelope && replacementPlay
-      ? buildFootballPlayReplacementEnvelope(envelope, replacementPlay)
+      ? replacementChallenge
+        ? buildFootballChallengeRescoreEnvelope(challengeWorkingEnvelope || envelope, replacementPlay)
+        : buildFootballPlayReplacementEnvelope(envelope, replacementPlay)
       : envelope
-  ), [envelope, replacementPlay]);
+  ), [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope]);
+  const pendingChallenge = pendingFootballChallengeRescore(envelope);
+  useEffect(() => {
+    if (pendingChallenge && !replacementPlay && footballChallengeEventKey(pendingChallenge) !== dismissedChallenge) {
+      setChallengeReview(pendingChallenge);
+      setPossessionClockChange(null);
+      setDriveSummary(null);
+      setWrapUpOpen(false);
+    }
+  }, [pendingChallenge, dismissedChallenge, replacementPlay]);
   const traceEntries = useMemo(
     () => (debugMode && envelope ? buildFootballFixtureDebugTrace(envelope) : []),
     [debugMode, envelope],
@@ -233,6 +252,11 @@ export default function FootballScorerShell() {
     setWrapUpSaveState({ saving: false, error: '' });
     setEditingPlay(null);
     setReplacementPlay(null);
+    setChallengeReview(null);
+    setDismissedChallenge(null);
+    setReplacementChallenge(null);
+    setChallengeBaseEnvelope(null);
+    setChallengeWorkingEnvelope(null);
     setPlayEditFeedback(null);
     setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
     setRecoveryState({ recovering: false, error: '' });
@@ -736,13 +760,35 @@ export default function FootballScorerShell() {
 
   const cancelPlayReplacement = useCallback(() => {
     setReplacementPlay(null);
+    setReplacementChallenge(null);
+    setChallengeBaseEnvelope(null);
+    setChallengeWorkingEnvelope(null);
     setFcqiState(createInitialFootballQuickInputState());
     setFcqiResetKey((current) => current + 1);
     setPlayEditFeedback({ tone: 'warning', message: 'Play replacement canceled. No play was changed.' });
   }, []);
 
+  const startChallengeRescore = (play) => {
+    try {
+      buildFootballChallengeRescoreEnvelope(envelope, play);
+      setReplacementChallenge(challengeReview);
+      setChallengeBaseEnvelope(envelope);
+      setDismissedChallenge(footballChallengeEventKey(challengeReview));
+      setChallengeReview(null);
+      setChallengeWorkingEnvelope(null);
+      setEditingPlay(null);
+      setReplacementPlay(play);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey(value => value + 1);
+      setPlayEditFeedback({ tone: 'warning', message: `Rescoring overturned play #${play.sequence}. Enter the corrected ruling. The original remains saved until you finish.` });
+    } catch (error) { setPlayEditFeedback({ tone: 'error', message: error.message }); }
+  };
+
   const replacementSubmitAdapter = useCallback(async (submitRequest) => {
-    const result = replaceFootballPlayInEnvelope(envelope, replacementPlay, submitRequest?.event);
+    if (replacementChallenge && challengeBaseEnvelope !== envelope) return { ok: false, errors: [{ code: 'CHALLENGE_GAME_CHANGED', message: 'The game changed during this correction. Cancel and reopen the challenge to use the latest saved game.' }] };
+    const result = replacementChallenge
+      ? rescoreOverturnedFootballPlay(challengeWorkingEnvelope || envelope, replacementChallenge, replacementPlay, submitRequest?.event)
+      : replaceFootballPlayInEnvelope(envelope, replacementPlay, submitRequest?.event);
     if (!result.ok) {
       return {
         ok: false,
@@ -758,25 +804,40 @@ export default function FootballScorerShell() {
       gameEnvelope: result.envelope,
       envelope: result.envelope,
       projection: null,
+      needsRescore: result.needsRescore,
       warnings: result.warnings || [],
       rawResponse: { success: true, status: 'replaced', warnings: result.warnings || [] },
     };
-  }, [envelope, replacementPlay]);
+  }, [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope, challengeBaseEnvelope]);
 
   const handleReplacementAccepted = useCallback((result) => {
     const replacementEnvelope = result?.gameEnvelope || result?.envelope;
     if (!replacementEnvelope || !result?.acceptedEvent) return;
+    if (replacementChallenge && result.needsRescore) {
+      setChallengeWorkingEnvelope(replacementEnvelope);
+      setReplacementPlay(result.needsRescore.target);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey(value => value + 1);
+      setPlayEditFeedback({ tone: 'warning', message: `Confirm affected play #${result.needsRescore.target.sequence}. ${result.needsRescore.message} The correction has not been saved yet.` });
+      return;
+    }
     const persistedEnvelope = requestedGameId
       ? saveDashboardSeededFootballEnvelope(requestedGameId, replacementEnvelope) || replacementEnvelope
       : replacementEnvelope;
     setLocalUndoStack((current) => [...current, envelope]);
     setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
     setReplacementPlay(null);
+    setReplacementChallenge(null);
+    setChallengeBaseEnvelope(null);
+    setChallengeWorkingEnvelope(null);
+    setChallengeReview(null);
     setEditingPlay(null);
     const contextWarning = result.warnings?.find((warning) => warning.code === 'REPLACEMENT_CONTEXT_MISMATCH');
     setPlayEditFeedback({
       tone: contextWarning ? 'warning' : 'success',
-      message: contextWarning
+      message: replacementChallenge
+        ? `Challenge corrected. Original play retained in history; scores, statistics and following context recalculated.`
+        : contextWarning
         ? `Play #${result.acceptedEvent.sequence} was replaced. ${contextWarning.message}`
         : `Play #${result.acceptedEvent.sequence} was replaced. The game remains final and downstream context was preserved.`,
     });
@@ -789,7 +850,7 @@ export default function FootballScorerShell() {
       setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
       void flushServerSync();
     }
-  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId, replacementChallenge]);
 
   const recordPossessionClock = useCallback((clock) => {
     if (!possessionClockChange) return;
@@ -1055,7 +1116,8 @@ export default function FootballScorerShell() {
         scoreboard={<FootballScoreboardSlot envelope={envelope} />}
         stats={<FootballStatsSlot envelope={envelope} />}
         input={(
-          footballOvertimePending(envelope) ? <p className="p-4 font-semibold">Confirm the overtime possession to continue.</p> : <FootballInputSlot
+          pendingChallenge && !replacementPlay ? <div className="p-4"><p className="font-bold">An overturned challenge needs a corrected play before scoring continues.</p><button className="mt-3 rounded bg-emerald-700 px-4 py-2 font-bold text-white" onClick={() => setChallengeReview(pendingChallenge)}>Resume Challenge Rescore</button></div>
+          : footballOvertimePending(envelope) && !replacementPlay ? <p className="p-4 font-semibold">Confirm the overtime possession to continue.</p> : <FootballInputSlot
             debugMode={debugMode}
             envelope={inputEnvelope}
             fcqiResetKey={fcqiResetKey}
@@ -1070,6 +1132,7 @@ export default function FootballScorerShell() {
             onTeamAliasesChange={saveTeamAliases}
             onOpenTeamAliases={openTeamAliasesEditor}
             replacementPlay={replacementPlay}
+            challengeRescore={Boolean(replacementChallenge)}
             submitAdapter={replacementPlay
               ? replacementSubmitAdapter
               : useLocalTestGame
@@ -1084,6 +1147,7 @@ export default function FootballScorerShell() {
             editingDisabled={Boolean(replacementPlay)}
             envelope={envelope}
             onEditEvent={openPlayEditor}
+            onChallengeRescore={setChallengeReview}
             onUndoLastEvent={useLocalTestGame ? undoLastLocalEvent : undefined}
           />
         )}
@@ -1132,7 +1196,8 @@ export default function FootballScorerShell() {
         open={Boolean(pendingSecondHalfStart)}
         teams={envelope.game.teams}
       />
-      {footballOvertimePending(envelope) && <FootballOvertimeModal key={`${footballOvertimePending(envelope).round}-${footballOvertimePending(envelope).series}`} envelope={envelope} pending={footballOvertimePending(envelope)} onConfirm={confirmOvertime} />}
+      {footballOvertimePending(envelope) && !pendingChallenge && !replacementPlay && <FootballOvertimeModal key={`${footballOvertimePending(envelope).round}-${footballOvertimePending(envelope).series}`} envelope={envelope} pending={footballOvertimePending(envelope)} onConfirm={confirmOvertime} />}
+      <FootballChallengeRescoreModal envelope={envelope} challenge={challengeReview} onClose={() => { setDismissedChallenge(footballChallengeEventKey(challengeReview)); setChallengeReview(null); }} onConfirm={startChallengeRescore} error={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''} />
       <FootballGameWrapUpModal
         envelope={envelope}
         onClose={closeGameWrapUp}
@@ -1375,6 +1440,7 @@ export const FootballInputSlot = ({
   onPregameEnvelopeChange,
   onSubmitAccepted,
   replacementPlay,
+  challengeRescore = false,
   submitAdapter,
 }) => {
   const showPregameWorkspace = envelope.game.status === 'pregame';
@@ -1388,8 +1454,9 @@ export const FootballInputSlot = ({
             <div>
               <div className="text-sm font-black">Replacing play #{replacementPlay.sequence}</div>
               <p className="mt-1 text-sm">
-                The original sequence, Q{replacementPlay.period} {formatFootballClockDisplay(replacementPlay.clock, '--:--')}, and starting context are locked.
-                If its result disagrees with the next recorded play, the replacement will be saved and the inconsistency will be flagged for review.
+                {challengeRescore
+                  ? 'Enter the corrected play. The original will remain in history. Following context and statistics will be recalculated when the correction is complete.'
+                  : `The original sequence, Q${replacementPlay.period} ${formatFootballClockDisplay(replacementPlay.clock, '--:--')}, and starting context are locked. If its result disagrees with the next recorded play, the replacement will be saved and the inconsistency will be flagged for review.`}
               </p>
             </div>
             <button
@@ -1429,7 +1496,7 @@ export const FootballInputSlot = ({
   );
 };
 
-export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onUndoLastEvent }) => (
+export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onChallengeRescore, onUndoLastEvent }) => (
   <div className="h-[65vh] min-h-[18rem] p-4 lg:h-full lg:min-h-0">
     <GameLogColumn
       canUndo={canUndo}
@@ -1437,6 +1504,7 @@ export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDis
       editingDisabled={editingDisabled}
       envelope={envelope}
       onEditEvent={onEditEvent}
+      onChallengeRescore={onChallengeRescore}
       onUndoLastEvent={onUndoLastEvent}
     />
   </div>
@@ -1578,7 +1646,7 @@ const playContextLabel = (envelope, context) => {
   return `${team ? `${team} ball` : 'No possession'}${context.down ? `, ${context.down} & ${context.goalToGo ? 'Goal' : context.distance ?? '—'}` : ''} on ${spot}`;
 };
 
-const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onUndoLastEvent }) => {
+const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onChallengeRescore, onUndoLastEvent }) => {
   const contextReviews = useMemo(() => reviewFootballPlayContexts(envelope).reviews, [envelope]);
   const regulationPeriods = Math.max(1, Number(envelope.game?.rules?.periods) || 4);
   const currentPeriod = Math.max(1, Number(envelope.clock?.period || envelope.game?.period) || 1);
@@ -1704,6 +1772,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {onChallengeRescore && isOverturnedFootballChallenge(item.event) && item.event.result.gameControl.rescore?.status !== 'complete' && <button className="rounded border border-amber-500 px-2 py-1 text-xs font-bold" disabled={editingDisabled} onClick={() => onChallengeRescore(item.event)}>Rescore</button>}
                     {onEditEvent && isEditableGameLogEvent(item.event) && (
                       <button
                         aria-label={isFootballBallContextRevision(item.event)
@@ -1730,6 +1799,11 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                 <div className="mt-2 text-xs text-zinc-500">
                   {gameLogContextLabel(envelope, item.event, periodLabel)}
                 </div>
+                {(envelope.playHistory || []).filter(record => record.replacementEventId === item.event.eventId).map(record => <details key={record.historyId} className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm">
+                  <summary className="cursor-pointer font-bold">Original Play #{record.originalEvent.sequence} — {record.status === 'overturned' ? 'Overturned' : 'Recalculated'}</summary>
+                  <p className="mt-2">{record.originalEvent.description}</p>
+                  <p className="mt-1 text-xs">{gameLogContextLabel(envelope, record.originalEvent, periodLabel)}. Historical record only; excluded from statistics. Replaced by corrected Play #{item.event.sequence}.</p>
+                </details>)}
                 {contextReviews.get(footballContextEventKey(item.event))?.fields.length > 0 && (
                   <div className="mt-2 inline-block rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900" aria-label={`Context mismatch for play ${item.event.sequence}`}>
                     Context mismatch

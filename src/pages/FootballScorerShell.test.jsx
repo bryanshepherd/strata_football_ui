@@ -520,6 +520,48 @@ describe('FootballScorerShell', () => {
     expect(screen.getAllByText('Final').length).toBeGreaterThan(0);
   });
 
+  it('resumes an overturned challenge, keeps cancellation unchanged, and saves the corrected play with visible history', async () => {
+    const game = cloneNormalEnvelope();
+    game.gameId = 'FB-CHALLENGE-RESCORE-UI';
+    game.rosters.gameId = game.gameId;
+    game.game.status = 'inProgress'; game.game.period = 1;
+    game.pregame = { gamePhase: 'live' };
+    game.events[0].sequence = 1;
+    game.events[1] = { ...game.events[1], sequence: 2, type: 'rush', subtype: null, period: 1, clock: '10:00', possession: 'H',
+      preState: { possession: 'H', down: 2, distance: 6, yardLine: 'H44', lineToGain: '50', goalToGo: false, driveId: 'DRV-0002', driveNumber: 2 },
+      participants: { primary: { playerId: 'H-22', team: 'H', role: 'rusher', jersey: '22', displayName: 'Jordan Smith' } },
+      result: { code: 'tackle', yards: 0, endYardLine: 'H44' }, penalties: [], description: 'Original disputed rush for no gain.' };
+    const original = structuredClone(game.events[1]);
+    game.liveState = { ...game.events[1].preState, down: 3 };
+    game.events.push({ eventId: 'EVT-OVERTURNED', clientEventId: 'overturned', sequence: 3, type: 'gameControl', subtype: 'challenge', status: 'accepted', period: 1, clock: '10:00', possession: 'H', preState: { ...game.liveState }, participants: {}, penalties: [],
+      result: { code: 'noPlay', gameControl: { action: 'challenge', teamSide: 'V', challengeStatus: 'callOverturned', rescore: { status: 'pending', targetEventId: original.eventId } } }, description: 'Challenge by VIS: the ruling on the field is overturned.' });
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const view = renderScorer('/scorer?envelopeGameId=FB-CHALLENGE-RESCORE-UI');
+    let prompt = await screen.findByRole('dialog', { name: /ruling overturned/i });
+    expect(within(prompt).getByText(original.description)).toBeInTheDocument();
+    fireEvent.click(within(prompt).getByRole('button', { name: /rescore play #2/i }));
+    expect(screen.getByRole('heading', { name: /replacement entry/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /cancel replacement/i }));
+    expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events[1].description).toBe(original.description);
+    expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.playHistory).toBeUndefined();
+    view.unmount();
+    renderScorer('/scorer?envelopeGameId=FB-CHALLENGE-RESCORE-UI');
+    prompt = await screen.findByRole('dialog', { name: /ruling overturned/i });
+    fireEvent.click(within(prompt).getByRole('button', { name: /rescore play #2/i }));
+    completePassFlowInputs();
+    const summary = await screen.findByRole('dialog', { name: /play summary review/i });
+    fireEvent.click(within(summary).getByRole('button', { name: /^replace play$/i }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Challenge corrected.'));
+    const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    expect(saved.events).toHaveLength(3);
+    expect(saved.events[1].type).toBe('pass');
+    expect(saved.events[2].result.gameControl.rescore.status).toBe('complete');
+    expect(saved.playHistory[0].originalEvent).toEqual(original);
+    expect(saved.liveState).toMatchObject({ possession: 'H', down: 1, distance: 10, yardLine: 'V49' });
+    expect(screen.getByText('Original Play #2 — Overturned')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resume challenge rescore/i })).not.toBeInTheDocument();
+  });
+
   it('starts a historical replacement from a final game without reopening ordinary scoring', async () => {
     const finalEnvelope = cloneNormalEnvelope();
     finalEnvelope.gameId = 'FB-FINAL-REPLACE-UI';

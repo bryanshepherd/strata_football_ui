@@ -1,3 +1,4 @@
+import { prepareFootballChallengeEvent } from '../utils/footballChallengeRescore';
 import { repairFootballPlayReadoutsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { applyFootballOvertimeControl, applyFootballOvertimeOutcome, validateFootballOvertimeEvent } from '../utils/footballOvertime';
 import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
@@ -2609,6 +2610,7 @@ export async function submitFootballEventLocally(baseEnvelope, submitRequest) {
   if (!baseEnvelope || !submitRequest?.event) {
     return { ok: false, errors: [{ code: 'INVALID_LOCAL_SUBMIT', message: 'Local test-game submit requires an envelope and event.' }], warnings: [] };
   }
+  submitRequest = { ...submitRequest, event: prepareFootballChallengeEvent(baseEnvelope, submitRequest.event) };
   const duplicate = (baseEnvelope.events || []).find((event) => event.clientEventId === submitRequest.event.clientEventId);
   if (duplicate && !isSameSubmittedEvent(duplicate, submitRequest.event)) {
     return {

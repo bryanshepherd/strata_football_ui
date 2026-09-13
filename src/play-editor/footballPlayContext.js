@@ -108,7 +108,7 @@ export function reviewFootballPlayContexts(envelope) {
   return { reviews, endingContext: canonicalDriveContext(envelope, state) };
 }
 
-export function recalculateFootballPlayContext(envelope, target, { editedAt = new Date().toISOString() } = {}) {
+export function recalculateFootballPlayContext(envelope, target, { editedAt = new Date().toISOString(), expectedContext } = {}) {
   const events = envelope?.events || [];
   const index = events.findIndex((event) => footballContextEventKey(event) === footballContextEventKey(target));
   if (index < 0) throw new Error('The selected play is no longer in the game log.');
@@ -118,7 +118,8 @@ export function recalculateFootballPlayContext(envelope, target, { editedAt = ne
   if (events.some((event, i) => !accepted(event) || Number(event.sequence) !== i + 1)) {
     throw new Error('This game needs a complete sequential event log before recalculating a play.');
   }
-  const review = reviewFootballPlayContexts(envelope).reviews.get(footballContextEventKey(original));
+  const review = expectedContext ? { expected: expectedContext, previousSequence: events[index - 1]?.sequence }
+    : reviewFootballPlayContexts(envelope).reviews.get(footballContextEventKey(original));
   if (review.unavailable) throw new Error(review.unavailable);
   const event = clone(original);
   event.preState = { ...event.preState, ...review.expected };
