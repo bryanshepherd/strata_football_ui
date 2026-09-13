@@ -93,6 +93,25 @@ describe('football Play-by-Play projection', () => {
     expect(formatFootballPlayText(event, teams)).not.toContain('Deadball foul, Deadball foul');
   });
 
+  it('prints captain lines above the first-quarter toss without repeating them in later quarters', () => {
+    const envelope = structuredClone(baselineRecord.envelope);
+    const visitor = Object.values(envelope.rosters.teams.V.players)[0];
+    const home = Object.values(envelope.rosters.teams.H.players)[0];
+    envelope.pregame.coinToss.captains = {
+      V: [{ playerId: visitor.playerId, jerseyNumber: visitor.jersey }],
+      H: [{ playerId: home.playerId, jerseyNumber: home.jersey }],
+    };
+    const before = JSON.stringify(envelope);
+    const report = buildFootballPlayByPlayReport(envelope);
+    expect(report.quarters[0].rows.slice(0, 3).map(row => row.text)).toEqual([
+      `${envelope.game.teams.V.name} Captains: ${visitor.jersey} - ${visitor.displayName}`,
+      `${envelope.game.teams.H.name} Captains: ${home.jersey} - ${home.displayName}`,
+      'West Virginia St. won the toss and elected to receive. Fairmont St. will kick to West Virginia St.; Fairmont St. will defend the west goal.',
+    ]);
+    expect(report.quarters.slice(1).some(quarter => quarter.rows.some(row => row.text.includes('Captains:')))).toBe(false);
+    expect(JSON.stringify(envelope)).toBe(before);
+  });
+
   it('opens each half with the recorded coin-toss choices', () => {
     const report = buildFootballPlayByPlayReport(baselineRecord.envelope);
 
