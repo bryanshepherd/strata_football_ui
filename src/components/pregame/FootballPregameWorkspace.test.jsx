@@ -297,4 +297,29 @@ describe('FootballPregameWorkspace', () => {
     expect(rosters.teams.H.players['H-12'].displayName).toBe('Duri T. Trahan');
     expect(rosters.teams.H.jerseyIndex['3']).toEqual(['H-3', 'H-3R']);
   });
+
+  it.each(['', 'TBD'])('saves an inactive player with jersey %j and validates it again when reactivated', (jersey) => {
+    const gameEnvelope = envelope();
+    const onSave = vi.fn();
+    const { rerender } = render(
+      <FootballRosterEditorModal envelope={gameEnvelope} onClose={vi.fn()} onSave={onSave} open />,
+    );
+    const jerseyInput = screen.getByLabelText('Home H-12 jersey');
+    fireEvent.change(jerseyInput, { target: { value: jersey } });
+    fireEvent.click(within(jerseyInput.closest('tr')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rosters' }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const rosters = onSave.mock.calls[0][0];
+    expect(rosters.teams.H.players['H-12']).toMatchObject({ active: false, jersey });
+    expect(Object.values(rosters.teams.H.jerseyIndex).flat()).not.toContain('H-12');
+
+    rerender(<FootballRosterEditorModal envelope={{ ...gameEnvelope, rosters }} onClose={vi.fn()} onSave={onSave} open />);
+    const savedRow = screen.getByLabelText('Home H-12 jersey').closest('tr');
+    expect(within(savedRow).getByRole('checkbox')).not.toBeChecked();
+    fireEvent.click(within(savedRow).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rosters' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('needs a numeric jersey number');
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
 });
