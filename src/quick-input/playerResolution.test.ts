@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { footballPositionKeys } from '../utils/footballPositions.js';
+import { getPositionPriorityAdvanced } from '../utils/positionPriority.js';
 import {
   createDraftPlayerResolution,
   resolvePlayerByJersey,
@@ -6,6 +8,52 @@ import {
 } from './playerResolution';
 
 describe('playerResolution', () => {
+  it('uses the operator-defined defensive position names and DB aliases', () => {
+    expect(footballPositionKeys('Nose Guard')).toEqual(['NG']);
+    expect(footballPositionKeys('Nose Tackle')).toEqual(['NT']);
+    expect(footballPositionKeys('Wide Safety')).toEqual(['WS']);
+    for (const position of ['MIKE', 'WILL', 'SPUR', 'NKL', 'RVR', 'Rover']) {
+      expect(footballPositionKeys(position)).toEqual(['DB']);
+      expect(getPositionPriorityAdvanced({ position })).toBe(getPositionPriorityAdvanced({ position: 'DB' }));
+    }
+  });
+
+  it.each([
+    'NG', 'MIKE', 'WILL', 'WS', 'SPUR', 'NKL', 'RVR',
+    'DE', 'DT', 'NT', 'DL', 'MLB', 'OLB', 'ILB', 'LB', 'CB', 'DB', 'FS', 'SS', 'S',
+    'LDE', 'RDE', 'SDE', 'WDE', 'EDGE', 'LDT', 'RDT', 'LOLB', 'ROLB', 'LILB', 'RILB',
+    'SAM', 'JACK', 'LCB', 'RCB', 'NB', 'DIME',
+    'Defensive End', 'Nose Guard', 'Nose Tackle', 'Weak-side Linebacker',
+    'Wide Safety', 'Nickelback', 'Rover', 'Edge Rusher', 'Strong Safety',
+    'Left Outside Linebacker', 'Right Cornerback', ' w.i.l.l ', 'LB/DB', 'WR / CB',
+  ])('recognizes %s for defensive lookup without changing the saved label or choosing automatically', position => {
+    const roster = [
+      player('offense', 'H', '7', 'Receiver', { position: 'WR' }),
+      player('defense', 'H', '7', 'Defender', { position }),
+    ];
+    const before = clone(roster);
+    const result = resolvePlayerByJersey({ jerseyToken: '7', teamScope: 'H', actionContext: 'defense', roster });
+    expect(result.kind).toBe('duplicate');
+    if (result.kind === 'duplicate') {
+      expect(result.recommended.playerId).toBe('defense');
+      expect(result.candidates.map(candidate => candidate.playerId)).toEqual(['offense', 'defense']);
+      expect(result.recommended.player.position).toBe(position);
+    }
+    const offense = resolvePlayerByJersey({ jerseyToken: '7', teamScope: 'H', actionContext: 'offense', roster });
+    if (offense.kind === 'duplicate') expect(offense.recommended.playerId).toBe('offense');
+    expect(roster).toEqual(before);
+  });
+
+  it('does not mistake unrelated position words for defensive labels', () => {
+    const result = resolvePlayerByJersey({
+      jerseyToken: '7', teamScope: 'H', actionContext: 'defense', roster: [
+        player('receiver', 'H', '7', 'Receiver', { position: 'WR' }),
+        player('unknown', 'H', '7', 'Unknown', { position: 'WILLIAM' }),
+      ],
+    });
+    if (result.kind === 'duplicate') expect(result.recommended.playerId).toBe('receiver');
+  });
+
   it('returns a blocking error when no roster player matches the jersey and team', () => {
     const result = resolvePlayerByJersey({
       jerseyToken: '99',

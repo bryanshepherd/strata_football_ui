@@ -254,6 +254,22 @@ describe('FootballPregameWorkspace', () => {
     expect(screen.getByLabelText('Home defense starter 1 position')).toHaveValue('CB');
   });
 
+  it.each(['NG', 'MIKE', 'WILL', 'WS', 'SPUR', 'NKL', 'RVR'])('recommends a %s defensive starter while retaining the other jersey choice', position => {
+    const gameEnvelope = envelope();
+    const roster = rosterForEnvelope(gameEnvelope).map(player => ({ ...player,
+      position: player.playerId === 'H-3R' ? position : player.position,
+      off_position: undefined, def_position: undefined, st_position: undefined,
+    }));
+    render(<FootballStartersModal onClose={vi.fn()} onSave={vi.fn()} open
+      pregame={pregameForEnvelope(gameEnvelope)} roster={roster} team="H" />);
+    const jersey = screen.getByLabelText('Home defense starter 1 jersey');
+    fireEvent.change(jersey, { target: { value: '3' } });
+    fireEvent.blur(jersey);
+    expect(screen.getByRole('combobox', { name: 'Home defense starter 1 player' })).toHaveValue('H-3R');
+    expect(screen.getByLabelText('Home defense starter 1 position')).toHaveValue(position);
+    expect(screen.getByRole('combobox', { name: 'Home defense starter 1 player' }).options).toHaveLength(2);
+  });
+
   it('allows duplicate selection changes and saves the operator-entered position', () => {
     const gameEnvelope = envelope();
     const onSave = vi.fn();

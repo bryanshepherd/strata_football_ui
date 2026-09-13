@@ -1,5 +1,6 @@
 import type { DraftPlayerResolution, TeamCode } from './footballIntentSchema';
 import { getPositionPriorityAdvanced } from '../utils/positionPriority.js';
+import { FOOTBALL_DEFENSIVE_POSITIONS, footballPositionKeys } from '../utils/footballPositions.js';
 
 export type PlayerResolutionActionContext = DraftPlayerResolution['actionContext'];
 
@@ -97,12 +98,11 @@ export type ResolvePlayerOptions = {
 };
 
 const OFFENSE_POSITIONS = ['RB', 'TB', 'HB', 'FB', 'QB', 'WR', 'TE', 'LT', 'LG', 'C', 'RG', 'RT', 'OL', 'OT', 'OG'];
-const DEFENSE_POSITIONS = ['DE', 'DT', 'NT', 'DL', 'MLB', 'OLB', 'ILB', 'LB', 'CB', 'DB', 'FS', 'SS', 'S'];
 const SPECIAL_TEAMS_POSITIONS = ['PR', 'KR', 'K', 'P', 'LS'];
 
 const POSITION_ORDERS: Record<'offense' | 'defense' | 'specialTeams', string[]> = {
   offense: OFFENSE_POSITIONS,
-  defense: DEFENSE_POSITIONS,
+  defense: FOOTBALL_DEFENSIVE_POSITIONS,
   specialTeams: SPECIAL_TEAMS_POSITIONS,
 };
 
@@ -251,7 +251,7 @@ function positionFieldScore(
 function collectPositions(player: PlayerResolutionRosterPlayer): string[] {
   return [player.position, player.pos, player.off_position, player.def_position, player.st_position]
     .filter(isNonEmptyString)
-    .map((position) => position.toUpperCase());
+    .flatMap(footballPositionKeys);
 }
 
 function sideMatches(side: unknown, actionContext: 'offense' | 'defense' | 'specialTeams'): boolean {

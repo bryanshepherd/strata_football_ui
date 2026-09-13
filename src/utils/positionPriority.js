@@ -1,3 +1,5 @@
+import { FOOTBALL_DEFENSIVE_POSITIONS, footballPositionKeys } from './footballPositions.js';
+
 export function getPositionPriority(pos) {
   const p = (pos||'').toUpperCase();
   if (['RB','TB','FB','HB','QB','WR'].includes(p)) return 1;      // offense skill
@@ -32,13 +34,15 @@ export function getPositionPriorityAdvanced(m = {}) {
     'rb','hb','tb','fb','qb','wr','te',
     // OL
     'lt','lg','c','rg','rt','ol',
-    // Defense front/seconday
-    'de','dt','nt','dl','mlb','olb','ilb','lb','cb','db','fs','ss','s',
+    // Defense front/secondary, including named starter positions.
+    ...FOOTBALL_DEFENSIVE_POSITIONS.map(position => position.toLowerCase()),
     // ST
     'kr','pr','k','p'
   ];
-  const idx = order.indexOf(relevantPos);
-  const bonus = idx >= 0 ? (order.length - idx) : 0;
+  const bonus = Math.max(0, ...footballPositionKeys(relevantPos).map(position => {
+    const idx = order.indexOf(position.toLowerCase());
+    return idx >= 0 ? order.length - idx : 0;
+  }));
 
   return base + bonus; // higher = better
 }
