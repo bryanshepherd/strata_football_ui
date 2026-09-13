@@ -1801,6 +1801,41 @@ describe('FootballScorerShell', () => {
     } finally { submitMock.restore(); }
   });
 
+  it('saves participation from final-game Game Control, mirrors it, and restores editable choices on reload', async () => {
+    const game = finalEnvelopeWithBallContextRevision('FB-FINAL-PARTICIPATION');
+    game.rosters.teams.H.players['H-manual'] = { playerId: 'H-manual', team: 'H', jersey: '99', displayName: 'Manual Player', active: true };
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const submitMock = mockSubmitSuccess();
+    const route = '/scorer?dashboardGameId=DASH-PARTICIPATION&envelopeGameId=FB-FINAL-PARTICIPATION';
+    try {
+      const first = renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      fireEvent.keyDown(window, { key: 'i' });
+      const modal = screen.getByRole('dialog', { name: 'Participation' });
+      fireEvent.click(within(modal).getByRole('checkbox', { name: /Manual Player played/ }));
+      fireEvent.click(within(modal).getByRole('button', { name: 'Save Participation' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Participation' })).not.toBeInTheDocument());
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.participation.manualPlayed.H).toEqual(['H-manual']);
+      expect(saved.events).toEqual(game.events);
+      expect(saved.liveState).toEqual(game.liveState);
+      expect(saved.game).toEqual(game.game);
+      await waitFor(() => expect(submitMock.fetchSpy.mock.calls.some(([, init]) => JSON.parse(init.body).envelope?.participation?.manualPlayed?.H?.includes('H-manual'))).toBe(true));
+      first.unmount();
+      renderScorer(route);
+      fireEvent.click(await screen.findByRole('button', { name: /^game control/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^Participation I$/i }));
+      const checkbox = screen.getByRole('checkbox', { name: /Manual Player played/ });
+      expect(checkbox).toBeChecked();
+      expect(checkbox).toBeEnabled();
+      fireEvent.click(checkbox);
+      fireEvent.click(screen.getByRole('button', { name: 'Save Participation' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Participation' })).not.toBeInTheDocument());
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.participation.manualPlayed.H).toEqual([]);
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    } finally { submitMock.restore(); }
+  });
+
   it('preserves saved abbreviations when undo restores a deleted play', async () => {
     const game = finalEnvelopeWithBallContextRevision('FB-ALIAS-UNDO');
     saveDashboardSeededFootballEnvelope(game.gameId, game);

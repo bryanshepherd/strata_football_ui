@@ -145,6 +145,7 @@ export default function FootballConfirmedQuickInput({
   onOpenPenaltyEditor,
   onOpenTeamAliases,
   onOpenStarters,
+  onOpenParticipation,
   onSubmitAccepted,
   onStateChange,
   replacementMode = false,
@@ -177,7 +178,7 @@ export default function FootballConfirmedQuickInput({
     [envelope, startMeta, teamAliases],
   );
   const gamePhase = gamePhaseForEnvelope(envelope);
-  const canEditFinalSettings = gamePhase === 'final' && Boolean(onOpenTeamAliases) && !replacementMode;
+  const canEditFinalSettings = gamePhase === 'final' && Boolean(onOpenTeamAliases || onOpenParticipation) && !replacementMode;
   const kickoffContextReady = isCanonicalSpot(envelope.liveState?.yardLine)
     && envelope.liveState.yardLine !== 'goal';
   const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
@@ -324,7 +325,7 @@ export default function FootballConfirmedQuickInput({
   };
 
   const startGameControl = (startedBy) => {
-    // Final games expose only game-label settings; scoring transitions stay locked.
+    // Final games expose labels and participation; scoring transitions stay locked.
     if (canEditFinalSettings) { setSettingsOnlyMenuOpen(true); return; }
     if (!familyAvailable('gameControl')) return;
     const nextStartMeta = createStartMeta('game-control', startedBy, 'G');
@@ -394,6 +395,13 @@ export default function FootballConfirmedQuickInput({
       clearModalStepHistory();
       publishState(createInitialFootballQuickInputState());
       onOpenTeamAliases();
+      return;
+    }
+    if ((settingsOnlyMenuOpen || currentState.currentStep === 'gameControlMenu') && normalizedValue === 'I' && onOpenParticipation) {
+      setSettingsOnlyMenuOpen(false);
+      clearModalStepHistory();
+      publishState(createInitialFootballQuickInputState());
+      onOpenParticipation();
       return;
     }
     if (settingsOnlyMenuOpen) return;
@@ -769,6 +777,7 @@ export default function FootballConfirmedQuickInput({
         progressSteps={progressSteps}
         gameControlSettingsOnly={settingsOnlyMenuOpen}
         teamAliasesEditable={Boolean(onOpenTeamAliases)}
+        participationEditable={Boolean(onOpenParticipation)}
         state={settingsOnlyMenuOpen ? { ...fallbackState, flow: 'gameControl', currentStep: 'gameControlMenu', status: 'token.awaiting' } : currentState}
         teamAliases={teamAliases}
         teamNames={{ H: envelope.game.teams.H.name, V: envelope.game.teams.V.name }}

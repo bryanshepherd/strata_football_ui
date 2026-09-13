@@ -15,6 +15,8 @@ import FootballGameWrapUpModal from '../components/scorer/FootballGameWrapUpModa
 import FootballPossessionClockModal from '../components/scorer/FootballPossessionClockModal';
 import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
 import FootballTeamAliasesModal from '../components/scorer/FootballTeamAliasesModal';
+import FootballParticipationModal from '../components/scorer/FootballParticipationModal';
+import { applyFootballParticipation } from '../utils/footballParticipation';
 import FootballTeamStats from '../components/scorer/FootballTeamStats';
 import FootballPregameWorkspace from '../components/pregame/FootballPregameWorkspace';
 import FootballRosterEditorModal from '../components/pregame/FootballRosterEditorModal';
@@ -186,6 +188,7 @@ export default function FootballScorerShell() {
   const [driveSummary, setDriveSummary] = useState(null);
   const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
   const [teamAliasesEditorOpen, setTeamAliasesEditorOpen] = useState(false);
+  const [participationOpen, setParticipationOpen] = useState(false);
   const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
   const [wrapUpOpen, setWrapUpOpen] = useState(false);
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
@@ -224,6 +227,7 @@ export default function FootballScorerShell() {
     setDriveSummary(null);
     setPenaltyCodeEditorOpen(false);
     setTeamAliasesEditorOpen(false);
+    setParticipationOpen(false);
     setPendingSecondHalfStart(null);
     setWrapUpOpen(false);
     setWrapUpSaveState({ saving: false, error: '' });
@@ -520,9 +524,12 @@ export default function FootballScorerShell() {
   const undoLastLocalEvent = useCallback(() => {
     const previousEnvelope = localUndoStack[localUndoStack.length - 1];
     if (!previousEnvelope) return;
-    // Undo scoring changes without reverting separately saved team labels.
-    const restore = envelope.operatorTeamAliases
-      ? { ...previousEnvelope, operatorTeamAliases: envelope.operatorTeamAliases } : previousEnvelope;
+    // Undo scoring changes without reverting separately saved game settings.
+    const restore = {
+      ...previousEnvelope,
+      ...(envelope.operatorTeamAliases ? { operatorTeamAliases: envelope.operatorTeamAliases } : {}),
+      ...(envelope.participation ? { participation: envelope.participation } : {}),
+    };
     const restoredEnvelope = requestedGameId
       ? saveDashboardSeededFootballEnvelope(requestedGameId, restore) || restore
       : restore;
@@ -542,7 +549,7 @@ export default function FootballScorerShell() {
       setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
       void flushServerSync();
     }
-  }, [dashboardGameId, envelope?.operatorTeamAliases, flushServerSync, localUndoStack, requestedGameId]);
+  }, [dashboardGameId, envelope?.operatorTeamAliases, envelope?.participation, flushServerSync, localUndoStack, requestedGameId]);
 
   const openPlayEditor = useCallback((event) => {
     setPlayEditFeedback(null);
@@ -815,6 +822,19 @@ export default function FootballScorerShell() {
   const closeDriveSummary = useCallback(() => setDriveSummary(null), []);
   const openPenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(true), []);
   const closePenaltyCodeEditor = useCallback(() => setPenaltyCodeEditorOpen(false), []);
+  const openParticipation = useCallback(() => setParticipationOpen(true), []);
+  const closeParticipation = useCallback(() => setParticipationOpen(false), []);
+  const saveParticipation = useCallback((selections) => {
+    const updated = applyFootballParticipation(envelope, selections);
+    const persisted = requestedGameId ? saveDashboardSeededFootballEnvelope(requestedGameId, updated) : updated;
+    if (!persisted) throw new Error('Participation could not be saved.');
+    setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+    if (requestedGameId && dashboardGameId) {
+      enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+      void flushServerSync();
+    }
+  }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
   const openGameWrapUp = useCallback(() => {
     setWrapUpSaveState({ saving: false, error: '' });
     setWrapUpOpen(true);
@@ -1044,6 +1064,7 @@ export default function FootballScorerShell() {
             onFcqiStateChange={setFcqiState}
             onOpenPenaltyEditor={openPenaltyCodeEditor}
             onOpenStarters={openStartersEditor}
+            onOpenParticipation={openParticipation}
             onSubmitAccepted={replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
             onTeamAliasesChange={saveTeamAliases}
@@ -1099,6 +1120,7 @@ export default function FootballScorerShell() {
         summary={driveSummary}
       />
       {teamAliasesEditorOpen && <FootballTeamAliasesModal envelope={envelope} onClose={closeTeamAliasesEditor} onSave={saveTeamAliases} />}
+      {participationOpen && <FootballParticipationModal envelope={envelope} onClose={closeParticipation} onSave={saveParticipation} />}
       <FootballPenaltyCodeEditorModal
         onClose={closePenaltyCodeEditor}
         open={penaltyCodeEditorOpen}
@@ -1349,6 +1371,7 @@ export const FootballInputSlot = ({
   onOpenTeamAliases,
   onTeamAliasesChange,
   onOpenStarters,
+  onOpenParticipation,
   onPregameEnvelopeChange,
   onSubmitAccepted,
   replacementPlay,
@@ -1394,6 +1417,7 @@ export const FootballInputSlot = ({
         onOpenPenaltyEditor={onOpenPenaltyEditor}
         onOpenTeamAliases={onOpenTeamAliases}
         onOpenStarters={onOpenStarters}
+        onOpenParticipation={onOpenParticipation}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
         replacementMode={Boolean(replacementPlay)}
