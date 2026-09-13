@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import baselineRecord from '../../data/footballCompletedBaselineGameRecord.json';
 import {
   fetchFootballEnvelope,
+  normalizeFootballScoringSetupEnvelope,
   getDashboardSeededFootballEnvelopeRecord,
 } from '../../services/footballDashboardService';
 
@@ -40,7 +41,7 @@ export default function FootballReportLoader({ envelope, children }) {
 
   const current = loaded?.requestKey === requestKey ? loaded : null;
   const reportEnvelope = immediateEnvelope || current?.envelope;
-  if (reportEnvelope) return children(reportEnvelope);
+  if (reportEnvelope) return children(normalizeFootballScoringSetupEnvelope(reportEnvelope));
   const error = !gameId ? 'The report link is missing its game ID.' : current?.error;
   return (
     <main className="football-report-screen">

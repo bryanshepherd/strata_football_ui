@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import FootballPlayEditorModal from './FootballPlayEditorModal';
+import { applyFootballPlayEditToEnvelope } from '../../play-editor/footballPlayEditEnvelope';
 import {
   footballPlayEditorSandboxPlays,
   footballPlayEditorSandboxRoster,
@@ -9,6 +10,27 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('saves a changed punter into the play description and every punter reference', () => {
+    const play = structuredClone(footballPlayEditorSandboxPlays[0]);
+    Object.assign(play, {
+      type: 'punt', subtype: 'fairCatch', penalties: [],
+      participants: { primary: { playerId: 'OLD', team: 'V', role: 'punter' }, punter: { playerId: 'OLD', team: 'V', role: 'punter' }, defenders: [] },
+      result: { code: 'fairCatch', endYardLine: 'H35', kick: { kickYards: 35, catchYardLine: 'H35' } },
+    });
+    const oldPlayer = { playerId: 'OLD', team: 'V', jersey: '48', displayName: 'Hezekiah Adams' };
+    const newPlayer = { playerId: 'NEW', team: 'V', jersey: '82', displayName: 'Wesley Oxce' };
+    const envelope = { gameId: 'FB-EDIT', game: { teams: { H: { abbr: 'BST' }, V: { abbr: 'LIV' } } }, rosters: { teams: { V: { players: { OLD: oldPlayer, NEW: newPlayer } } } }, events: [play] };
+    let saved;
+    const onSave = vi.fn(edited => { saved = applyFootballPlayEditToEnvelope(envelope, edited); });
+    render(<FootballPlayEditorModal isOpen play={play} roster={[oldPlayer, newPlayer]} onSave={onSave} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Punter'), { target: { value: 'NEW' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(saved.events[0].participants.primary.playerId).toBe('NEW');
+    expect(saved.events[0].description).toContain('#82 Wesley Oxce punt');
+    expect(saved.events[0].description).not.toContain('Hezekiah Adams');
+  });
+
   it('shows the mismatch and prevents recalculation from discarding unsaved detail edits', () => {
     const onRecalculate = vi.fn();
     renderEditor({ onRecalculate, contextReview: {

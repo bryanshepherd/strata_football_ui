@@ -563,7 +563,11 @@ const KickFields = ({ draft, roster, update }) => {
     punt: [['punter', 'Punter', 'punter'], ['returner', 'Returner', 'returner']],
     kickoff: [['kicker', 'Kicker', 'kicker'], ['returner', 'Returner', 'returner']],
     fieldGoal: [['kicker', 'Kicker', 'kicker'], ['holder', 'Holder', 'holder']],
-    try: [['kicker', 'Kicker', 'kicker'], ['holder', 'Holder', 'holder']],
+    try: draft.subtype === 'pass'
+      ? [['primary', 'Passer', 'passer'], ['secondary', 'Receiver', 'receiver']]
+      : draft.subtype === 'rush'
+        ? [['primary', 'Rusher', 'rusher']]
+        : [['kicker', 'Kicker', 'kicker'], ['holder', 'Holder', 'holder']],
   }[draft.type] || [];
   return (
     <>

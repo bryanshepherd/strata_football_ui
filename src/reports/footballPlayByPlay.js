@@ -1,3 +1,4 @@
+import { repairFootballEditedActorsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { formatFootballSafetyReadout, withFootballSafetyScoring } from '../utils/footballSafety';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
@@ -378,7 +379,7 @@ export const buildFootballPlayByPlayReport = (envelope, scopeInput = {}) => {
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the Play-by-Play report.');
   }
-  envelope = { ...envelope, events: (envelope.events || []).map(withFootballSafetyScoring) };
+  envelope = repairFootballEditedActorsInEnvelope({ ...envelope, events: (envelope.events || []).map(withFootballSafetyScoring) });
   const events = acceptedEvents(envelope);
   const periods = selectedPeriods(envelope, events, scopeInput);
   const drives = driveRows(envelope, events.filter(isDisplayEvent));

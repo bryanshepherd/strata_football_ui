@@ -1,5 +1,6 @@
 import { generateFootballPlaySummary } from '../quick-input/footballPlaySummaryGrammar';
 import { classifyPlayEdit } from './footballPlayEditPolicy';
+import { repairFootballEditedActorReferences, synchronizeFootballEditedActors } from './footballActorReferences';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -84,6 +85,9 @@ const summaryParticipants = (envelope, event) => {
     ...participants,
     primary: resolve(participants.primary),
     secondary: resolve(participants.secondary),
+    receiver: resolve(participants.receiver),
+    target: resolve(participants.target),
+    interceptor: resolve(participants.interceptor),
     defenders: (participants.defenders || []).map(resolve),
     returner: resolve(participants.returner),
     kicker: resolve(participants.kicker),
@@ -195,10 +199,11 @@ export function applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt
     throw new Error(`${changedLockedField} is locked context and cannot be edited.`);
   }
 
+  const synchronizedPlay = synchronizeFootballEditedActors(envelope, original, editedPlay);
   const amendedEvent = {
     ...original,
-    participants: clone(editedPlay.participants || original.participants || {}),
-    result: clone(editedPlay.result || original.result || {}),
+    participants: clone(synchronizedPlay.participants || original.participants || {}),
+    result: clone(synchronizedPlay.result || original.result || {}),
     penalties: clone(editedPlay.penalties || []),
   };
   const description = buildFootballEditedPlaySummary(envelope, amendedEvent);
@@ -214,4 +219,20 @@ export function applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt
     updatedAt: editedAt,
     events,
   };
+}
+
+export function repairFootballEditedActorsInEnvelope(envelope) {
+  if (!Array.isArray(envelope?.events)) return envelope;
+  let changed = false;
+  const events = envelope.events.map(event => {
+    const repaired = repairFootballEditedActorReferences(envelope, event);
+    if (repaired === event) return event;
+    changed = true;
+    const description = buildFootballEditedPlaySummary(envelope, repaired);
+    return {
+      ...repaired, description,
+      ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}),
+    };
+  });
+  return changed ? { ...envelope, events } : envelope;
 }
