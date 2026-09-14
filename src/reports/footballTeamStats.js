@@ -93,13 +93,13 @@ const offenseLostPossession = (event, team) => {
   );
 };
 
-export const firstDownBreakdown = (envelope, events, team, total, period = null) => {
+export const firstDownBreakdown = (envelope, events, team, total, period = 0) => {
   const length = fieldLength(envelope);
   let rushing = 0;
   let passing = 0;
   events.forEach((event) => {
     if (
-      (period !== null && Number(event.period) !== period)
+      (period !== 0 && Number(event.period) !== period)
       || event.possession !== team
       || !['rush', 'pass'].includes(event.type)
       || acceptedPreviousSpotPenalty(event)
@@ -337,14 +337,14 @@ const isRedZoneSpot = (spot, team) => {
   return Boolean(match && match[1].toUpperCase() !== team && finiteNumber(match[2]) <= 20);
 };
 
-export const redZoneStats = (envelope, events, team, period = null) => {
+export const redZoneStats = (envelope, events, team, period = 0) => {
   const completed = Array.isArray(envelope?.drives?.completed) ? envelope.drives.completed : [];
   const current = envelope?.drives?.current;
   const allDrives = current?.driveId && !completed.some(d => d.driveId === current.driveId) ? [...completed, current] : completed;
   const inDrive = (event, drive) => (event.possession || event.preState?.possession) === team
     && (drive.driveId ? event.preState?.driveId === drive.driveId : event.preState?.driveNumber === drive.driveNumber);
   const drives = allDrives.filter((drive) => drive.team === team
-    && (period === null || Number(drive.endPeriod || envelope?.game?.period || drive.startPeriod) === period) && events.some((event) => (
+    && (period === 0 || Number(drive.endPeriod || envelope?.game?.period || drive.startPeriod) === period) && events.some((event) => (
     inDrive(event, drive) && ['rush', 'pass', 'penalty', 'fieldGoal'].includes(event.type)
     && (event?.preState?.redZone || isRedZoneSpot(event?.preState?.yardLine, team))
   )));
