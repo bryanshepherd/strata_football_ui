@@ -226,6 +226,10 @@ export function applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt
       return { ...penalty, name };
     }),
   };
+  if (amendedEvent.type === 'pass'
+    && (amendedEvent.result?.pass?.outcome || amendedEvent.subtype || amendedEvent.result?.code) === 'complete') {
+    amendedEvent.result.passDefenseRecorded = true;
+  }
   const description = buildFootballEditedPlaySummary(envelope, amendedEvent);
   amendedEvent.description = description;
   if (original.confirmation) {

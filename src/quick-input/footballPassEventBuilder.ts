@@ -39,6 +39,8 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
   if (intent.result.penaltyContext) result.penaltyContext = { ...intent.result.penaltyContext };
   const participants: DraftScoringEvent['participants'] = { primary: base, secondary: targetParticipant, target: targetParticipant, receiver: null, interceptor: null, defenders: [] };
   if (outcome === 'complete') {
+    participants.defenders = intent.participants.defenders.map(({ playerId, team, role }) => ({ playerId, team, role }));
+    result.passDefenseRecorded = true;
     const receiver = intent.participants.secondary;
     requirePlayer(receiver, 'receiver', 'participants.secondary', errors);
     const yards = intent.result.yards;

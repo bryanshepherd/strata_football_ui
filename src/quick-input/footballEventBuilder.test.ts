@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildCanonicalPassEvent } from './footballPassEventBuilder';
 import { buildFootballEvent } from './footballEventBuilder';
 import { generateFootballPlaySummary } from './footballPlaySummaryGrammar';
 import type {
@@ -183,6 +184,24 @@ describe('footballEventBuilder', () => {
       endYardLine: 'H00',
       scoring: { team: 'V', points: 2, type: 'safety' },
     });
+  });
+
+  it.each([0, 1, 2])('keeps %i selected tacklers in canonical completed-pass submissions', (count) => {
+    const defenders = [participant('tackler', 'V', 'V-44', '44', 'Caleb Moss'), participant('tackler', 'V', 'V-45', '45', 'Alex Smith')].slice(0, count);
+    const intent = baseIntent({ family: 'pass', subtype: 'complete',
+      primary: participant('passer', 'H', 'H-12', '12', 'Mason Reed'),
+      secondary: participant('receiver', 'H', 'H-88', '88', 'Eli Grant'), defenders,
+      result: { code: 'complete', yards: 7, endYardLine: 'V49' },
+    });
+    const before = JSON.stringify(intent);
+    const built = buildCanonicalPassEvent(intent);
+    expect(built.ok).toBe(true);
+    if (!built.ok) throw new Error('Pass did not build');
+    const expected = defenders.map(({ playerId, team, role }) => ({ playerId, team, role }));
+    expect(built.event.participants.defenders).toEqual(expected);
+    expect(built.submitRequest.event.participants.defenders).toEqual(expected);
+    expect(built.event.result.passDefenseRecorded).toBe(true);
+    expect(JSON.stringify(intent)).toBe(before);
   });
 
   it('builds complete pass', () => {
