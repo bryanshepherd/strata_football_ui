@@ -858,6 +858,49 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('mirrors queued flags without adding plays and clears them on toggle, cancel and reload', async () => {
+    const game = structuredClone(gameEnvelopeFixtures.normal);
+    game.gameId = 'FB-LIVE-FLAG'; game.rosters.gameId = game.gameId;
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const mock = mockSubmitSuccess();
+    let view;
+    const saved = () => getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    const latest = () => submittedRequestAt(mock.fetchSpy).envelope;
+    const settled = () => waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+    try {
+      view = renderScorer('/scorer?dashboardGameId=DASH-LIVE-FLAG&envelopeGameId=FB-LIVE-FLAG');
+      await settled();
+      fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+      fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(true));
+      expect(saved().events).toEqual(game.events);
+      expect(saved().stats).toEqual(game.stats);
+      expect(saved().game).toEqual(game.game);
+      expect(saved().drives).toEqual(game.drives);
+      expect(screen.getByLabelText(/rusher jersey/i)).toBeInTheDocument();
+      await settled();
+      const markedRevision = submittedRequestAt(mock.fetchSpy).mirrorRevision;
+      fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(false));
+      expect(submittedRequestAt(mock.fetchSpy).mirrorRevision).toBeGreaterThan(markedRevision);
+      fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(true));
+      await settled();
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel', exact: true }));
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(false));
+      fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+      fireEvent.keyDown(window, { key: 'E', code: 'KeyE', shiftKey: true });
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(true));
+      await settled();
+      view.unmount();
+      view = renderScorer('/scorer?dashboardGameId=DASH-LIVE-FLAG&envelopeGameId=FB-LIVE-FLAG');
+      await waitFor(() => expect(latest().liveState.penaltyPending).toBe(false));
+      expect(saved().events).toEqual(game.events);
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeInTheDocument();
+      await settled();
+    } finally { view?.unmount(); mock.restore(); }
+  });
+
   it('mirrors a fresh dashboard envelope before the first scoring action', async () => {
     const submitMock = mockSubmitSuccess();
     createFootballDashboardGame({

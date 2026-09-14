@@ -1,4 +1,5 @@
 import { prepareFootballChallengeEvent } from '../utils/footballChallengeRescore';
+import { withFootballPenaltyIndicator, withFootballReviewIndicator } from '../utils/footballLiveIndicators';
 import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
 import { repairFootballPlayReadoutsInEnvelope } from '../play-editor/footballPlayEditEnvelope';
 import { applyFootballOvertimeControl, applyFootballOvertimeOutcome, validateFootballOvertimeEvent } from '../utils/footballOvertime';
@@ -351,7 +352,7 @@ export function getDashboardSeededFootballEnvelopeRecord(gameId) {
   const record = store.games?.[String(gameId)];
   if (!record?.envelope) return null;
   const clonedRecord = clone(record);
-  clonedRecord.envelope = normalizeFootballEnvelopeRuleSpots(clonedRecord.envelope);
+  clonedRecord.envelope = withFootballReviewIndicator(normalizeFootballEnvelopeRuleSpots(clonedRecord.envelope));
   return clonedRecord;
 }
 
@@ -1033,7 +1034,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptySt
   const statsEnvelope = repairedStats === repairedMuffClockEnvelope?.stats
     ? repairedMuffClockEnvelope
     : { ...repairedMuffClockEnvelope, stats: repairedStats };
-  const normalizedEnvelope = repairFirstHalfTouchdownClockSeries(statsEnvelope);
+  const normalizedEnvelope = withFootballReviewIndicator(repairFirstHalfTouchdownClockSeries(statsEnvelope));
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');
@@ -2384,7 +2385,7 @@ const applyGameControlProjection = (envelope, event) => {
   const periods = Number(rules.periods || 4);
   const period = Number(control.period || currentPeriod);
   const updatedAt = event.acceptedAt;
-  const withEvent = (patch) => ({
+  const withEvent = (patch) => withFootballReviewIndicator({
     ...envelope,
     ...patch,
     updatedAt,
@@ -2570,6 +2571,7 @@ const clockTextToTenths = (clock) => {
 };
 
 export function applyFootballScorerEventToEnvelope(baseEnvelope, acceptedEvent) {
+  baseEnvelope = withFootballPenaltyIndicator(baseEnvelope, false);
   const event = normalizeAcceptedEvent(baseEnvelope, acceptedEvent, acceptedEvent.acceptedAt);
   validateFootballOvertimeEvent(baseEnvelope, event);
   const overtimeEnvelope = applyFootballOvertimeControl(baseEnvelope, event);

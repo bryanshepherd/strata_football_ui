@@ -59,7 +59,7 @@ it.each([
     method: 'GET', credentials: 'same-origin', cache: 'no-store',
   }));
   expect(localStorage.length).toBe(0);
-  expect(document.title).toBe(`Server Visitor vs. Server Home - ${reportTitle}`);
+  await waitFor(() => expect(document.title).toBe(`Server Visitor vs. Server Home - ${reportTitle}`));
 });
 
 it('uses server data even when browser data exists without changing local scoring state', async () => {

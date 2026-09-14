@@ -1,4 +1,5 @@
 import { footballOvertimePending } from '../utils/footballOvertime';
+import { footballPenaltyPendingForInput, withFootballPenaltyIndicator } from '../utils/footballLiveIndicators';
 import FootballOvertimeModal from '../components/scorer/FootballOvertimeModal';
 import { formatFootballSafetyReadout } from '../utils/footballSafety';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -334,6 +335,29 @@ export default function FootballScorerShell() {
       });
     }
   }, [dashboardGameId, requestedGameId]);
+
+  const penaltyPending = !replacementPlay && footballPenaltyPendingForInput(fcqiState);
+  useEffect(() => {
+    if (!envelope || (requestedGameId && envelope.gameId !== requestedGameId)) return;
+    // Drafts are not restored after reload, so an abandoned flag clears here.
+    // Status changes use the normal mirror without adding a play or undo entry.
+    const current = requestedGameId
+      ? getDashboardSeededFootballEnvelopeRecord(requestedGameId)?.envelope || envelope : envelope;
+    const next = withFootballPenaltyIndicator(current, penaltyPending, new Date().toISOString());
+    if (next === current) return;
+    try {
+      const persisted = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, next) || next : next;
+      setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+      if (requestedGameId && dashboardGameId) {
+        enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      }
+    } catch (error) {
+      setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `The live penalty indicator could not be synced: ${error.message}` });
+    }
+  }, [dashboardGameId, envelope, flushServerSync, penaltyPending, requestedGameId]);
 
   const handleFetchFromServer = useCallback(async () => {
     if (!requestedGameId || recoveryState.recovering) return;
