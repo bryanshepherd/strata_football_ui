@@ -279,7 +279,7 @@ function FootballIndividualOffenseReportContent({ envelope }) {
 
 export default function FootballIndividualOffenseReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="individual-offense">
       {(loadedEnvelope) => <FootballIndividualOffenseReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

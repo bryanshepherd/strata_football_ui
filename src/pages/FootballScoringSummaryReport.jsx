@@ -168,7 +168,7 @@ function FootballScoringSummaryReportContent({ envelope }) {
 
 export default function FootballScoringSummaryReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="scoring-summary">
       {(loadedEnvelope) => <FootballScoringSummaryReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

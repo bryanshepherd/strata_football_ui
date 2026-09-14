@@ -3,6 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import baselineRecord from '../../data/footballCompletedBaselineGameRecord.json';
 import { saveDashboardSeededFootballEnvelope } from '../../services/footballDashboardService';
 import FootballReportLoader from './FootballReportLoader';
+import FootballDefensiveStatsReport from '../../pages/FootballDefensiveStatsReport';
+import FootballParticipationReport from '../../pages/FootballParticipationReport';
+import FootballReportPacket from '../../pages/FootballReportPacket';
 import FootballScoringSummaryReport from '../../pages/FootballScoringSummaryReport';
 import FootballTeamStatsReport from '../../pages/FootballTeamStatsReport';
 import FootballPenaltyChartReport from '../../pages/FootballPenaltyChartReport';
@@ -32,21 +35,31 @@ beforeEach(() => { localStorage.clear(); navigate(); });
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); window.history.replaceState({}, '', '/'); });
 
 it.each([
-  FootballScoringSummaryReport, FootballTeamStatsReport, FootballPenaltyChartReport,
-  FootballDriveChartReport, FootballQuickieStatsReport, FootballIndividualOffenseReport,
-  FootballPlayByPlayReport, FootballMaxPrepsExportReport,
-])('loads the selected server game with empty browser storage for %s', async (Report) => {
+  [FootballScoringSummaryReport, 'Scoring Summary'],
+  [FootballTeamStatsReport, 'Team Stats'],
+  [FootballPenaltyChartReport, 'Penalty Chart'],
+  [FootballDriveChartReport, 'Drive Chart'],
+  [FootballQuickieStatsReport, 'Quickie Stats'],
+  [FootballIndividualOffenseReport, 'Individual Offense'],
+  [FootballPlayByPlayReport, 'Play-by-Play'],
+  [FootballMaxPrepsExportReport, 'MaxPreps Export'],
+  [FootballDefensiveStatsReport, 'Defensive Stats'],
+  [FootballParticipationReport, 'Participation'],
+  [FootballReportPacket, 'Report Packet'],
+])('loads and titles the selected server game with empty browser storage for %s', async (Report, reportTitle) => {
   const fetch = vi.fn().mockResolvedValue(respond(serverEnvelope()));
   vi.stubGlobal('fetch', fetch);
   const { container } = render(<Report />);
   expect(screen.getByRole('status')).toHaveTextContent('Loading report from server');
   expect(container).not.toHaveTextContent('Fairmont');
+  expect(document.title).toBe(reportTitle);
   await waitFor(() => expect(container).toHaveTextContent('Server Visitor'));
   expect(container).not.toHaveTextContent('Fairmont');
   expect(fetch).toHaveBeenCalledWith('/api/football/games/DASH-REPORT/envelope', expect.objectContaining({
     method: 'GET', credentials: 'same-origin', cache: 'no-store',
   }));
   expect(localStorage.length).toBe(0);
+  expect(document.title).toBe(`Server Visitor vs. Server Home - ${reportTitle}`);
 });
 
 it('uses server data even when browser data exists without changing local scoring state', async () => {
@@ -105,4 +118,17 @@ it('does not show sample data when the dashboard link is missing a game ID', () 
   window.history.replaceState({}, '', '/index.html?dashboardGameId=DASH-REPORT');
   probe();
   expect(screen.getByRole('alert')).toHaveTextContent('missing its game ID');
+});
+
+it('updates the PDF title after a game change and restores the previous window title on close', () => {
+  document.title = 'Scorer window';
+  const envelope = serverEnvelope();
+  const { rerender, unmount } = render(<FootballTeamStatsReport envelope={envelope} />);
+  expect(document.title).toBe('Server Visitor vs. Server Home - Team Stats');
+  const corrected = structuredClone(envelope);
+  corrected.game.teams.V.name = 'Corrected Visitor';
+  rerender(<FootballTeamStatsReport envelope={corrected} />);
+  expect(document.title).toBe('Corrected Visitor vs. Server Home - Team Stats');
+  unmount();
+  expect(document.title).toBe('Scorer window');
 });

@@ -142,7 +142,7 @@ function FootballDriveChartReportContent({ envelope }) {
 
 export default function FootballDriveChartReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="drive-chart">
       {(loadedEnvelope) => <FootballDriveChartReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

@@ -48,7 +48,7 @@ export const FootballParticipationReportPage = ({ report }) => (
           </section>
         </td>
       ))}
-    </tr></tbody><tfoot className="football-participation-print-clearance" aria-hidden="true"><tr><td colSpan={2} /></tr></tfoot></table>
+    </tr></tbody></table>
     <FootballReportFooterBrand />
   </article>
 );
@@ -71,7 +71,7 @@ function FootballParticipationReportContent({ envelope }) {
 
 export default function FootballParticipationReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="participation">
       {(loadedEnvelope) => <FootballParticipationReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

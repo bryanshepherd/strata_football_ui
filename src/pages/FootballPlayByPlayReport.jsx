@@ -104,7 +104,7 @@ function FootballPlayByPlayReportContent({ envelope }) {
 
 export default function FootballPlayByPlayReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="play-by-play">
       {(loadedEnvelope) => <FootballPlayByPlayReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

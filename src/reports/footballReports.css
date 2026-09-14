@@ -1,6 +1,7 @@
 @page {
   size: letter portrait;
-  margin: 0;
+  /* Bottom padding in the report reserves another .44in for the brand. */
+  margin: .32in .34in .18in;
 }
 
 .football-report-screen {
@@ -713,11 +714,6 @@
 }
 
 /* This report flows across pages; only individual rows stay together. */
-@page football-defense {
-  size: letter portrait;
-  margin: .32in .34in .62in;
-}
-
 .football-defensive-stats-page {
   overflow: visible;
 }
@@ -738,7 +734,6 @@
 .football-defense-number-column { width: 3.5%; }
 .football-defense-name-column { width: 25%; }
 .football-defense-yards-column { width: 8%; }
-.football-defense-print-clearance { display: none; }
 
 .football-defensive-stats-table th,
 .football-defensive-stats-table td {
@@ -766,11 +761,6 @@
   border-top: 1px solid #19201c;
   background: #eef2ef;
   font-weight: 700;
-}
-
-@page football-participation {
-  size: letter portrait;
-  margin: .32in .34in .62in;
 }
 
 .football-participation-page { overflow: visible; }
@@ -858,13 +848,6 @@
   font: italic 7pt/1.2 Arial, Helvetica, sans-serif;
 }
 
-.football-participation-print-clearance { display: none; }
-
-@page football-packet {
-  size: letter portrait;
-  margin: .32in .34in .62in;
-}
-
 .football-report-packet .football-report-actions h1 {
   margin: 0 auto 0 0;
   align-self: center;
@@ -873,17 +856,10 @@
 
 .football-report-packet-layout {
   margin: 0 auto;
-  border-collapse: collapse;
-}
-
-.football-report-packet-layout > tbody > tr > td {
-  padding: 0;
-  vertical-align: top;
 }
 
 .football-report-packet-section + .football-report-packet-section { margin-top: 20px; }
-.football-packet-print-brand,
-.football-packet-print-clearance { display: none; }
+.football-packet-print-brand { display: none; }
 
 .football-game-details {
   border-top: 1px solid #c7cfca;
@@ -967,82 +943,28 @@
     display: none !important;
   }
 
-  .football-report-page {
-    width: 8.5in;
-    min-height: 11in;
+  /* Physical page margins repeat on every sheet, including continuations.
+     Element padding and named pages inside a fragmented table do not reliably
+     provide those margins in Firefox. Keep screen page styling separate. */
+  .football-report-screen .football-report-page {
+    width: auto;
+    min-height: 0;
     margin: 0;
+    padding: 0 0 .44in;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    overflow: visible;
     box-shadow: none;
   }
 
+  /* Cloned bottom padding keeps rows clear of the fixed brand on every page. */
   .football-report-brand-footer {
     position: fixed;
-  }
-
-  .football-report-screen:has(.football-defensive-stats-page) {
-    page: football-defense;
-  }
-
-  .football-defensive-stats-page {
-    page: football-defense;
-    width: auto;
-    min-height: 0;
-    padding: 0;
-  }
-
-  .football-defensive-stats-page .football-report-brand-footer {
-    page: football-defense;
     left: 0;
     bottom: 0;
-  }
-
-  /* Repeated table clearance keeps the fixed brand off continuation rows. */
-  .football-defense-print-clearance {
-    display: table-footer-group;
-  }
-
-  .football-defense-print-clearance td {
-    height: .44in;
-    border: 0;
-    padding: 0;
-  }
-
-  .football-report-screen:has(.football-participation-page),
-  .football-participation-page,
-  .football-participation-page .football-report-brand-footer {
-    page: football-participation;
-  }
-
-  .football-participation-page {
-    width: auto;
-    min-height: 0;
-    padding: 0;
-  }
-
-  .football-participation-page .football-report-brand-footer {
-    left: 0;
-    bottom: 0;
-  }
-
-  .football-participation-print-clearance { display: table-footer-group; }
-  .football-participation-print-clearance td { height: .44in; }
-
-  /* One page profile and one brand for the whole packet prevent standalone
-     fixed footers and mixed page sizes from overlapping or adding blank pages. */
-  .football-report-packet,
-  .football-report-packet .football-report-page,
-  .football-report-packet .football-report-brand-footer {
-    page: football-packet !important;
   }
 
   .football-report-packet-layout { width: 100%; }
-
-  .football-report-packet .football-report-page {
-    width: auto;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    overflow: visible;
-  }
 
   .football-report-packet-section + .football-report-packet-section {
     margin-top: 0;
@@ -1050,21 +972,12 @@
     page-break-before: always;
   }
 
-  .football-report-packet-section .football-report-brand-footer,
-  .football-report-packet .football-defense-print-clearance,
-  .football-report-packet .football-participation-print-clearance {
-    display: none !important;
+  .football-report-page ~ .football-report-page .football-report-brand-footer,
+  .football-report-packet-section .football-report-brand-footer {
+    display: none;
   }
 
   .football-packet-print-brand { display: block; }
-  .football-packet-print-brand .football-report-brand-footer {
-    position: fixed;
-    left: 0;
-    bottom: 0;
-  }
-
-  .football-packet-print-clearance { display: table-footer-group; }
-  .football-packet-print-clearance td { height: .44in; }
 
   .football-penalty-chart-page + .football-penalty-chart-page {
     margin-top: 0;
@@ -1092,13 +1005,5 @@
   .football-play-by-play-page-break {
     break-before: page;
     page-break-before: always;
-  }
-
-  .football-penalty-chart-page .football-report-brand-footer {
-    position: absolute;
-  }
-
-  .football-drive-chart-page .football-report-brand-footer {
-    position: absolute;
   }
 }

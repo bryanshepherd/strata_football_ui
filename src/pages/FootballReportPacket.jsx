@@ -35,19 +35,16 @@ export function FootballReportPacketContent({ envelope }) {
         <a href={`${import.meta.env.BASE_URL}index.html?${destination}`}>Back to scorer</a>
         <button type="button" onClick={() => window.print()}>Print / Save PDF</button>
       </nav>
-      <table className="football-report-packet-layout" role="presentation">
-        <tbody><tr><td>
-          {packet.sections.map(({ id, label, report }) => {
-            const ReportPages = REPORT_PAGES[id];
-            return (
-              <section className="football-report-packet-section" data-packet-report={id} aria-label={label} key={id}>
-                <ReportPages report={report} />
-              </section>
-            );
-          })}
-        </td></tr></tbody>
-        <tfoot className="football-packet-print-clearance" aria-hidden="true"><tr><td /></tr></tfoot>
-      </table>
+      <div className="football-report-packet-layout">
+        {packet.sections.map(({ id, label, report }) => {
+          const ReportPages = REPORT_PAGES[id];
+          return (
+            <section className="football-report-packet-section" data-packet-report={id} aria-label={label} key={id}>
+              <ReportPages report={report} />
+            </section>
+          );
+        })}
+      </div>
       <div className="football-packet-print-brand"><FootballReportFooterBrand /></div>
     </main>
   );
@@ -55,7 +52,7 @@ export function FootballReportPacketContent({ envelope }) {
 
 export default function FootballReportPacket({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="report-packet">
       {(loadedEnvelope) => <FootballReportPacketContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

@@ -30,6 +30,7 @@ describe('Report Packet', () => {
     expect(screen.getAllByRole('navigation', { name: 'Report actions' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
     expect(print).toHaveBeenCalledOnce();
+    expect(document.title).toBe('Packet Visitor vs. Packet Home - Report Packet');
     expect(screen.getByRole('link', { name: 'Back to scorer' })).toHaveAttribute('href', '/index.html?envelopeGameId=FB-PACKET-TEST&dashboardGameId=DASH-PACKET');
     expect(container.querySelectorAll('[data-football-report="drive-chart-teams"]')).toHaveLength(1);
     expect(container.querySelectorAll('[data-football-report="drive-chart-chronological"]')).toHaveLength(1);

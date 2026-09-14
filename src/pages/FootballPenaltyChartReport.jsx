@@ -115,7 +115,7 @@ function FootballPenaltyChartReportContent({ envelope }) {
 
 export default function FootballPenaltyChartReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="penalty-chart">
       {(loadedEnvelope) => <FootballPenaltyChartReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

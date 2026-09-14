@@ -306,7 +306,7 @@ function FootballQuickieStatsReportContent({ envelope }) {
 
 export default function FootballQuickieStatsReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="quickie-stats">
       {(loadedEnvelope) => <FootballQuickieStatsReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

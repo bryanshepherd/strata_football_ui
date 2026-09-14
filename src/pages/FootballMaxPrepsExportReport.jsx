@@ -106,7 +106,7 @@ function FootballMaxPrepsExportReportContent({ envelope }) {
 
 export default function FootballMaxPrepsExportReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="maxpreps-export">
       {(loadedEnvelope) => <FootballMaxPrepsExportReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

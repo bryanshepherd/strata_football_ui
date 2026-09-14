@@ -83,7 +83,7 @@ function FootballTeamStatsReportContent({ envelope }) {
 
 export default function FootballTeamStatsReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="team-stats">
       {(loadedEnvelope) => <FootballTeamStatsReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );

@@ -52,9 +52,6 @@ export const FootballDefensiveStatsReportPage = ({ report }) => (
               <StatCells player={report.teamReports[team].totals} />
             </tr>
           </tbody>
-          <tfoot className="football-defense-print-clearance" aria-hidden="true">
-            <tr><td colSpan={13} /></tr>
-          </tfoot>
         </table>
       </section>
     ))}
@@ -80,7 +77,7 @@ function FootballDefensiveStatsReportContent({ envelope }) {
 
 export default function FootballDefensiveStatsReport({ envelope }) {
   return (
-    <FootballReportLoader envelope={envelope}>
+    <FootballReportLoader envelope={envelope} reportId="defensive-stats">
       {(loadedEnvelope) => <FootballDefensiveStatsReportContent envelope={loadedEnvelope} />}
     </FootballReportLoader>
   );
