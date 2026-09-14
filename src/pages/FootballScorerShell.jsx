@@ -16,6 +16,8 @@ import FootballPossessionClockModal from '../components/scorer/FootballPossessio
 import FootballPenaltyCodeEditorModal from '../components/scorer/FootballPenaltyCodeEditorModal';
 import FootballTeamAliasesModal from '../components/scorer/FootballTeamAliasesModal';
 import FootballParticipationModal from '../components/scorer/FootballParticipationModal';
+import FootballPlayReviewModal from '../components/scorer/FootballPlayReviewModal';
+import { isEditableFootballReviewEvent as isEditableGameLogEvent } from '../utils/footballPlayReview';
 import FootballChallengeRescoreModal from '../components/scorer/FootballChallengeRescoreModal';
 import { pendingFootballChallengeRescore, isOverturnedFootballChallenge, footballChallengeEventKey } from '../utils/footballChallengeRescore';
 import { buildFootballChallengeRescoreEnvelope, rescoreOverturnedFootballPlay } from '../play-editor/footballChallengeRescore';
@@ -192,6 +194,7 @@ export default function FootballScorerShell() {
   const [penaltyCodeEditorOpen, setPenaltyCodeEditorOpen] = useState(false);
   const [teamAliasesEditorOpen, setTeamAliasesEditorOpen] = useState(false);
   const [participationOpen, setParticipationOpen] = useState(false);
+  const [playReviewOpen, setPlayReviewOpen] = useState(false);
   const [pendingSecondHalfStart, setPendingSecondHalfStart] = useState(null);
   const [wrapUpOpen, setWrapUpOpen] = useState(false);
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
@@ -247,6 +250,7 @@ export default function FootballScorerShell() {
     setPenaltyCodeEditorOpen(false);
     setTeamAliasesEditorOpen(false);
     setParticipationOpen(false);
+    setPlayReviewOpen(false);
     setPendingSecondHalfStart(null);
     setWrapUpOpen(false);
     setWrapUpSaveState({ saving: false, error: '' });
@@ -1127,6 +1131,8 @@ export default function FootballScorerShell() {
             onOpenPenaltyEditor={openPenaltyCodeEditor}
             onOpenStarters={openStartersEditor}
             onOpenParticipation={openParticipation}
+            onReviewPlays={() => { setPlayEditFeedback(null); setPlayReviewOpen(true); }}
+            interactionBlocked={playReviewOpen && !replacementPlay}
             onSubmitAccepted={replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
             onTeamAliasesChange={saveTeamAliases}
@@ -1206,6 +1212,14 @@ export default function FootballScorerShell() {
         saveError={wrapUpSaveState.error}
         saving={wrapUpSaveState.saving}
       />
+      {playReviewOpen && <FootballPlayReviewModal
+        envelope={envelope}
+        feedback={playEditFeedback}
+        hidden={Boolean(editingPlay || replacementPlay || challengeReview || possessionClockChange || driveSummary)}
+        key={envelope.gameId}
+        onClose={() => setPlayReviewOpen(false)}
+        onEdit={openPlayEditor}
+      />}
       <FootballPlayEditorModal
         contextReview={editingContextReview}
         fieldLength={envelope.game.rules?.fieldLength}
@@ -1443,6 +1457,8 @@ export const FootballInputSlot = ({
   onTeamAliasesChange,
   onOpenStarters,
   onOpenParticipation,
+  onReviewPlays,
+  interactionBlocked,
   onPregameEnvelopeChange,
   onSubmitAccepted,
   replacementPlay,
@@ -1491,6 +1507,8 @@ export const FootballInputSlot = ({
         onOpenTeamAliases={onOpenTeamAliases}
         onOpenStarters={onOpenStarters}
         onOpenParticipation={onOpenParticipation}
+        onReviewPlays={onReviewPlays}
+        interactionBlocked={interactionBlocked}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
         replacementMode={Boolean(replacementPlay)}
@@ -1619,11 +1637,6 @@ const EnvelopeRow = ({ label, value }) => (
     </dt>
     <dd className="mt-0.5 break-words font-medium text-zinc-900">{value}</dd>
   </div>
-);
-
-const EDITABLE_EVENT_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
-const isEditableGameLogEvent = (event) => (
-  EDITABLE_EVENT_TYPES.has(event?.type) || isFootballBallContextRevision(event)
 );
 
 // Quarter-start controls are recorded against the previous play context, but

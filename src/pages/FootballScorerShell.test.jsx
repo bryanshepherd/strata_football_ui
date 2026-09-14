@@ -1956,6 +1956,54 @@ describe('FootballScorerShell', () => {
     } finally { submitMock.restore(); }
   });
 
+  it('reviews and edits a final-game actor through the existing editor and refreshes the filtered list', async () => {
+    const game = finalEnvelopeWithBallContextRevision('FB-REVIEW-EDIT');
+    const oldPlayer = Object.values(game.rosters.teams.H.players)[0];
+    game.events[0].participants = { primary: { playerId: oldPlayer.playerId, team: 'H', role: 'rusher' }, defenders: [] };
+    game.rosters.teams.H.players['review-new'] = { playerId: 'review-new', team: 'H', jersey: '99', displayName: 'Review Replacement', active: true };
+    game.stats = normalizeFootballScoringSetupEnvelope(game, { rebuildEmptyStats: true }).stats;
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const submitMock = mockSubmitSuccess();
+    try {
+      renderScorer('/scorer?dashboardGameId=DASH-REVIEW&envelopeGameId=FB-REVIEW-EDIT');
+      await screen.findByRole('button', { name: /^review plays v$/i });
+      fireEvent.keyDown(window, { key: 'v' });
+      const review = screen.getByRole('dialog', { name: 'Review Plays' });
+      fireEvent.keyDown(window, { key: 'g' });
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      fireEvent.change(within(review).getByLabelText('Search plays'), { target: { value: '#1' } });
+      fireEvent.click(within(review).getByRole('button', { name: 'By Player' }));
+      fireEvent.change(within(review).getByLabelText('Team'), { target: { value: 'H' } });
+      fireEvent.click(within(review).getByRole('button', { name: new RegExp(oldPlayer.displayName) }));
+      fireEvent.click(within(review).getByRole('button', { name: 'Edit reviewed play 1' }));
+      expect(screen.queryByRole('dialog', { name: 'Review Plays' })).not.toBeInTheDocument();
+      const editor = screen.getByRole('dialog', { name: 'Edit Play 1' });
+      fireEvent.change(within(editor).getByLabelText('Rusher'), { target: { value: 'review-new' } });
+      fireEvent.click(within(editor).getByRole('button', { name: 'Save Changes' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Play 1' })).not.toBeInTheDocument());
+      const resumed = screen.getByRole('dialog', { name: 'Review Plays' });
+      expect(within(resumed).getByLabelText('Search plays')).toHaveValue('#1');
+      expect(within(resumed).queryByLabelText('Review play 1')).not.toBeInTheDocument();
+      fireEvent.click(within(resumed).getByRole('button', { name: /Review Replacement/ }));
+      expect(within(resumed).getByLabelText('Review play 1')).toHaveTextContent('Review Replacement');
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.events[0].participants.primary.playerId).toBe('review-new');
+      expect(saved.game).toEqual(game.game);
+      expect(saved.liveState).toEqual(game.liveState);
+      await waitFor(() => expect(submitMock.fetchSpy.mock.calls.some(([, init]) => JSON.parse(init.body).envelope?.events?.[0]?.participants?.primary?.playerId === 'review-new')).toBe(true));
+      fireEvent.click(within(resumed).getByRole('button', { name: 'Close' }));
+      expect(screen.getByRole('button', { name: /^rush/i })).toBeDisabled();
+    } finally { submitMock.restore(); }
+  });
+
+  it('disables Review Plays while an entry is in progress and does not take a team-selection token', () => {
+    renderScorer();
+    fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+    expect(screen.getByRole('button', { name: /^review plays v$/i })).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'v' });
+    expect(screen.queryByRole('dialog', { name: 'Review Plays' })).not.toBeInTheDocument();
+  });
+
   it('preserves saved abbreviations when undo restores a deleted play', async () => {
     const game = finalEnvelopeWithBallContextRevision('FB-ALIAS-UNDO');
     saveDashboardSeededFootballEnvelope(game.gameId, game);

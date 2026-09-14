@@ -23,6 +23,7 @@ const PLAY_BUTTONS = [
   { label: 'Kick', hotkey: 'K', enabled: true },
   { label: 'Penalty', hotkey: 'E', enabled: true },
   { label: 'Game Control', hotkey: 'G', enabled: true },
+  { label: 'Review Plays', hotkey: 'V', enabled: true },
 ];
 
 const editableSelector = 'input, textarea, select, [contenteditable="true"]';
@@ -146,6 +147,8 @@ export default function FootballConfirmedQuickInput({
   onOpenTeamAliases,
   onOpenStarters,
   onOpenParticipation,
+  onReviewPlays,
+  interactionBlocked = false,
   onSubmitAccepted,
   onStateChange,
   replacementMode = false,
@@ -179,6 +182,8 @@ export default function FootballConfirmedQuickInput({
   );
   const gamePhase = gamePhaseForEnvelope(envelope);
   const canEditFinalSettings = gamePhase === 'final' && Boolean(onOpenTeamAliases || onOpenParticipation || onOpenStarters) && !replacementMode;
+  const canReviewPlays = Boolean(onReviewPlays) && !replacementMode && !interactionBlocked
+    && !settingsOnlyMenuOpen && !isActiveFcqiPlayFlow(currentState);
   const kickoffContextReady = isCanonicalSpot(envelope.liveState?.yardLine)
     && envelope.liveState.yardLine !== 'goal';
   const awaitingPatTry = envelope.liveState?.nextPlayContext === 'awaitingTry'
@@ -342,7 +347,12 @@ export default function FootballConfirmedQuickInput({
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (interactionBlocked) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.toLowerCase() === 'v' && canReviewPlays && !event.target?.closest?.(editableSelector)
+        && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        event.preventDefault(); onReviewPlays(); return;
+      }
       if (event.shiftKey && event.key.toLowerCase() === 'e' && isActiveFcqiPlayFlow(currentState)) {
         event.preventDefault();
         publishState(applyEvent({ type: 'QUEUE_PENALTY_REQUEST' }));
@@ -633,7 +643,7 @@ export default function FootballConfirmedQuickInput({
                 : button.label === 'Team Play'
                   ? 'rush'
                   : button.label.toLowerCase();
-            const enabled = button.enabled
+            const enabled = button.label === 'Review Plays' ? canReviewPlays : button.enabled
               && (familyAvailable(family) || (family === 'gameControl' && canEditFinalSettings))
               && (family !== 'kickoff' || kickoffContextReady);
             return (
@@ -647,7 +657,9 @@ export default function FootballConfirmedQuickInput({
               disabled={!enabled}
               onClick={() => {
                 if (!enabled) return;
-                if (button.label === 'Pass') {
+                if (button.label === 'Review Plays') {
+                  onReviewPlays();
+                } else if (button.label === 'Pass') {
                   startPass('button');
                 } else if (button.label === 'Team Play') {
                   startTeamPlay('button');
