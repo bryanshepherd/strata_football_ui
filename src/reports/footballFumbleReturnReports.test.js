@@ -3,6 +3,7 @@ import fixture from './fixtures/football-fumble-return-touchdown.json';
 import { buildFootballScoringSummary } from './footballScoringSummary';
 import { buildFootballQuickieStatsReport } from './footballQuickieStats';
 import { buildFootballDriveSummary } from '../scoring/footballDriveSummary';
+import { buildFootballTeamStatsReport } from './footballTeamStats';
 
 describe('Play 50 defensive fumble-return touchdown reports', () => {
   it('uses the returner and return distance, groups the PAT, and omits the opponent drive', () => {
@@ -42,5 +43,13 @@ describe('Play 50 defensive fumble-return touchdown reports', () => {
     expect(buildFootballScoringSummary(envelope).scoring[0]).toMatchObject({
       description: 'Malachi Adkins 92 yard interception return (Zapata Kick)', drive: '—',
     });
+  });
+
+  it('keeps team rushing and fumble returns consistent with the individual report', () => {
+    const envelope = structuredClone(fixture);
+    envelope.stats = { teams: { H: { rushYards: 11, yards: 11 }, V: {} }, players: {} };
+    const report = buildFootballTeamStatsReport(envelope);
+    expect(report.teamStats.H).toMatchObject({ rushYards: 3, totalYards: 3, fumbleReturns: { count: 0, yards: 0, touchdowns: 0 } });
+    expect(report.teamStats.V.fumbleReturns).toMatchObject({ count: 1, yards: 92, touchdowns: 1 });
   });
 });

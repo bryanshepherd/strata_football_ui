@@ -1,3 +1,4 @@
+import { splitFootballDefensiveYards } from '../utils/footballDefensiveCredit';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { repairFootballPassDefense, isFootballHurryDefender, isFootballBreakupDefender } from '../utils/footballPassDefense';
 import {
@@ -391,18 +392,17 @@ const creditDefense = (store, event, envelope) => {
     tackleParticipants.forEach((participant) => {
       const row = store.get(participant.playerId, participant.team, participant);
       increment(row, 'TacklesForLoss', credit);
-      increment(row, 'TacklesForLossYards', Math.abs(finiteNumber(event?.result?.yards)) * credit);
+      increment(row, 'TacklesForLossYards', splitFootballDefensiveYards(Math.abs(finiteNumber(event?.result?.yards)), tackleParticipants, participant));
     });
   }
 
   if (sackers.length > 0) {
     const sackCredit = 1 / sackers.length;
-    const yardCredit = Math.abs(finiteNumber(event?.result?.yards)) / sackers.length;
     sackers.forEach((participant) => {
       const row = store.get(participant.playerId, participant.team, participant);
       initializeDefense(row);
       increment(row, 'Sacks', sackCredit);
-      increment(row, 'SacksYardsLost', yardCredit);
+      increment(row, 'SacksYardsLost', splitFootballDefensiveYards(Math.abs(finiteNumber(event?.result?.yards)), sackers, participant));
     });
   }
 

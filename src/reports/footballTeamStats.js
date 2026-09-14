@@ -1,5 +1,6 @@
 import { formatFootballReportDate } from './footballScoringSummary';
 import { confirmedPenaltyAfterPossessionChange } from '../utils/footballPenaltyPossession';
+import { footballOffensivePlayYards } from '../scoring/footballReturnTouchdown';
 import { footballReturnTouchdownDriveEnd, footballPointsOffTurnovers } from '../scoring/footballTurnoverScoring';
 
 const TEAM_CODES = ['V', 'H'];
@@ -92,13 +93,14 @@ const offenseLostPossession = (event, team) => {
   );
 };
 
-const firstDownBreakdown = (envelope, events, team, total) => {
+export const firstDownBreakdown = (envelope, events, team, total, period = null) => {
   const length = fieldLength(envelope);
   let rushing = 0;
   let passing = 0;
   events.forEach((event) => {
     if (
-      event.possession !== team
+      (period !== null && Number(event.period) !== period)
+      || event.possession !== team
       || !['rush', 'pass'].includes(event.type)
       || acceptedPreviousSpotPenalty(event)
       || replayDownPenalty(event)
@@ -132,7 +134,7 @@ const rushingBreakdown = (events, team, authoritativeYards) => {
     const sack = event.type === 'pass'
       && (event.subtype === 'sack' || event?.result?.pass?.outcome === 'sack');
     if (event.type !== 'rush' && !sack) return;
-    const yards = finiteNumber(event?.result?.yards);
+    const yards = footballOffensivePlayYards(event);
     if (yards >= 0) gained += yards;
     else lost += Math.abs(yards);
   });
@@ -155,7 +157,7 @@ const spotRuleYards = (value, fallback) => {
 };
 
 const puntStats = (envelope, events, team, source, opponentSource) => {
-  const punts = events.filter((event) => event.type === 'punt' && event.possession === team);
+  const punts = events.filter((event) => event.type === 'punt' && event.possession === team && !acceptedPreviousSpotPenalty(event));
   const count = readNumber(source, ['punts.num', 'punts.count', 'punts']);
   const yards = readNumber(source, ['punts.yds', 'puntYards']);
   const returnYards = readNumber(opponentSource, ['puntReturns.yds', 'punt_returns.yds', 'puntReturnYds']);
@@ -214,7 +216,7 @@ export const footballKickoffGrossYards = (envelope, event) => {
 };
 
 const kickoffStats = (envelope, events, team, opponentSource) => {
-  const kicks = events.filter((event) => event.type === 'kickoff' && kickoffTeam(event) === team);
+  const kicks = events.filter((event) => event.type === 'kickoff' && kickoffTeam(event) === team && !acceptedPreviousSpotPenalty(event));
   const length = fieldLength(envelope);
   let yards = 0;
   let placementAdjustment = 0;
@@ -250,7 +252,8 @@ const kickoffStats = (envelope, events, team, opponentSource) => {
 const explicitReturnStats = (events, team, type) => {
   const matching = events.filter((event) => (
     String(event?.result?.return?.type || '').toLowerCase() === type.toLowerCase()
-    && (event?.participants?.returner?.team || event?.result?.turnover?.team || event?.result?.scoring?.team) === team
+    && (event?.participants?.returner?.team || event?.result?.fumble?.recoveredByTeam || event?.result?.nextPossession || event?.result?.turnover?.recoveredBy || event?.result?.scoring?.team || event?.result?.turnover?.team) === team
+    && !acceptedPreviousSpotPenalty(event)
   ));
   return {
     count: matching.length,
@@ -334,21 +337,55 @@ const isRedZoneSpot = (spot, team) => {
   return Boolean(match && match[1].toUpperCase() !== team && finiteNumber(match[2]) <= 20);
 };
 
-const redZoneStats = (envelope, events, team) => {
+export const redZoneStats = (envelope, events, team, period = null) => {
   const completed = Array.isArray(envelope?.drives?.completed) ? envelope.drives.completed : [];
-  const drives = completed.filter((drive) => drive.team === team && events.some((event) => (
-    event?.preState?.driveId === drive.driveId
+  const current = envelope?.drives?.current;
+  const allDrives = current?.driveId && !completed.some(d => d.driveId === current.driveId) ? [...completed, current] : completed;
+  const inDrive = (event, drive) => (event.possession || event.preState?.possession) === team
+    && (drive.driveId ? event.preState?.driveId === drive.driveId : event.preState?.driveNumber === drive.driveNumber);
+  const drives = allDrives.filter((drive) => drive.team === team
+    && (period === null || Number(drive.endPeriod || envelope?.game?.period || drive.startPeriod) === period) && events.some((event) => (
+    inDrive(event, drive) && ['rush', 'pass', 'penalty', 'fieldGoal'].includes(event.type)
     && (event?.preState?.redZone || isRedZoneSpot(event?.preState?.yardLine, team))
   )));
-  const touchdowns = drives.filter((drive) => drive.result === 'touchdown'
-    && !events.some(event => event.preState?.driveId === drive.driveId && footballReturnTouchdownDriveEnd(event, team))).length;
-  const fieldGoals = drives.filter((drive) => drive.result === 'fieldGoal').length;
-  return {
-    attempts: drives.length,
-    scores: touchdowns + fieldGoals,
-    touchdowns,
-    fieldGoals,
-  };
+  const xml = { att: drives.length, scores: 0, points: 0, tdrush: 0, tdpass: 0, fgmade: 0,
+    endfga: 0, enddowns: 0, endint: 0, endfumb: 0, endhalf: 0, endgame: 0 };
+  let touchdowns = 0;
+  let fieldGoals = 0;
+  for (const drive of drives) {
+    const plays = events.filter(event => inDrive(event, drive) && ['rush', 'pass', 'fieldGoal'].includes(event.type)
+      && !acceptedPreviousSpotPenalty(event));
+    const score = plays.find(event => event.result?.scoring?.team === team
+      && ['touchdown', 'fieldGoal'].includes(event.result.scoring.type));
+    const returned = plays.find(event => footballReturnTouchdownDriveEnd(event, team));
+    if (!returned && (score?.result?.scoring?.type === 'touchdown' || drive.result === 'touchdown')) {
+      touchdowns += 1;
+      xml[score?.type === 'pass' ? 'tdpass' : 'tdrush'] += 1;
+      xml.points += 6;
+      if (score) {
+        for (const following of events.slice(events.indexOf(score) + 1)) {
+          if (['penalty', 'gameControl'].includes(following.type)) continue;
+          if (following.type !== 'try') break;
+          if (replayDownPenalty(following)) continue;
+          if (following.result?.scoring?.team === team) xml.points += finiteNumber(following.result.scoring.points);
+          break;
+        }
+      }
+    } else if (score?.result?.scoring?.type === 'fieldGoal' || drive.result === 'fieldGoal') {
+      fieldGoals += 1; xml.fgmade += 1; xml.points += 3;
+    } else {
+      const last = plays.at(-1);
+      const outcome = String(drive.result || '').toLowerCase();
+      if (last?.result?.fumble?.turnover) xml.endfumb += 1;
+      else if (['interception', 'intercepted'].includes(last?.subtype)) xml.endint += 1;
+      else if (outcome === 'missedfieldgoal') xml.endfga += 1;
+      else if (outcome === 'turnoverondowns') xml.enddowns += 1;
+      else if (['endofhalf', 'endhalf'].includes(outcome)) xml.endhalf += 1;
+      else if (['endofgame', 'endgame'].includes(outcome)) xml.endgame += 1;
+    }
+  }
+  xml.scores = touchdowns + fieldGoals;
+  return { attempts: drives.length, scores: xml.scores, touchdowns, fieldGoals, xml };
 };
 
 const formatInteger = (value) => String(Math.trunc(finiteNumber(value)));
@@ -366,7 +403,9 @@ const teamProjection = (envelope, events, team) => {
   const firstDowns = readNumber(source, ['firstDowns', 'first_downs']);
   const firstDownTypes = firstDownBreakdown(envelope, events, team, firstDowns);
   const rushAttempts = readNumber(source, ['rushAttempts', 'rush.att', 'rushing.att']);
-  const rushYards = readNumber(source, ['rushYards', 'rush.yds', 'rushing.yds']);
+  const rushCorrection = events.reduce((sum, event) => event.type === 'rush' && event.possession === team && !acceptedPreviousSpotPenalty(event)
+    ? sum + footballOffensivePlayYards(event, fieldLength(envelope)) - finiteNumber(event.result?.yards) : sum, 0);
+  const rushYards = readNumber(source, ['rushYards', 'rush.yds', 'rushing.yds']) + rushCorrection;
   const rushing = rushingBreakdown(events, team, rushYards);
   const passCompletions = readNumber(source, ['pass.cmp', 'passing.cmp']);
   const passAttempts = readNumber(source, ['pass.att', 'passing.att']);
@@ -374,7 +413,7 @@ const teamProjection = (envelope, events, team) => {
   const passYardageCorrection = completedPassTurnoverYardageCorrection(events, team, fieldLength(envelope));
   const passYards = readNumber(source, ['pass.yds', 'passing.yds']) + passYardageCorrection;
   const plays = readNumber(source, ['plays', 'totalPlays']);
-  const totalYards = readNumber(source, ['yards', 'totalYards']) + passYardageCorrection;
+  const totalYards = readNumber(source, ['yards', 'totalYards']) + passYardageCorrection + rushCorrection;
   const fumbles = readNumber(source, ['fumbles.num', 'fumbles.count', 'fumbles']);
   const fumblesLost = readNumber(source, ['fumbles.lost', 'fumblesLost']);
   const penalties = readNumber(source, ['penalties.num', 'penalties.count', 'penalties']);

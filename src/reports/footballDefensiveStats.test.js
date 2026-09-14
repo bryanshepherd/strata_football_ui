@@ -51,9 +51,9 @@ describe('Defensive Stats report', () => {
       tackle([actor('solo', 'tackler'), actor('assist', 'assistTackler')], -3),
     ]));
     const solo = report.teamReports.V.players.find((p) => p.playerId === 'solo');
-    expect(solo).toMatchObject({ solo: 1, assists: 1, total: 2, sacks: 0.5, sackYards: 3.5, tfl: 1, tflYards: 5 });
+    expect(solo).toMatchObject({ solo: 1, assists: 1, total: 2, sacks: 0.5, sackYards: 4, tfl: 1, tflYards: 6 });
     expect(report.teamReports.V.totals).toMatchObject({ sacks: 1, sackYards: 7, tfl: 2, tflYards: 10 });
-    expect(formatDefensiveStatYards(solo.sacks, solo.sackYards)).toBe('0.5-3.5');
+    expect(formatDefensiveStatYards(solo.sacks, solo.sackYards)).toBe('0.5-4');
   });
 
   it('credits recoveries, forced fumbles, interceptions, breakups and every kind of blocked kick', () => {
