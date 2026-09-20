@@ -58,6 +58,44 @@ const envelope = {
 };
 
 describe('football play edit envelope', () => {
+  it('restores the ejected checkbox from an older explicit ejection note, preserving saved No decisions', () => {
+    const source = structuredClone(envelope);
+    source.events[0].penalties[0] = { ...source.events[0].penalties[0], code: 'TH', name: 'Targeting', notes: 'EJECTION: H-8 ejected from the game.' };
+    const repaired = repairFootballPlayReadoutsInEnvelope(source);
+    expect(repaired.events[0].penalties[0]).toMatchObject({ ejected: true, ejectedPlayerId: 'H-8' });
+    expect(repaired.events[0].description).toContain('#8 Mike Wilson ejected from the game');
+    expect(repairFootballPlayReadoutsInEnvelope(repaired)).toBe(repaired);
+    source.events[0].penalties[0].ejected = false;
+    expect(repairFootballPlayReadoutsInEnvelope(source).events[0].penalties[0].ejected).toBe(false);
+    delete source.events[0].penalties[0].ejected;
+    delete source.events[0].penalties[0].notes;
+    expect(repairFootballPlayReadoutsInEnvelope(source).events[0].penalties[0].ejected).toBeUndefined();
+  });
+
+  it('recounts fouls after edits or removal while preserving the operator ejection decision', () => {
+    const source = structuredClone(envelope);
+    const event = (sequence, ejected) => ({ ...structuredClone(baseEvent), sequence, eventId: `uns-${sequence}`,
+      penalties: [{ ...baseEvent.penalties[0], code: 'UC', name: 'Unsportsmanlike Conduct',
+        ...(ejected !== undefined ? { ejected, ejectedPlayerId: 'H-8' } : {}) }],
+    });
+    source.events = [event(1), event(2, true)];
+    const repaired = repairFootballPlayReadoutsInEnvelope(source);
+    expect(repaired.events.map(e => e.penalties[0].unsportsmanlikeCount)).toEqual([1, 2]);
+    expect(repaired.events[0].description).toContain('unsportsmanlike foul 1 for this player');
+    expect(repaired.events[1].description).toContain('unsportsmanlike foul 2 for this player');
+    expect(repaired.events[1].description).toContain('#8 Mike Wilson ejected from the game');
+    expect(repairFootballPlayReadoutsInEnvelope(repaired)).toBe(repaired);
+    const removed = repairFootballPlayReadoutsInEnvelope({ ...repaired, events: [repaired.events[1]] });
+    expect(removed.events[0].penalties[0]).toMatchObject({ unsportsmanlikeCount: 1, ejected: true });
+    expect(removed.events[0].description).not.toContain('unsportsmanlike foul 2');
+    const edited = structuredClone(repaired);
+    edited.events[0].penalties[0] = { ...edited.events[0].penalties[0], code: 'PF', name: 'Personal Foul' };
+    const recounted = repairFootballPlayReadoutsInEnvelope(edited);
+    expect(recounted.events[0].penalties[0].unsportsmanlikeCount).toBeUndefined();
+    expect(recounted.events[0].description).not.toContain('unsportsmanlike foul');
+    expect(recounted.events[1].penalties[0].unsportsmanlikeCount).toBe(1);
+  });
+
   it('resolves a changed penalty code instead of retaining its previous name', () => {
     const edited = structuredClone(baseEvent);
     edited.penalties[0].code = 'RTK';

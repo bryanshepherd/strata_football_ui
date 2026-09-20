@@ -1,8 +1,18 @@
+import { footballUnsportsmanlikeKey } from '../../utils/footballUnsportsmanlike';
 import { describe, expect, it } from 'vitest';
 import { getGameEnvelopeFixture } from '../../data/footballGameEnvelopeFixtures';
 import { buildQuickInputContext } from './FootballConfirmedQuickInput';
 
 describe('FootballConfirmedQuickInput context', () => {
+  it('derives player discipline counts from the current saved game on every load', () => {
+    const envelope = structuredClone(getGameEnvelopeFixture('normal'));
+    envelope.events = [{ sequence: 1, penalties: [{ team: 'H', playerId: 'H-22', name: 'Unsportsmanlike Conduct', status: 'accepted' }] }];
+    const meta = { startedBy: 'button', seed: 'discipline', startedAt: envelope.updatedAt };
+    expect(buildQuickInputContext(envelope, meta).unsportsmanlikeCounts).toEqual({ [footballUnsportsmanlikeKey('H', 'H-22')]: 1 });
+    envelope.events = [];
+    expect(buildQuickInputContext(envelope, meta).unsportsmanlikeCounts).toEqual({});
+  });
+
   it('uses the saved second-half kicking team instead of stale prior-event possession', () => {
     const envelope = JSON.parse(JSON.stringify(getGameEnvelopeFixture('halftime')));
     envelope.clock = { ...envelope.clock, period: 3, clock: '15:00' };

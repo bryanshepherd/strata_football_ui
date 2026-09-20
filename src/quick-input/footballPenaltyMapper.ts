@@ -12,7 +12,7 @@ const ENFORCEMENT_SPOTS: Record<DraftPenaltyEnforcementSpot, NonNullable<Canonic
 };
 
 /** Converts FCQI penalty detail into the public submit-event contract. */
-export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): CanonicalPenalty & { name?: string } {
+export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): CanonicalPenalty & { name?: string; unsportsmanlikeCount?: number; ejected?: boolean; ejectedPlayerId?: string } {
   const playerId = penalty.playerId ?? penalty.penalizedPlayerId;
   const replayDown = penalty.source === 'immediate' || penalty.replayDown || penalty.downConsequence === 'REPEAT' ||
     (penalty.status === 'offsetting' && penalty.offsetting?.previousPlayCounts === false);
@@ -32,6 +32,9 @@ export function mapDraftPenaltyToCanonicalEvent(penalty: DraftPenalty): Canonica
     name: footballPenaltyDisplayName(penalty),
     team: penalty.team,
     ...(playerId !== undefined ? { playerId } : {}),
+    ...(penalty.unsportsmanlikeCount ? { unsportsmanlikeCount: penalty.unsportsmanlikeCount } : {}),
+    ...(typeof penalty.ejected === 'boolean' ? { ejected: penalty.ejected } : {}),
+    ...(penalty.ejected && penalty.ejectedPlayerId ? { ejectedPlayerId: penalty.ejectedPlayerId } : {}),
     ...(typeof penalty.liveBall === 'boolean' ? { timing: penalty.liveBall ? 'liveBall' : 'deadBall' } : {}),
     status: penalty.status,
     ...(typeof penalty.yards === 'number' ? { yards: Math.abs(penalty.yards) } : {}),

@@ -1,3 +1,4 @@
+import { footballUnsportsmanlikeCounts } from '../../utils/footballUnsportsmanlike';
 import { footballOvertimeNeedsTwo } from '../../utils/footballOvertime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -919,6 +920,7 @@ export function buildQuickInputContext(envelope, startMeta, teamAliases) {
       driveNumber: envelope.liveState.driveNumber || 0,
     },
     roster: flattenRoster(envelope),
+    unsportsmanlikeCounts: footballUnsportsmanlikeCounts(envelope.events),
     retainedPrimaryJerseys: retainedPrimaryJerseysForEnvelope(envelope, actionTeam || 'H'),
     teamAliases: normalizeTeamAliases(teamAliases),
     gamePhase: phase,

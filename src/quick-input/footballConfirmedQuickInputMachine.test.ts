@@ -1,3 +1,4 @@
+import { footballUnsportsmanlikeKey } from '../utils/footballUnsportsmanlike';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createInitialFootballQuickInputState,
@@ -10,6 +11,8 @@ import { applyFootballScorerEventToEnvelope, saveDashboardSeededFootballEnvelope
 import { getGameEnvelopeFixture } from '../data/footballGameEnvelopeFixtures';
 import { validateFootballDraftIntent } from './footballIntentSchema';
 import { footballPossessionChanges } from '../utils/footballPenaltyPossession';
+import { buildFootballIndividualOffenseReport } from '../reports/footballIndividualOffense';
+import { buildFootballEditedPlaySummary } from '../play-editor/footballPlayEditEnvelope';
 import { buildFootballDefensiveStatsReport } from '../reports/footballDefensiveStats';
 
 describe('footballConfirmedQuickInputMachine', () => {
@@ -1035,6 +1038,67 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it('records the first unsportsmanlike foul without an ejection prompt', () => {
+    const state = commitPenaltyTokens(startPenalty('immediate'), ['Unsportsmanlike Conduct', 'H', 'A', '22']);
+    expect(state.currentStep).toBe('penaltyFinalSpot');
+    const ready = commitPenaltyTokens(state, ['H29']);
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
+    expect(reviewing.draft?.penalties[0]).toMatchObject({ unsportsmanlikeCount: 1, playerId: 'H-22' });
+    expect(reviewing.summary?.summaryText).toContain('unsportsmanlike foul 1 for this player');
+    expect(reviewing.summary?.summaryText).not.toContain('ejected');
+  });
+
+  it.each([['Y', true], ['N', false]] as const)('requires a second-foul decision and saves %s as ejected=%s', (answer, ejected) => {
+    const context = { ...makeContext(), unsportsmanlikeCounts: { [footballUnsportsmanlikeKey('H', 'H-22')]: 1 } };
+    const question = commitPenaltyTokens(startPenalty('immediate'), ['Unsportsmanlike Conduct', 'H', 'A', '22'], context);
+    expect(question.currentStep).toBe('penaltyEjected');
+    expect(question.currentToken).toBe('');
+    expect(commitPenaltyTokens(question, [''], context).status).toBe('token.error');
+    const ready = commitPenaltyTokens(question, [answer, 'H29'], context);
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' }, context);
+    expect(reviewing.summary?.summaryText).toContain('unsportsmanlike foul 2 for this player');
+    expect(reviewing.summary?.summaryText.includes('ejected from the game')).toBe(ejected);
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' }, context);
+    expect(confirmed.buildResult?.ok).toBe(true);
+    if (!confirmed.buildResult?.ok) throw new Error('Penalty must build');
+    expect(JSON.parse(JSON.stringify(confirmed.buildResult.event.penalties[0]))).toMatchObject({ unsportsmanlikeCount: 2, ejected });
+  });
+
+  it('collects the player on a declined unsportsmanlike foul and still asks on the second charge', () => {
+    const context = { ...makeContext(), unsportsmanlikeCounts: { [footballUnsportsmanlikeKey('H', 'H-22')]: 1 } };
+    const question = commitPenaltyTokens(startPenalty('immediate'), ['Unsportsmanlike Conduct', 'H', 'D', '22'], context);
+    expect(question.currentStep).toBe('penaltyEjected');
+    const ready = commitPenaltyTokens(question, ['N'], context);
+    expect(ready.status).toBe('draft.ready');
+    expect(ready.draft?.penalties[0]).toMatchObject({ status: 'declined', unsportsmanlikeCount: 2, ejected: false });
+  });
+
+  it('tracks separate players and ejection decisions on both offsetting unsportsmanlike fouls', () => {
+    const context = { ...makeContext(), unsportsmanlikeCounts: { [footballUnsportsmanlikeKey('V', 'V-44')]: 1 } };
+    const first = commitPenaltyTokens(startPenalty('immediate'), ['Unsportsmanlike Conduct', 'H', 'O', 'Unsportsmanlike Conduct', 'V'], context);
+    expect(first.currentStep).toBe('penaltyPlayerJersey');
+    const second = commitPenaltyTokens(first, ['22'], context);
+    expect(second.tokens.penaltyDisciplineSlot).toBe('second');
+    const question = commitPenaltyTokens(second, ['44'], context);
+    expect(question.currentStep).toBe('penaltyEjected');
+    const ready = commitPenaltyTokens(question, ['Y'], context);
+    expect(ready.draft?.penalties).toMatchObject([
+      { playerId: 'H-22', unsportsmanlikeCount: 1 },
+      { playerId: 'V-44', unsportsmanlikeCount: 2, ejected: true },
+    ]);
+    const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' }, context);
+    expect(reviewing.summary?.summaryText).toContain('#44 Caleb Moss ejected from the game');
+    expect(transition(reviewing, { type: 'CONFIRM_SUMMARY' }, context).buildResult?.ok).toBe(true);
+  });
+
+  it('counts an earlier foul attached to the same play before prompting for the next one', () => {
+    const reviewing = commitPenaltyTokens(startQueuedPenalty(completeRushDraft()), ['Unsportsmanlike Conduct', 'H', 'D', '22']);
+    expect(reviewing.status).toBe('summary.reviewing');
+    const second = commitPenaltyTokens(startQueuedPenalty(reviewing), ['Unsportsmanlike Conduct', 'H', 'L', 'D', '22']);
+    expect(second.currentStep).toBe('penaltyEjected');
+    expect(second.tokens.penaltyUnsportsmanlikeCount).toBe(2);
+  });
+
   it('prefills Yes for catalog entries with automatic ejection', () => {
     const state = commitPenaltyTokens(startPenalty('immediate'), ['Targeting', 'V', 'A', '']);
 
@@ -1073,6 +1137,10 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(state.draft?.penalties[0].notes).toContain('EJECTION: H-22');
     const reviewing = transition(state, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.summary?.summaryText).toContain('#22 Jordan Smith ejected from the game');
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' });
+    expect(confirmed.buildResult?.ok).toBe(true);
+    if (!confirmed.buildResult?.ok) throw new Error('Targeting must build');
+    expect(confirmed.buildResult.event.penalties[0]).toMatchObject({ ejected: true, ejectedPlayerId: 'H-22' });
   });
 
   it('queued accepted penalty defaults down consequence from table', () => {
@@ -2647,6 +2715,52 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(reviewing.summary?.summaryText).toContain('pass incomplete intended for #88 Eli Grant');
   });
 
+  it.each(['', '   '])('saves an incomplete pass with a blank target (%j)', (target) => {
+    const reviewing = transition(completeIncompletePassDraft({ target }), { type: 'GENERATE_SUMMARY' });
+    expect(reviewing.summary?.summaryText).toBe('HOM #12 Mason Reed pass incomplete.');
+    const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' });
+    expect(confirmed.buildResult?.ok).toBe(true);
+    if (!confirmed.buildResult?.ok) throw new Error('Pass must build');
+    expect(confirmed.buildResult.event.participants.secondary).toBeNull();
+    expect(confirmed.buildResult.event.result.code).toBe('incomplete');
+  });
+
+  it.each(['D', 'd', 'Dropped'])('accepts %s for a dropped pass and skips breakup', (result) => {
+    let next = startPass();
+    for (const token of ['12', result, '88', '']) next = commitToken(inputToken(next, token));
+    expect(next.currentStep).toBe('hurried');
+    next = commitToken(inputToken(next, 'N'));
+    const reviewing = transition(next, { type: 'GENERATE_SUMMARY' });
+    expect(reviewing.summary?.summaryText).toBe('HOM #12 Mason Reed pass dropped by #88 Eli Grant.');
+    expect(reviewing.draft?.result.pass).toMatchObject({ outcome: 'incomplete', dropped: true, completed: false });
+  });
+
+  it('persists a drop with hurry credit and the same stats and ball context as an incomplete', () => {
+    const build = (dropped: boolean) => {
+      const reviewing = transition(completeIncompletePassDraft({ dropped, hurried: ['44', '90'] }), { type: 'GENERATE_SUMMARY' });
+      const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' });
+      if (!confirmed.buildResult?.ok) throw new Error('Pass must build');
+      return JSON.parse(JSON.stringify(confirmed.buildResult.event));
+    };
+    const drop = { ...build(true), sequence: 1, acceptedAt: '2026-06-20T00:00:02Z' };
+    const incomplete = { ...build(false), sequence: 1, acceptedAt: '2026-06-20T00:00:02Z' };
+    expect(drop).toMatchObject({ type: 'pass', subtype: 'incomplete', result: { code: 'incomplete', pass: {
+      dropped: true, outcome: 'incomplete', brokenUpByPlayerId: null, hurriedByPlayerIds: ['V-44', 'V-90'],
+    } } });
+    const envelope = structuredClone(getGameEnvelopeFixture());
+    envelope.events = [drop];
+    expect(buildFootballDefensiveStatsReport(envelope).teamReports.V.totals).toMatchObject({ breakups: 0, hurries: 2 });
+    expect(buildFootballIndividualOffenseReport(envelope).teamReports.H.passing.totals).toMatchObject({ passAttempts: 1, passCompletions: 0, passYards: 0 });
+    expect(buildFootballEditedPlaySummary(envelope, drop)).toContain('pass dropped by');
+    const projectedDrop = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), drop);
+    const projectedIncomplete = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), incomplete);
+    expect(projectedDrop.diagnostics).toEqual([]);
+    expect(projectedIncomplete.diagnostics).toEqual([]);
+    expect(projectedDrop.envelope.liveState).toMatchObject({ down: 3, distance: 6, yardLine: 'H44' });
+    expect(projectedDrop.envelope.liveState).toEqual(projectedIncomplete.envelope.liveState);
+    expect(projectedDrop.envelope.stats).toEqual(projectedIncomplete.envelope.stats);
+  });
+
   it('incomplete pass asks whether it was broken up before asking about a hurry', () => {
     const withPasser = commitToken(inputToken(startPass(), '12'));
     const withResult = commitToken(inputToken(withPasser, 'I'));
@@ -3385,15 +3499,17 @@ function completePassFumbleDraft(): FootballConfirmedQuickInputState {
 }
 
 function completeIncompletePassDraft(options: {
+  dropped?: boolean;
+  target?: string;
   brokenUp?: boolean;
   hurried?: string[];
 } = {}): FootballConfirmedQuickInputState {
   const withPasser = commitToken(inputToken(startPass(), '12'));
-  const withResult = commitToken(inputToken(withPasser, 'I'));
-  const withReceiver = commitToken(inputToken(withResult, '88'));
+  const withResult = commitToken(inputToken(withPasser, options.dropped ? 'D' : 'I'));
+  const withReceiver = commitToken(inputToken(withResult, options.target ?? '88'));
   let next = commitToken(inputToken(withReceiver, ''));
 
-  next = commitToken(inputToken(next, options.brokenUp ? 'B' : 'N'));
+  if (!options.dropped) next = commitToken(inputToken(next, options.brokenUp ? 'B' : 'N'));
 
   if (options.brokenUp) {
     next = commitToken(inputToken(next, '44'));

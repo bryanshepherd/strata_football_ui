@@ -4,6 +4,42 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('asks the exact second-unsportsmanlike question and accepts Yes or No', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit}
+      teamNames={{ H: 'Midway University', V: 'Bellarmine' }} state={{
+        status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyEjected', currentToken: '',
+        tokens: { penaltyTeam: 'H', penaltyPlayer: { jersey: '22' }, penaltyUnsportsmanlikeCount: 2 },
+      }} />);
+    expect(screen.getByText('Midway University # 22 has been charged a second unsportsmanlike conduct penalty. Has this player been ejected?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Yes/ }));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('N');
+  });
+
+  it('offers Dropped as a button and D hotkey', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{
+      status: 'token.awaiting', flow: 'pass', currentStep: 'passResult', currentToken: '', tokens: {},
+    }} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Dropped/ }));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('D');
+    fireEvent.keyDown(window, { key: 'd' });
+    expect(onTokenCommit).toHaveBeenCalledTimes(2);
+    expect(onTokenCommit).toHaveBeenLastCalledWith('D');
+  });
+
+  it('submits a blank Intended For answer', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{
+      status: 'token.awaiting', flow: 'pass', currentStep: 'intendedReceiverJersey', currentToken: '', tokens: {},
+    }} />);
+    expect(screen.getByRole('textbox', { name: 'Intended For jersey' })).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Enter' }));
+    expect(onTokenCommit).toHaveBeenCalledWith('');
+  });
+
   it('offers a team recovery button and hotkey alongside the player jersey input', () => {
     const onTokenCommit = vi.fn();
     render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{

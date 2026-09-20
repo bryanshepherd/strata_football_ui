@@ -1,3 +1,4 @@
+import { chargeFootballUnsportsmanlike } from '../utils/footballUnsportsmanlike';
 import { repairFootballPenaltyNames } from '../utils/footballPenaltyNames';
 import { footballPenaltyDisplayName, footballPenaltyRulesetFromRules } from '../quick-input/penaltyTable';
 import { generateFootballPlaySummary } from '../quick-input/footballPlaySummaryGrammar';
@@ -264,16 +265,32 @@ export function repairFootballEditedActorsInEnvelope(envelope) {
   return changed ? { ...envelope, events } : envelope;
 }
 
+function repairRecordedPenaltyEjection(penalty) {
+  // Older FCQI saves carried the explicit decision in this per-penalty note,
+  // but dropped the boolean. Never override an operator's saved Yes or No.
+  if (typeof penalty.ejected === 'boolean') return penalty;
+  const playerId = penalty.ejectedPlayerId || penalty.playerId || penalty.penalizedPlayerId;
+  const actor = playerId || 'penalized person';
+  if (!String(penalty.notes || '').includes(`EJECTION: ${actor} ejected from the game.`)) return penalty;
+  return { ...penalty, ejected: true, ...(playerId ? { ejectedPlayerId: playerId } : {}) };
+}
+
 export function repairFootballPlayReadoutsInEnvelope(envelope) {
   const repaired = repairFootballEditedActorsInEnvelope(envelope);
   if (!Array.isArray(repaired?.events)) return repaired;
   let changed = false;
+  const disciplineCounts = {};
   const events = repaired.events.map(original => {
     if (!original || (original.status && original.status !== 'accepted')) return original;
     const event = repairFootballPenaltyNames(repaired, original);
     if (event !== original) changed = true;
     let missingYardsRepaired = false;
-    const penalties = (event.penalties || []).map((penalty, index) => {
+    let disciplineChanged = false;
+    const penalties = (event.penalties || []).map((originalPenalty, index) => {
+      const count = chargeFootballUnsportsmanlike(disciplineCounts, originalPenalty);
+      const penalty = repairRecordedPenaltyEjection(count !== originalPenalty.unsportsmanlikeCount
+        ? { ...originalPenalty, unsportsmanlikeCount: count } : originalPenalty);
+      if (penalty !== originalPenalty) disciplineChanged = true;
       if (penalty.status !== 'accepted' || penalty.yards !== null && penalty.yards !== undefined) return penalty;
       const yards = calculateEditedPenaltyYards(event, penalty, index);
       if (yards === null) return penalty;
@@ -286,7 +303,7 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       : null;
     const staleChallengeReadout = challengeReadout && (event.description !== challengeReadout
       || event.confirmation && event.confirmation.summaryText !== challengeReadout);
-    if (!missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
+    if (!disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
     changed = true;
     const next = { ...event, penalties };
     const description = challengeReadout || buildFootballEditedPlaySummary(repaired, next);

@@ -258,6 +258,7 @@ export type DraftResultCode =
   | 'noPlay';
 
 export type DraftPassResult = {
+  dropped?: boolean;
   outcome?: 'complete' | 'incomplete' | 'interception';
   startYardLine?: Spot;
   terminalYardLine?: Spot;
@@ -384,6 +385,7 @@ export type DraftPenalty = {
   downCounts?: boolean;
   liveBall?: boolean;
   deadBall?: boolean;
+  unsportsmanlikeCount?: number;
   ejectionable?: boolean;
   ejected?: boolean;
   ejectedPlayerId?: string;

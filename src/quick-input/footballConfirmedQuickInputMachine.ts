@@ -1,3 +1,4 @@
+import { chargeFootballUnsportsmanlike, isFootballUnsportsmanlike } from '../utils/footballUnsportsmanlike';
 import { footballOvertimeNeedsTwo } from '../utils/footballOvertime';
 import type {
   DraftParticipant,
@@ -55,7 +56,7 @@ export type FootballQuickInputStateName =
 export type FootballQuickInputFlow = 'rush' | 'pass' | 'punt' | 'kick' | 'teamPlay' | 'penalty' | 'gameControl';
 export type TeamPlaySelection = 'spike' | 'kneel' | 'aborted';
 export type RushResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
-export type PassPrimaryResultSelection = 'complete' | 'incomplete' | 'sack' | 'sackFumble' | 'rushConversion' | 'interception';
+export type PassPrimaryResultSelection = 'complete' | 'incomplete' | 'dropped' | 'sack' | 'sackFumble' | 'rushConversion' | 'interception';
 export type CompletePassResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
 export type PuntReceiveResultSelection = 'return' | 'touchback' | 'fairCatch' | 'outOfBounds' | 'muffed' | 'downed' | 'blocked';
 export type ReturnTerminalResultSelection = 'tackle' | 'outOfBounds' | 'fumble' | 'lateral' | 'endOfPlay';
@@ -315,6 +316,11 @@ export type PenaltyFlowTokens = KickFlowTokens & {
   penaltyResolution?: PenaltyResolutionSelection;
   penaltyPlayer?: DraftParticipant;
   penaltyEjected?: boolean;
+  penaltyUnsportsmanlikeCount?: number;
+  penaltyDisciplineSlot?: 'first' | 'second';
+  offsettingSecondPlayer?: DraftParticipant;
+  offsettingSecondEjected?: boolean;
+  offsettingSecondUnsportsmanlikeCount?: number;
   penaltyEnforcedFrom?: PenaltyEnforcedFromSelection;
   penaltySpotOfFoul?: Spot;
   penaltyFinalSpot?: Spot;
@@ -410,6 +416,7 @@ export type FootballQuickInputContext = {
   clientEventId?: string;
   now?: string;
   penalties?: DraftPenalty[];
+  unsportsmanlikeCounts?: Record<string, number>;
   deriveRushYardsFromEndSpot?: boolean;
   calculateRushYards?: (input: {
     startYardLine: Spot | null | undefined;
@@ -1224,6 +1231,17 @@ function commitPassToken(
   }
 
   if (state.currentStep === 'intendedReceiverJersey') {
+    if (!state.currentToken.trim()) {
+      return {
+        state: {
+          ...baseActiveState(state),
+          status: 'token.awaiting',
+          currentStep: 'passYardLine',
+          currentToken: '',
+          tokens: { ...cloneTokens(state.tokens), intendedReceiver: undefined },
+        },
+      };
+    }
     return resolveJerseyToken(state, context, {
       role: 'intendedReceiver',
       teamScope: context.play.possession ?? context.play.actionTeam,
@@ -1271,7 +1289,7 @@ function commitPassToken(
       state: {
         ...baseActiveState(state),
         status: 'token.awaiting',
-        currentStep: 'passBreakup',
+        currentStep: state.tokens.passResult === 'dropped' ? 'hurried' : 'passBreakup',
         currentToken: '',
         tokens: {
           ...tokens,
@@ -2151,7 +2169,7 @@ function commitPenaltyToken(
         },
       };
     }
-    if (resolution === 'declined' && !state.tokens.penaltyDefinition?.ejectionable) {
+    if (resolution === 'declined' && !state.tokens.penaltyDefinition?.ejectionable && !isFootballUnsportsmanlike(state.tokens.penaltyDefinition)) {
       return finalizePenaltyEntry({ ...baseActiveState(state), tokens }, context);
     }
     return {
@@ -2166,53 +2184,14 @@ function commitPenaltyToken(
   }
 
   if (state.currentStep === 'penaltyPlayerJersey') {
-    const source = state.tokens.penaltySource ?? 'immediate';
-    const deadBall = state.tokens.penaltyTiming === 'deadBall';
-    const defaultEnforcedFrom = source === 'immediate'
-      ? 'PREVIOUS'
-      : deadBall
-        ? 'END'
-        : defaultPenaltyEnforcement(state.tokens.penaltyDefinition);
-    const defaultDownConsequence = source === 'immediate'
-      ? 'REPEAT'
-      : deadBall
-        ? 'DOWN_COUNTS'
-        : defaultPenaltyDownConsequence(
-        state.tokens.penaltyDefinition,
-        defaultEnforcedFrom,
-        state.tokens.penaltyTeam,
-        context.play.actionTeam,
-      );
-    const nextStep = state.tokens.penaltyDefinition?.ejectionable
-      ? 'penaltyEjected'
-      : source === 'immediate' ? 'penaltyFinalSpot' : 'penaltyEnforcedFrom';
-    const nextTokens = {
-      ...cloneTokens(state.tokens),
-      penaltyEnforcedFrom: defaultEnforcedFrom,
-      penaltyDownConsequence: defaultDownConsequence,
-    };
-    const nextToken = nextStep === 'penaltyEnforcedFrom'
-      ? penaltyEnforcedFromInputCode(defaultEnforcedFrom)
-      : nextStep === 'penaltyFinalSpot'
-        ? suggestedPenaltyFinalSpot(context, nextTokens, state.draft) ?? ''
-        : state.tokens.penaltyDefinition?.autoEjection ? 'Y' : '';
-    const trimmed = state.currentToken.trim();
-    if (!trimmed) {
-      return {
-        state: {
-          ...baseActiveState(state),
-          status: 'token.awaiting',
-          currentStep: nextStep,
-          currentToken: nextToken,
-          tokens: nextTokens,
-        },
-      };
-    }
+    if (!state.currentToken.trim()) return { state: finishPenaltyPlayer(state, undefined, context) };
     return resolveJerseyToken(state, context, {
       role: 'penalizedPlayer',
-      teamScope: state.tokens.penaltyTeam ?? context.play.actionTeam,
+      teamScope: state.tokens.penaltyDisciplineSlot === 'second'
+        ? state.tokens.offsettingSecondTeam ?? context.play.actionTeam
+        : state.tokens.penaltyTeam ?? context.play.actionTeam,
       actionContext: 'penalty',
-      nextStep,
+      nextStep: 'penaltyEjected',
     });
   }
 
@@ -2221,26 +2200,10 @@ function commitPenaltyToken(
     if (ejected === null) {
       return { state: tokenError(state, 'MISSING_EJECTION_DECISION', 'Choose Ejected (Y) or Not Ejected (N).', 'penalties.ejected') };
     }
-    const nextState = {
-      ...baseActiveState(state),
-      tokens: {
-        ...cloneTokens(state.tokens),
-        penaltyEjected: ejected,
-      },
-    };
-    if (nextState.tokens.penaltyResolution === 'declined') return finalizePenaltyEntry(nextState, context);
-    const source = nextState.tokens.penaltySource ?? 'immediate';
-    const nextStep = source === 'immediate' ? 'penaltyFinalSpot' : 'penaltyEnforcedFrom';
-    return {
-      state: {
-        ...nextState,
-        status: 'token.awaiting',
-        currentStep: nextStep,
-        currentToken: nextStep === 'penaltyEnforcedFrom'
-          ? penaltyEnforcedFromInputCode(nextState.tokens.penaltyEnforcedFrom)
-          : suggestedPenaltyFinalSpot(context, nextState.tokens, state.draft) ?? '',
-      },
-    };
+    const tokens = cloneTokens(state.tokens);
+    if (tokens.penaltyDisciplineSlot === 'second') tokens.offsettingSecondEjected = ejected;
+    else tokens.penaltyEjected = ejected;
+    return continuePenaltyDiscipline({ ...baseActiveState(state), tokens }, context);
   }
 
   if (state.currentStep === 'penaltyEnforcedFrom') {
@@ -2444,21 +2407,13 @@ function commitPenaltyToken(
       offsettingSecondDefinition,
       offsettingSecondCode: offsettingSecondDefinition?.code || state.tokens.offsettingSecondCode,
     };
-    if ((state.tokens.penaltySource ?? 'immediate') === 'immediate') {
-      return finalizePenaltyEntry({
-        ...baseActiveState(state),
-        tokens: { ...tokens, offsettingPreviousPlayCounts: false },
-      }, context);
-    }
-    return {
-      state: {
-        ...baseActiveState(state),
-        status: 'token.awaiting',
-        currentStep: 'offsettingPlayCounts',
-        currentToken: '',
-        tokens,
-      },
-    };
+    const slot = needsDisciplineActor(tokens.penaltyDefinition) ? 'first'
+      : needsDisciplineActor(tokens.offsettingSecondDefinition) ? 'second' : undefined;
+    if (slot) return { state: {
+      ...baseActiveState(state), status: 'token.awaiting', currentStep: 'penaltyPlayerJersey', currentToken: '',
+      tokens: { ...tokens, penaltyDisciplineSlot: slot },
+    } };
+    return continuePenaltyDiscipline({ ...baseActiveState(state), tokens }, context);
   }
 
   if (state.currentStep === 'offsettingPlayCounts') {
@@ -2916,7 +2871,7 @@ function commitPassPrimaryResult(state: FootballConfirmedQuickInputState): Footb
       state: tokenError(
         state,
         'INVALID_PASS_RESULT',
-        'Pass result must be C, I, S, F, R, or X.',
+        'Pass result must be C, I, D, S, F, R, or X.',
         'result.code',
       ),
     };
@@ -3866,16 +3821,7 @@ function advanceAfterPlayerCommit(
   if (role === 'hurry') tokens.hurryDefenders = [...tokens.hurryDefenders, participant];
   if (role === 'forcedBy') tokens.forcedBy = participant;
   if (role === 'recoverer') tokens.recoverPlayer = participant;
-  if (role === 'penalizedPlayer') {
-    tokens.penaltyPlayer = participant;
-    const source = tokens.penaltySource ?? 'immediate';
-    tokens.penaltyEnforcedFrom = source === 'immediate'
-      ? 'PREVIOUS'
-      : defaultPenaltyEnforcement(tokens.penaltyDefinition);
-    tokens.penaltyDownConsequence = source === 'immediate'
-      ? 'REPEAT'
-      : defaultPenaltyDownConsequence(tokens.penaltyDefinition);
-  }
+  if (role === 'penalizedPlayer') return finishPenaltyPlayer(state, participant, context);
 
   if (state.flow === 'teamPlay' && state.tokens.teamPlaySelection === 'spike' && role === 'passer') {
     return makeReadyState({
@@ -4508,7 +4454,7 @@ function buildPassDraft(
 
 function passSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']['subtype'] {
   if (tokens.passResult === 'complete') return 'complete';
-  if (tokens.passResult === 'incomplete') return 'incomplete';
+  if (tokens.passResult === 'incomplete' || tokens.passResult === 'dropped') return 'incomplete';
   if (tokens.passResult === 'sack' || tokens.passResult === 'sackFumble') return 'sack';
   if (tokens.passResult === 'interception') return 'interception';
   return 'incomplete';
@@ -4567,12 +4513,13 @@ function buildPassResult(tokens: FootballFlowTokens, context: FootballQuickInput
     };
   }
 
-  if (tokens.passResult === 'incomplete') {
+  if (tokens.passResult === 'incomplete' || tokens.passResult === 'dropped') {
     return {
       code: 'incomplete',
       driveEnds: false,
       pass: {
         outcome: 'incomplete',
+        ...(tokens.passResult === 'dropped' ? { dropped: true } : {}),
         startYardLine: context.prePlay.yardLine ?? undefined,
         targetPlayerId: tokens.intendedReceiver?.playerId,
         completed: false,
@@ -5479,6 +5426,65 @@ function buildKickoffResult(tokens: FootballFlowTokens, context: FootballQuickIn
   };
 }
 
+function needsDisciplineActor(definition?: FootballPenaltyTableEntry): boolean {
+  return Boolean(definition?.ejectionable || isFootballUnsportsmanlike(definition));
+}
+
+function finishPenaltyPlayer(state: FootballConfirmedQuickInputState, participant: DraftParticipant | undefined, context: FootballQuickInputContext): FootballConfirmedQuickInputState {
+  const tokens = cloneTokens(state.tokens);
+  const second = tokens.penaltyDisciplineSlot === 'second';
+  const definition = second ? tokens.offsettingSecondDefinition : tokens.penaltyDefinition;
+  const counts = { ...context.unsportsmanlikeCounts };
+  for (const penalty of state.draft?.penalties || []) chargeFootballUnsportsmanlike(counts, penalty);
+  if (second && tokens.penaltyPlayer) chargeFootballUnsportsmanlike(counts, {
+    ...tokens.penaltyDefinition, team: tokens.penaltyTeam, playerId: tokens.penaltyPlayer.playerId, status: tokens.penaltyResolution,
+  });
+  const count = participant ? chargeFootballUnsportsmanlike(counts, {
+    ...definition, team: participant.team, playerId: participant.playerId, status: tokens.penaltyResolution,
+  }) : undefined;
+  if (second) {
+    tokens.offsettingSecondPlayer = participant;
+    tokens.offsettingSecondUnsportsmanlikeCount = count;
+    tokens.offsettingSecondEjected = undefined;
+  } else {
+    tokens.penaltyPlayer = participant;
+    tokens.penaltyUnsportsmanlikeCount = count;
+    tokens.penaltyEjected = undefined;
+  }
+  const source = tokens.penaltySource ?? 'immediate';
+  const deadBall = tokens.penaltyTiming === 'deadBall';
+  tokens.penaltyEnforcedFrom = source === 'immediate' ? 'PREVIOUS' : deadBall ? 'END' : defaultPenaltyEnforcement(definition);
+  tokens.penaltyDownConsequence = source === 'immediate' ? 'REPEAT' : deadBall ? 'DOWN_COUNTS'
+    : defaultPenaltyDownConsequence(definition, tokens.penaltyEnforcedFrom, tokens.penaltyTeam, context.play.actionTeam);
+  const next = { ...baseActiveState(state), tokens, duplicate: undefined };
+  if (definition?.ejectionable || count === 2) return {
+    ...next, status: 'token.awaiting', currentStep: 'penaltyEjected',
+    currentToken: count === 2 ? '' : definition?.autoEjection ? 'Y' : '',
+  };
+  return continuePenaltyDiscipline(next, context).state;
+}
+
+function continuePenaltyDiscipline(state: FootballConfirmedQuickInputState, context: FootballQuickInputContext): FootballQuickInputTransitionResult {
+  const tokens = cloneTokens(state.tokens);
+  if (tokens.penaltyResolution === 'offsetting') {
+    if (tokens.penaltyDisciplineSlot === 'first' && needsDisciplineActor(tokens.offsettingSecondDefinition)) return { state: {
+      ...baseActiveState(state), status: 'token.awaiting', currentStep: 'penaltyPlayerJersey', currentToken: '',
+      tokens: { ...tokens, penaltyDisciplineSlot: 'second' },
+    } };
+    if ((tokens.penaltySource ?? 'immediate') === 'immediate') return finalizePenaltyEntry({
+      ...baseActiveState(state), tokens: { ...tokens, offsettingPreviousPlayCounts: false },
+    }, context);
+    return { state: { ...baseActiveState(state), status: 'token.awaiting', currentStep: 'offsettingPlayCounts', currentToken: '', tokens } };
+  }
+  if (tokens.penaltyResolution === 'declined') return finalizePenaltyEntry(state, context);
+  const nextStep = (tokens.penaltySource ?? 'immediate') === 'immediate' ? 'penaltyFinalSpot' : 'penaltyEnforcedFrom';
+  return { state: {
+    ...baseActiveState(state), status: 'token.awaiting', currentStep: nextStep,
+    currentToken: nextStep === 'penaltyFinalSpot' ? suggestedPenaltyFinalSpot(context, tokens, state.draft) ?? ''
+      : penaltyEnforcedFromInputCode(tokens.penaltyEnforcedFrom), tokens,
+  } };
+}
+
 function finalizePenaltyEntry(
   state: FootballConfirmedQuickInputState,
   context: FootballQuickInputContext,
@@ -5496,7 +5502,7 @@ function finalizePenaltyEntry(
       state.draft,
       penalties,
       context,
-      state.tokens.penaltyPlayer ? [state.tokens.penaltyPlayer] : [],
+      [state.tokens.penaltyPlayer, state.tokens.offsettingSecondPlayer].filter((player): player is DraftParticipant => Boolean(player)),
     );
     if (state.tokens.penaltyPossessionDecision) {
       if (!state.tokens.penaltyContext?.confirmed) {
@@ -5647,7 +5653,8 @@ function buildPenaltyOnlyDraft(
     participants: {
       primary: undefined,
       defenders: [],
-      penalizedPlayers: state.tokens.penaltyPlayer ? [cloneParticipant(state.tokens.penaltyPlayer)] : [],
+      penalizedPlayers: [state.tokens.penaltyPlayer, state.tokens.offsettingSecondPlayer]
+        .filter((player): player is DraftParticipant => Boolean(player)).map(cloneParticipant),
       others: [],
     },
     result: {
@@ -5840,7 +5847,11 @@ function buildDraftPenaltiesFromTokens(
 
   if (resolution !== 'offsetting') return [base];
 
-  const second = buildSingleDraftPenalty(tokens, context, baseDraft, {
+  const second = buildSingleDraftPenalty({ ...tokens,
+    penaltyPlayer: tokens.offsettingSecondPlayer,
+    penaltyEjected: tokens.offsettingSecondEjected,
+    penaltyUnsportsmanlikeCount: tokens.offsettingSecondUnsportsmanlikeCount,
+  }, context, baseDraft, {
     penaltyId: `${context.clientEventId ?? 'fcqi-penalty'}-pen-${penaltyNumber + 1}`,
     name: tokens.offsettingSecondName,
     code: tokens.offsettingSecondCode,
@@ -5881,8 +5892,9 @@ function buildSingleDraftPenalty(
     defaultEnforcement: input.definition?.defaultEnforcement,
     liveBall: (tokens.penaltyTiming ?? (input.source === 'queued' ? 'liveBall' : 'deadBall')) === 'liveBall',
     deadBall: (tokens.penaltyTiming ?? (input.source === 'queued' ? 'liveBall' : 'deadBall')) === 'deadBall',
-    ejectionable: input.definition?.ejectionable,
-    ejected: input.definition?.ejectionable ? tokens.penaltyEjected === true : undefined,
+    unsportsmanlikeCount: tokens.penaltyUnsportsmanlikeCount,
+    ejectionable: input.definition?.ejectionable || tokens.penaltyUnsportsmanlikeCount === 2,
+    ejected: tokens.penaltyEjected,
     ejectedPlayerId: tokens.penaltyEjected ? tokens.penaltyPlayer?.playerId : undefined,
     automaticFirstDown: input.definition?.automaticFirstDown,
     lossOfDown: input.definition?.lossOfDown,
@@ -6425,6 +6437,7 @@ function parsePassPrimaryResult(value: string): PassPrimaryResultSelection | nul
   const normalized = value.trim().toUpperCase();
   if (normalized === 'C' || normalized === 'COMPLETE') return 'complete';
   if (normalized === 'I' || normalized === 'INCOMPLETE') return 'incomplete';
+  if (normalized === 'D' || normalized === 'DROPPED') return 'dropped';
   if (normalized === 'S' || normalized === 'SACK') return 'sack';
   if (normalized === 'F' || normalized === 'SACK FUMBLE' || normalized === 'SACKFUMBLE') return 'sackFumble';
   if (normalized === 'R' || normalized === 'RUSH') return 'rushConversion';
@@ -7350,6 +7363,11 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     penaltyResolution: tokens.penaltyResolution,
     penaltyPlayer: tokens.penaltyPlayer ? cloneParticipant(tokens.penaltyPlayer) : undefined,
     penaltyEjected: tokens.penaltyEjected,
+    penaltyUnsportsmanlikeCount: tokens.penaltyUnsportsmanlikeCount,
+    penaltyDisciplineSlot: tokens.penaltyDisciplineSlot,
+    offsettingSecondPlayer: tokens.offsettingSecondPlayer ? cloneParticipant(tokens.offsettingSecondPlayer) : undefined,
+    offsettingSecondEjected: tokens.offsettingSecondEjected,
+    offsettingSecondUnsportsmanlikeCount: tokens.offsettingSecondUnsportsmanlikeCount,
     penaltyEnforcedFrom: tokens.penaltyEnforcedFrom,
     penaltySpotOfFoul: tokens.penaltySpotOfFoul,
     penaltyFinalSpot: tokens.penaltyFinalSpot,

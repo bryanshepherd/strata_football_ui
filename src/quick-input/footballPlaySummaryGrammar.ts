@@ -138,9 +138,10 @@ function passSummary(context: SummaryContext): string {
   const team = teamAbbr(intent, intent.play.actionTeam);
 
   if (intent.play.subtype === 'incomplete' || intent.result.code === 'incomplete') {
-    const clauses = receiver
-      ? [`${team} ${formatPlayer(passer)} pass incomplete intended for ${formatPlayer(receiver)}`]
-      : [`${team} ${formatPlayer(passer)} pass incomplete`];
+    const dropped = intent.result.pass?.dropped === true;
+    const outcomePhrase = dropped ? 'dropped' : 'incomplete';
+    const targetPhrase = receiver ? ` ${dropped ? 'by' : 'intended for'} ${formatPlayer(receiver)}` : '';
+    const clauses = [`${team} ${formatPlayer(passer)} pass ${outcomePhrase}${targetPhrase}`];
 
     const breakup = participantByPlayerId(intent, intent.result.pass?.brokenUpByPlayerId);
     if (breakup) clauses.push(`broken up by ${formatPlayer(breakup)}`);
@@ -539,7 +540,11 @@ function penaltiesSummary(
 
   if (penalties.every((penalty) => penalty.status === 'offsetting')) {
     const previousPlayCounts = penalties[0]?.offsetting?.previousPlayCounts;
-    const penaltyList = penalties.map((penalty) => penaltyBasicText(context, penalty)).join('; ');
+    const penaltyList = penalties.map((penalty) => {
+      const parts = [penaltyBasicText(context, penalty)];
+      appendPenaltyEjection(context, penalty, parts);
+      return parts.join(', ');
+    }).join('; ');
     if (previousPlayCounts === true) return sentence(`Offsetting penalties after the play: ${penaltyList}. Previous play counts`);
     if (previousPlayCounts === false) return sentence(`Offsetting penalties: ${penaltyList}. Previous play does not count`);
     return sentence(`Penalties offset: ${penaltyList}`);
@@ -672,7 +677,9 @@ function penaltyBasicText(context: SummaryContext, penalty: DraftPenalty): strin
   const playerId = penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
   const participant = participantByPlayerId(context.intent, playerId);
   const playerText = participant ? ` (${formatPlayer(participant)})` : '';
-  return `${teamAbbr(context.intent, penalty.team)} ${name}${playerText}`;
+  const countText = penalty.unsportsmanlikeCount
+    ? `, unsportsmanlike foul ${penalty.unsportsmanlikeCount} for this player` : '';
+  return `${teamAbbr(context.intent, penalty.team)} ${name}${playerText}${countText}`;
 }
 
 function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | undefined {

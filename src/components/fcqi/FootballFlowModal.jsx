@@ -157,7 +157,7 @@ const stepCopy = {
   intendedReceiverJersey: {
     title: 'Pass target',
     label: 'Intended For jersey',
-    helper: 'Enter the intended receiver jersey number.',
+    helper: 'Enter the intended receiver jersey number, or press Enter to skip.',
     placeholder: '88',
   },
   interceptorJersey: {
@@ -668,6 +668,7 @@ const teamPlayButtons = [
 const passResultButtons = [
   { label: 'Complete', hotkey: 'C', value: 'C' },
   { label: 'Incomplete', hotkey: 'I', value: 'I' },
+  { label: 'Dropped', hotkey: 'D', value: 'D' },
   { label: 'Sack', hotkey: 'S', value: 'S' },
   { label: 'Sack Fumble', hotkey: 'F', value: 'F' },
   { label: 'Rush Conversion', hotkey: 'R', value: 'R' },
@@ -1177,7 +1178,9 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'penaltyTeam' || step === 'offsettingSecondTeam') return teamButtonsForAliases(aliases, teamNames);
   if (step === 'penaltyTiming') return penaltyTimingButtons;
   if (step === 'penaltyResolution') return penaltyResolutionButtons;
-  if (step === 'penaltyEjected') return penaltyEjectedButtons;
+  if (step === 'penaltyEjected') return (state.tokens?.penaltyDisciplineSlot === 'second'
+    ? state.tokens.offsettingSecondUnsportsmanlikeCount : state.tokens?.penaltyUnsportsmanlikeCount) === 2
+    ? [{ label: 'Yes', hotkey: 'Y', value: 'Y' }, { label: 'No', hotkey: 'N', value: 'N' }] : penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
   if (step === 'penaltyDown') return penaltyDownButtons;
   if (step === 'penaltyAfterPossession') return penaltyYesNoButtons;
@@ -1223,6 +1226,19 @@ function timeoutButtonsForAliases(aliases, teamNames) {
 function stepCopyForState(state, aliases, teamNames) {
   const step = state.currentStep;
   const copy = stepCopy[step];
+  if (step === 'penaltyEjected' || step === 'penaltyPlayerJersey') {
+    const second = state.tokens?.penaltyDisciplineSlot === 'second';
+    const player = second ? state.tokens.offsettingSecondPlayer : state.tokens?.penaltyPlayer;
+    const count = second ? state.tokens.offsettingSecondUnsportsmanlikeCount : state.tokens?.penaltyUnsportsmanlikeCount;
+    const team = second ? state.tokens.offsettingSecondTeam : state.tokens?.penaltyTeam;
+    if (step === 'penaltyEjected' && player && count === 2) return {
+      ...copy,
+      helper: `${teamNames?.[team] || team} # ${player.jersey} has been charged a second unsportsmanlike conduct penalty. Has this player been ejected?`,
+    };
+    if (step === 'penaltyPlayerJersey' && state.tokens?.penaltyResolution === 'offsetting') return {
+      ...copy, title: `${teamNames?.[team] || team} penalty player`,
+    };
+  }
   if (state.tokens?.kickMenuSelection === 'fieldGoal') {
     if (step === 'kickerJersey') return { ...copy, title: 'Field goal' };
     if (step === 'returnerJersey') return { ...copy, title: 'Field goal return' };

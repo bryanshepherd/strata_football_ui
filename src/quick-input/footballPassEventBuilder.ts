@@ -20,7 +20,7 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
   const isSpike = subtype === 'spike' && intent.result.teamCharged === true;
   const outcome = isSpike ? 'incomplete' : subtype;
   requirePlayer(passer, 'passer', 'participants.primary', errors);
-  if (outcome !== 'interception' && !isSpike) requirePlayer(target, 'target', 'participants.secondary', errors);
+  if (outcome === 'complete' || (outcome === 'incomplete' && !isSpike && target)) requirePlayer(target, 'target', 'participants.secondary', errors);
   if (!['complete', 'incomplete', 'interception', 'spike'].includes(String(subtype))) errors.push({ code: 'UNSUPPORTED_PASS_OUTCOME', message: 'Pass slice supports complete, incomplete, spike, and interception only.', field: 'play.subtype' });
   if (errors.length) return { ok: false, errors, warnings: warning };
 
@@ -65,6 +65,7 @@ export function buildCanonicalPassEvent(intent: FcqiIntent): PassEventBuildResul
     participants.defenders = intent.participants.defenders.map(({ playerId, team, role }) => ({
       playerId, team, role: role === 'other' && hurriedByPlayerIds.includes(playerId) ? 'qbHurry' : role,
     }));
+    if (intent.result.pass?.dropped) pass.dropped = true;
     pass.brokenUpByPlayerId = intent.result.pass?.brokenUpByPlayerId ?? null;
     pass.hurriedByPlayerIds = hurriedByPlayerIds;
   } else if (outcome === 'interception') {
