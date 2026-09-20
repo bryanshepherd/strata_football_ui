@@ -303,7 +303,9 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       : null;
     const staleChallengeReadout = challengeReadout && (event.description !== challengeReadout
       || event.confirmation && event.confirmation.summaryText !== challengeReadout);
-    if (!disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
+    const staleDisciplineReadout = penalties.some(penalty => penalty.unsportsmanlikeCount)
+      && /unsportsmanlike foul \d+ for this player/.test(event.description || '');
+    if (!staleDisciplineReadout && !disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
     changed = true;
     const next = { ...event, penalties };
     const description = challengeReadout || buildFootballEditedPlaySummary(repaired, next);

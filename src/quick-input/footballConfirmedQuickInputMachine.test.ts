@@ -1044,7 +1044,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     const ready = commitPenaltyTokens(state, ['H29']);
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.draft?.penalties[0]).toMatchObject({ unsportsmanlikeCount: 1, playerId: 'H-22' });
-    expect(reviewing.summary?.summaryText).toContain('unsportsmanlike foul 1 for this player');
+    expect(reviewing.summary?.summaryText).toContain('Smith’s first unsportsmanlike foul of the game.');
     expect(reviewing.summary?.summaryText).not.toContain('ejected');
   });
 
@@ -1056,7 +1056,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(commitPenaltyTokens(question, [''], context).status).toBe('token.error');
     const ready = commitPenaltyTokens(question, [answer, 'H29'], context);
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' }, context);
-    expect(reviewing.summary?.summaryText).toContain('unsportsmanlike foul 2 for this player');
+    expect(reviewing.summary?.summaryText).toContain('Smith’s second unsportsmanlike foul of the game.');
     expect(reviewing.summary?.summaryText.includes('ejected from the game')).toBe(ejected);
     const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' }, context);
     expect(confirmed.buildResult?.ok).toBe(true);

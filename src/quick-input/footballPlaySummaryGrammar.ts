@@ -42,8 +42,10 @@ export function generateFootballPlaySummary(intent: FootballDraftIntent): Footba
     ? sentence(`${stripTerminalPunctuation(playSummary)}, ${penaltyText}`)
     : playSummary;
 
+  const disciplineText = intent.penalties.map(penalty => penaltyDisciplineSentence(context, penalty)).filter(Boolean).join(' ');
+
   return {
-    summaryText: formatFootballFumbleReadout({ type: intent.play.family, possession: intent.play.actionTeam, preState: intent.prePlay, result: intent.result }, summaryText),
+    summaryText: formatFootballFumbleReadout({ type: intent.play.family, possession: intent.play.actionTeam, preState: intent.prePlay, result: intent.result }, disciplineText ? `${sentence(summaryText)} ${disciplineText}` : summaryText),
     warnings: context.warnings,
   };
 }
@@ -677,9 +679,21 @@ function penaltyBasicText(context: SummaryContext, penalty: DraftPenalty): strin
   const playerId = penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
   const participant = participantByPlayerId(context.intent, playerId);
   const playerText = participant ? ` (${formatPlayer(participant)})` : '';
-  const countText = penalty.unsportsmanlikeCount
-    ? `, unsportsmanlike foul ${penalty.unsportsmanlikeCount} for this player` : '';
-  return `${teamAbbr(context.intent, penalty.team)} ${name}${playerText}${countText}`;
+  return `${teamAbbr(context.intent, penalty.team)} ${name}${playerText}`;
+}
+
+function penaltyDisciplineSentence(context: SummaryContext, penalty: DraftPenalty): string {
+  const count = penalty.unsportsmanlikeCount;
+  if (!count || penalty.status === 'pending') return '';
+  const participant = participantByPlayerId(context.intent, penalty.penalizedPlayerId ?? penalty.playerId ?? undefined);
+  const displayName = participant?.displayName?.trim() || '';
+  const lastName = participant?.lastName?.trim() || (displayName.includes(',')
+    ? displayName.split(',')[0].trim()
+    : displayName.replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV)$/i, '').split(/\s+/).at(-1));
+  const possessive = lastName ? `${lastName}’s` : participant ? `${formatPlayer(participant)}’s` : 'This player’s';
+  const ordinal = ['first', 'second', 'third'][count - 1]
+    || `${count}${count % 100 >= 11 && count % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[count % 10] || 'th')}`;
+  return `${possessive} ${ordinal} unsportsmanlike foul of the game.`;
 }
 
 function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | undefined {
