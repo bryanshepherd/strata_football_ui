@@ -1,3 +1,4 @@
+import { isFootballEndZoneFumbleRecovery } from '../utils/footballFumbleReadout';
 import { footballSafetyDefender } from '../utils/footballSafety';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { footballReturnTouchdown } from './footballReturnTouchdown';
@@ -183,6 +184,10 @@ const inferredDriveReason = (events, drive, scoringEvent) => {
 };
 
 export const footballScoringPlayText = (envelope, scoringEvent) => {
+  if (isFootballEndZoneFumbleRecovery(scoringEvent)) {
+    const player = participantFullName(envelope, scoringEvent, ['recoveredBy'], scoringEvent.result.fumble.recoveredByPlayerId);
+    return `${player} fumble recovery in the end zone`;
+  }
   const returned = footballReturnTouchdown(scoringEvent);
   if (returned) {
     const player = participantFullName(envelope, scoringEvent, [], returned.playerId);

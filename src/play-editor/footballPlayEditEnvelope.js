@@ -1,3 +1,4 @@
+import { formatFootballFumbleReadout, isFootballEndZoneFumbleRecovery } from '../utils/footballFumbleReadout';
 import { chargeFootballUnsportsmanlike } from '../utils/footballUnsportsmanlike';
 import { repairFootballPenaltyNames } from '../utils/footballPenaltyNames';
 import { footballPenaltyDisplayName, footballPenaltyRulesetFromRules } from '../quick-input/penaltyTable';
@@ -297,6 +298,7 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       missingYardsRepaired = true;
       return { ...penalty, yards };
     });
+    const staleFumbleReadout = isFootballEndZoneFumbleRecovery(event) && formatFootballFumbleReadout(event, event.description || '') !== (event.description || '');
     const missingRekickReadout = isFootballKickoffReplay(event) && !/\bNo play\.[\s\S]*\bRe-kick\b/i.test(event.description || '');
     const challengeReadout = event.type === 'gameControl'
       ? formatFootballChallengeReadout(event.result?.gameControl, repaired.game?.teams)
@@ -305,7 +307,7 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       || event.confirmation && event.confirmation.summaryText !== challengeReadout);
     const staleDisciplineReadout = penalties.some(penalty => penalty.unsportsmanlikeCount)
       && /unsportsmanlike foul \d+ for this player/.test(event.description || '');
-    if (!staleDisciplineReadout && !disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
+    if (!staleFumbleReadout && !staleDisciplineReadout && !disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
     changed = true;
     const next = { ...event, penalties };
     const description = challengeReadout || buildFootballEditedPlaySummary(repaired, next);

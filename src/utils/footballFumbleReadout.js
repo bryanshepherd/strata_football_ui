@@ -1,5 +1,19 @@
+export const isFootballEndZoneFumbleRecovery = (event) => {
+  const result = event?.result || {};
+  const fumble = result.fumble || {};
+  const scoring = result.scoring || {};
+  const goalSide = scoring.team === 'H' ? 'V' : 'H';
+  const recoverySpot = String(fumble.recoverySpot || '').toUpperCase();
+  const returnYards = fumble.returnYards ?? result.return?.returnYards ?? result.turnover?.returnYards ?? 0;
+  return scoring.type === 'touchdown' && ['H', 'V'].includes(scoring.team)
+    && fumble.recoveredByTeam === scoring.team && Number(returnYards) === 0
+    && (recoverySpot === 'GOAL' || recoverySpot === `${goalSide}00` || recoverySpot === `${goalSide}0`);
+};
+
 // Repair presentation from structured play facts without rewriting saved events.
 export const formatFootballFumbleReadout = (event, text) => {
+  const endZoneRecovery = isFootballEndZoneFumbleRecovery(event);
+  if (endZoneRecovery) text = text.replace(/recovered by (.+?) at the (?:[HV] )?goal line/gi, 'fumble recovery in the end zone by $1');
   const result = event?.result || {};
   const fumble = result.fumble || {};
   const scoring = result.scoring || {};
@@ -19,6 +33,7 @@ export const formatFootballFumbleReadout = (event, text) => {
     const gain = yards === 0 ? 'no gain' : yards < 0 ? `a loss of ${-yards} yards` : `${yards} ${yards === 1 ? 'yard' : 'yards'}`;
     text = text.replace(/\brush\b[^,]*/, `rush for ${gain} to the ${fumble.spot}`);
   }
+  if (endZoneRecovery) return text;
   const returnYards = fumble.returnYards ?? result.return?.returnYards;
   if (typeof returnYards === 'number' && !/\breturned\b/.test(text)) {
     const penaltyIndex = text.search(/, (?:Deadball foul, )?PENALTY\b/);
