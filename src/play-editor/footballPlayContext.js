@@ -5,7 +5,7 @@ import {
 } from '../services/footballDashboardService';
 import { applyFootballEventToEnvelope, calculateYardsGained } from '../utils/footballRulesEngine';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
-import { buildFootballEditedPlaySummary } from './footballPlayEditEnvelope';
+import { applyFootballPlayEditToEnvelope, buildFootballEditedPlaySummary } from './footballPlayEditEnvelope';
 
 const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
 const PLAY_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
@@ -108,14 +108,41 @@ export function reviewFootballPlayContexts(envelope) {
   return { reviews, endingContext: canonicalDriveContext(envelope, state) };
 }
 
-export function recalculateFootballPlayContext(envelope, target, { editedAt = new Date().toISOString(), expectedContext } = {}) {
+export function saveFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt = new Date().toISOString() } = {}) {
+  const amended = applyFootballPlayEditToEnvelope(envelope, editedPlay, { editedAt });
+  const index = amended.events.findIndex(event => footballContextEventKey(event) === footballContextEventKey(editedPlay));
+  const original = envelope.events[index];
+  const edited = amended.events[index];
+  if (PLAY_TYPES.has(edited.type) && original.preState) {
+    const before = projectPlay(envelope, original, original.preState);
+    const after = projectPlay(amended, edited, edited.preState);
+    const outcome = projection => JSON.stringify({
+      context: canonicalDriveContext(envelope, projection.liveState),
+      firstDown: projection.firstDown, scoring: projection.scoringUpdate,
+    });
+    const recalculated = recalculateFootballPlayContext(amended, edited, {
+      editedAt, expectedContext: edited.preState, endingOnly: true, previousPlay: original,
+      preserveFirstDown: outcome(before) === outcome(after)
+        || edited.result.firstDown !== original.result.firstDown,
+    });
+    // Saving always refreshes entry from the end of the recorded log. Later
+    // plays keep their starts; trailing operator corrections remain authoritative.
+    const ending = reviewFootballPlayContexts(recalculated).endingContext;
+    return ending ? { ...recalculated, liveState: { ...recalculated.liveState, ...ending } } : recalculated;
+  }
+  return normalizeFootballScoringSetupEnvelope(amended);
+}
+
+export function recalculateFootballPlayContext(envelope, target, {
+  editedAt = new Date().toISOString(), expectedContext, endingOnly = false, preserveFirstDown = false, previousPlay,
+} = {}) {
   const events = envelope?.events || [];
   const index = events.findIndex((event) => footballContextEventKey(event) === footballContextEventKey(target));
   if (index < 0) throw new Error('The selected play is no longer in the game log.');
   const original = events[index];
   if (!PLAY_TYPES.has(original.type) || !accepted(original)) throw new Error('Only a recorded play can be recalculated here.');
   if (JSON.stringify(original) !== JSON.stringify(target)) throw new Error('This play changed while the editor was open. Close and reopen it before recalculating.');
-  if (events.some((event, i) => !accepted(event) || Number(event.sequence) !== i + 1)) {
+  if (!endingOnly && events.some((event, i) => !accepted(event) || Number(event.sequence) !== i + 1)) {
     throw new Error('This game needs a complete sequential event log before recalculating a play.');
   }
   const review = expectedContext ? { expected: expectedContext, previousSequence: events[index - 1]?.sequence }
@@ -131,8 +158,8 @@ export function recalculateFootballPlayContext(envelope, target, { editedAt = ne
 
   // Context-derived shortcuts must not override this explicit recalculation.
   // Confirmed officiating decisions remain authoritative.
-  delete event.postState;
-  delete event.result.firstDown;
+  if (!endingOnly) delete event.postState;
+  if (!preserveFirstDown) delete event.result.firstDown;
   const official = event.result.officialOutcome;
   if (official && !official.operatorVerified && !official.operatorAdjusted) delete event.result.officialOutcome;
 
@@ -180,7 +207,8 @@ export function recalculateFootballPlayContext(envelope, target, { editedAt = ne
   const amended = clone(envelope);
   amended.updatedAt = editedAt;
   amended.events[index] = event;
-  const oldScoring = projectPlay(envelope, original, original.preState).scoringUpdate;
+  const scoringBaseline = previousPlay || original;
+  const oldScoring = projectPlay(envelope, scoringBaseline, scoringBaseline.preState).scoringUpdate;
   for (const [scoring, sign] of [[oldScoring, -1], [projection.scoringUpdate, 1]]) {
     if (scoring?.team && Number.isFinite(Number(scoring.points))) {
       amended.game.teams[scoring.team].score = Number(amended.game.teams[scoring.team].score || 0) + sign * Number(scoring.points);

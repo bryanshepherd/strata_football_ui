@@ -36,8 +36,7 @@ import {
 } from '../data/footballGameEnvelopeFixtures';
 import { createInitialFootballQuickInputState } from '../quick-input/footballConfirmedQuickInputMachine';
 import { deleteFootballPlayFromEnvelope } from '../play-editor/footballPlayDeletion';
-import { footballContextEventKey, recalculateFootballPlayContext, reviewFootballPlayContexts } from '../play-editor/footballPlayContext';
-import { applyFootballPlayEditToEnvelope } from '../play-editor/footballPlayEditEnvelope';
+import { footballContextEventKey, recalculateFootballPlayContext, reviewFootballPlayContexts, saveFootballPlayEditToEnvelope } from '../play-editor/footballPlayContext';
 import {
   deleteFootballBallContextRevision,
   isFootballBallContextRevision,
@@ -738,14 +737,17 @@ export default function FootballScorerShell() {
 
   const savePlayEditor = useCallback((editedPlay) => {
     try {
-      const amendedEnvelope = applyFootballPlayEditToEnvelope(envelope, editedPlay);
-      const normalizedEnvelope = normalizeFootballScoringSetupEnvelope(amendedEnvelope);
+      const normalizedEnvelope = saveFootballPlayEditToEnvelope(envelope, editedPlay);
       const persistedEnvelope = requestedGameId
         ? saveDashboardSeededFootballEnvelope(requestedGameId, normalizedEnvelope) || normalizedEnvelope
         : normalizedEnvelope;
       setLocalUndoStack((current) => [...current, envelope]);
       setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
       setEditingPlay(null);
+      setPossessionClockChange(null);
+      setDriveSummary(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey((current) => current + 1);
       setPlayEditFeedback({
         tone: 'success',
         message: `Play #${editedPlay.sequence} was updated in the local envelope.`,

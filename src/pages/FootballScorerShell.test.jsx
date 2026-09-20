@@ -14,6 +14,7 @@ import {
   normalizeFootballScoringSetupEnvelope,
   saveDashboardSeededFootballEnvelope,
 } from '../services/footballDashboardService';
+import { reviewFootballPlayContexts } from '../play-editor/footballPlayContext';
 import { buildFootballFixtureDebugTrace } from '../utils/footballDebugTrace';
 import { buildFootballParticipationReport } from '../reports/footballParticipationReport';
 import { footballParticipationForEnvelope } from '../utils/footballParticipation';
@@ -396,6 +397,63 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('dialog', { name: /edit play 12/i })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Play #12 was updated in the local envelope.');
     expect(screen.getByRole('button', { name: /undo last change/i })).toBeEnabled();
+  });
+
+  it.each([false, true])('refreshes the latest edited run before the next entry with reload=%s and keeps scoreboard, yards, undo and mirror aligned', async (reload) => {
+    const game = structuredClone(gameEnvelopeFixtures.normal);
+    game.gameId = 'FB-EDIT-LATEST'; game.rosters.gameId = game.gameId;
+    game.game.teams.H.score = 0; game.game.teams.V.score = 0;
+    game.pregame = { ...game.pregame, gamePhase: 'live' };
+    const start = { possession: 'H', down: 1, distance: 10, yardLine: 'H21', lineToGain: 'H31', goalToGo: false, redZone: false, driveId: 'DRV-0001', driveNumber: 1 };
+    game.events = [{ ...game.events[0], eventId: 'EDIT-RUSH-1', sequence: 1, period: 1, clock: '11:00', preState: start, postState: undefined,
+      result: { code: 'tackle', yards: 5, endYardLine: 'H26' }, penalties: [], description: 'Rush for 5 yards.' }];
+    game.liveState = { ...game.liveState, ...start, down: 2, distance: 5, yardLine: 'H26', nextPlayContext: 'H,2,5,H26' };
+    game.drives = { completed: [], current: { driveId: 'DRV-0001', driveNumber: 1, team: 'H', startYardLine: 'H21', startPeriod: 1, startClock: '12:00', plays: 1, yards: 5 } };
+    saveDashboardSeededFootballEnvelope(game.gameId, normalizeFootballScoringSetupEnvelope(game));
+    const mock = mockSubmitSuccess();
+    const saved = () => getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    const route = '/scorer?dashboardGameId=DASH-EDIT-LATEST&envelopeGameId=FB-EDIT-LATEST';
+    let view;
+    try {
+      view = renderScorer(route);
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      const edit = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Edit play 1' }));
+        const dialog = screen.getByRole('dialog', { name: 'Edit Play 1' });
+        fireEvent.change(within(dialog).getByLabelText(/end spot/i), { target: { value: 'H27' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+      };
+      edit();
+      expect(saved().liveState).toMatchObject({ down: 2, distance: 4, yardLine: 'H27' });
+      expect(screen.getAllByText('2 and 4').length).toBeGreaterThan(0);
+      await waitFor(() => expect(submittedRequestAt(mock.fetchSpy).envelope.liveState).toMatchObject({ down: 2, distance: 4, yardLine: 'H27' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+      expect(saved().liveState).toMatchObject({ down: 2, distance: 5, yardLine: 'H26' });
+      edit();
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      if (reload) {
+        view.unmount(); view = renderScorer(route);
+        await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      }
+      expect(screen.getAllByText('2 and 4').length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole('button', { name: /^rush/i }));
+      submitTextToken(/rusher jersey/i, '22');
+      fireEvent.click(screen.getByRole('button', { name: /^tackle/i }));
+      submitTextToken(/^tackler jersey/i, '44'); submitTextToken(/second tackler jersey/i, '');
+      submitTextToken(/final ball spot/i, 'H30');
+      const summary = await screen.findByRole('dialog', { name: /play summary review/i });
+      expect(summary).toHaveTextContent('rush for 3 yards');
+      fireEvent.click(within(summary).getByRole('button', { name: /^submit play$/i }));
+      await waitFor(() => expect(saved().events).toHaveLength(2));
+      expect(saved().events[1].preState).toMatchObject({ down: 2, distance: 4, yardLine: 'H27' });
+      expect(saved().events[1].result.yards).toBe(3);
+      expect(saved().liveState).toMatchObject({ down: 3, distance: 1, yardLine: 'H30' });
+      expect(saved().stats.teams.H).toMatchObject({ rushAttempts: 2, rushYards: 9 });
+      expect(screen.getAllByText('3 and 1').length).toBeGreaterThan(0);
+      const stats = screen.getByTestId('scorer-layout-shell').querySelector('[data-scorer-slot="stats"]');
+      expect(within(within(stats).getByText('Rushing').closest('tr')).getByText('2 for 9 yards')).toBeInTheDocument();
+      await waitFor(() => expect(submittedRequestAt(mock.fetchSpy).envelope.stats.teams.H.rushYards).toBe(9));
+    } finally { view?.unmount(); mock.restore(); }
   });
 
   it('deletes an extra penalty through the editor, mirrors the result, survives reload, and supports undo', async () => {
@@ -2001,6 +2059,8 @@ describe('FootballScorerShell', () => {
 
   it('reviews and edits a final-game actor through the existing editor and refreshes the filtered list', async () => {
     const game = finalEnvelopeWithBallContextRevision('FB-REVIEW-EDIT');
+    // A player-only edit retains an already correct final ball state.
+    game.liveState = { ...game.liveState, ...reviewFootballPlayContexts(game).endingContext };
     const oldPlayer = Object.values(game.rosters.teams.H.players)[0];
     game.events[0].participants = { primary: { playerId: oldPlayer.playerId, team: 'H', role: 'rusher' }, defenders: [] };
     game.rosters.teams.H.players['review-new'] = { playerId: 'review-new', team: 'H', jersey: '99', displayName: 'Review Replacement', active: true };

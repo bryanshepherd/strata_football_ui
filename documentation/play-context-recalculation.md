@@ -1,5 +1,25 @@
 # Play context review and recalculation
 
+## Saving an edited play
+
+Save Changes recalculates the edited play's ending context from its recorded
+starting context and revised result, updates statistics and drive totals, and
+refreshes live entry from the latest accepted ending context. Later Game Control
+ball/possession corrections are applied in order and remain authoritative.
+Saving resets the quick-input state so its next play uses the corrected state.
+Starting context, entered clocks, event identity, and final status stay intact.
+An explicitly edited first-down credit is honored; a copied calculated credit
+is recomputed when the play outcome changes.
+
+The latest play does not require a separate Recalculate click. For example,
+editing a five-yard run from the 21 to a six-yard run ending at the 27 immediately
+shows second-and-four. The following run to the 30 counts as three yards, giving
+nine rushing yards and third-and-one. Existing later plays retain their recorded
+starts and are flagged for the per-play repair workflow below. Saving an older
+play uses the latest ending context for live entry, not the older edited play.
+
+## Repairing recorded starting contexts
+
 The game log marks a play **Context mismatch** when its recorded starting
 possession, down, distance, spot, line to gain, or goal-to-go status differs from
 the preceding ending context. Quarter tabs do not limit this check. Clock values
