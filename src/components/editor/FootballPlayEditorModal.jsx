@@ -478,7 +478,7 @@ const PlayOwnedFields = ({ draft, firstInputRef, roster, teamNames, update, upda
       <>
         <EditorSection subtitle={`Edit only the values recorded for this ${humanize(draft.type)}.`} title={`${humanize(draft.type)} fields`}>
           {common}
-          <KickFields draft={draft} roster={roster} update={update} />
+          <KickFields draft={draft} roster={roster} teamNames={teamNames} update={update} />
         </EditorSection>
         {draft.result?.return && <ReturnFields draft={draft} roster={roster} update={update} />}
         {draft.result?.fumble && <FumbleFields draft={draft} roster={roster} teamNames={teamNames} update={update} />}
@@ -561,7 +561,7 @@ const PassFields = ({ draft, roster, update }) => {
   );
 };
 
-const KickFields = ({ draft, roster, update }) => {
+const KickFields = ({ draft, roster, teamNames, update }) => {
   const kick = draft.result?.kick || {};
   const participantFields = {
     punt: [['punter', 'Punter', 'punter'], ['returner', 'Returner', 'returner']],
@@ -580,6 +580,14 @@ const KickFields = ({ draft, roster, update }) => {
           <ParticipantField key={slot} label={label} onChange={(playerId) => update(['participants', slot], participantFromRoster(roster, playerId, role))} participant={draft.participants?.[slot]} roster={roster} />
         ))}
       </div>
+      {kick.onside && <div className="mt-4 grid gap-3 rounded border border-zinc-300 bg-zinc-50 p-4 sm:grid-cols-2">
+        <RosterSelect label="Onside recovering player" onChange={value => update(['result', 'kick', 'onside', 'recoveredByPlayerId'], value)} roster={roster.filter(player => player.team === kick.onside.recoveredByTeam)} value={kick.onside.recoveredByPlayerId || ''} />
+        <TextField label="Onside recovery spot" onChange={value => update(['result', 'kick', 'onside', 'recoverySpot'], value)} value={kick.onside.recoverySpot || ''} />
+        {kick.onside.recoveredByTeam === draft.participants?.kicker?.team && <>
+          <CheckboxField label={`Did ${teamNames[kick.onside.recoveredByTeam === 'H' ? 'V' : 'H']} touch the ball?`} checked={Boolean(kick.onside.touched)} onChange={value => update(['result', 'kick', 'onside'], { ...kick.onside, touched: value, touchedByPlayerId: value ? kick.onside.touchedByPlayerId || 'TM' : undefined })} />
+          {kick.onside.touched && <RosterSelect label="Who touched the onside kick?" teamRecovery teamLabel="Team" roster={roster.filter(player => player.team !== kick.onside.recoveredByTeam)} value={kick.onside.touchedByPlayerId || 'TM'} onChange={value => update(['result', 'kick', 'onside', 'touchedByPlayerId'], value || 'TM')} />}
+        </>}
+      </div>}
       {draft.result?.kick && (
         <div className="mt-4 grid gap-3 rounded border border-zinc-300 bg-zinc-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
           {kick.kickYards !== undefined && <NumberField label="Kick yards" onChange={(value) => update(['result', 'kick', 'kickYards'], value)} value={kick.kickYards ?? ''} />}
@@ -754,8 +762,8 @@ const ParticipantField = ({ label, onChange, participant, roster }) => (
   <RosterSelect label={label} onChange={onChange} roster={roster} value={participant?.playerId || ''} />
 );
 
-const RosterSelect = ({ label, noneLabel = 'Not recorded', onChange, roster, value, teamRecovery = false }) => (
-  <SelectField label={label} onChange={onChange} options={[['', noneLabel], ...(teamRecovery ? [['TM', 'Team recovery (no player)']] : []), ...roster.map((player) => [player.playerId, playerLabel(player)])]} value={value || ''} />
+const RosterSelect = ({ label, noneLabel = 'Not recorded', onChange, roster, value, teamRecovery = false, teamLabel = 'Team recovery (no player)' }) => (
+  <SelectField label={label} onChange={onChange} options={[['', noneLabel], ...(teamRecovery ? [['TM', teamLabel]] : []), ...roster.map((player) => [player.playerId, playerLabel(player)])]} value={value || ''} />
 );
 
 const EditorSection = ({ children, subtitle, title }) => (

@@ -105,7 +105,14 @@ const summaryParticipants = (envelope, event) => {
     forcedBy: resolve(participants.forcedBy),
     recoveredBy: resolve(participants.recoveredBy),
     penalizedPlayers,
-    others: (participants.others || []).map(resolve),
+    others: [
+      ...(participants.others || []),
+      ...(event.result?.kick?.onside ? [
+        { playerId: event.result.kick.onside.recoveredByPlayerId, team: event.result.kick.onside.recoveredByTeam, role: 'recoverer' },
+        ...(event.result.kick.onside.touched && event.result.kick.onside.touchedByPlayerId !== 'TM'
+          ? [{ playerId: event.result.kick.onside.touchedByPlayerId, team: event.result.kick.onside.recoveredByTeam === 'H' ? 'V' : 'H', role: 'fumbler' }] : []),
+      ] : []),
+    ].map(resolve),
   };
 };
 

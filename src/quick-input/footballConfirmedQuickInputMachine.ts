@@ -130,6 +130,8 @@ export type PuntTokenStep =
   | 'downingPlayerJersey'
   | 'downedSpot';
 export type KickTokenStep =
+  | 'onsideTeam' | 'onsideSpot' | 'onsideTouched' | 'onsideToucher' | 'onsideRecoverer' | 'onsideReturned'
+
   | 'kickMenu'
   | 'kickerJersey'
   | 'kickReceiveResult'
@@ -279,7 +281,13 @@ export type PuntFlowTokens = PassFlowTokens & {
 export type KickFlowTokens = PuntFlowTokens & {
   kickMenuSelection?: KickMenuSelection;
   kicker?: DraftParticipant;
-  kickReceiveResult?: PuntReceiveResultSelection;
+  kickReceiveResult?: PuntReceiveResultSelection | 'onside';
+  onsideTeam?: TeamCode;
+  onsideSpot?: Spot;
+  onsideTouched?: boolean;
+  onsideToucher?: DraftParticipant;
+  onsideRecoverer?: DraftParticipant;
+  onsideReturned?: boolean;
   kickReturnStartSpot?: Spot;
   kickTouchbackSpot?: Spot;
   kickFairCatchSpot?: Spot;
@@ -1000,6 +1008,48 @@ function commitCurrentToken(
       actionContext: 'defense',
       nextStep: 'recoverTeam',
     });
+  }
+
+  if (state.currentStep?.startsWith('onside')) {
+    const tokens = cloneTokens(state.tokens);
+    const next = (currentStep: FootballTokenStep) => ({ state: { ...baseActiveState(state), status: 'token.awaiting' as const, currentStep, currentToken: '', tokens } });
+    if (state.currentStep === 'onsideTeam') {
+      const team = parseTeamCode(state.currentToken, context);
+      if (!team) return { state: tokenError(state, 'INVALID_RECOVER_TEAM', 'Choose the recovering team.', 'result.kick.onside.recoveredByTeam') };
+      tokens.onsideTeam = team;
+      tokens.possessionChanges = [context.play.actionTeam, team].filter((team, index, values) => index === 0 || team !== values[index - 1]);
+      return next('onsideSpot');
+    }
+    if (state.currentStep === 'onsideSpot') {
+      const spot = parseSpot(state.currentToken, context);
+      if (!spot) return { state: tokenError(state, 'INVALID_SPOT', 'Enter the recovery spot.', 'result.kick.onside.recoverySpot') };
+      tokens.onsideSpot = spot;
+      return next(tokens.onsideTeam === context.play.actionTeam ? 'onsideTouched' : 'onsideRecoverer');
+    }
+    if (state.currentStep === 'onsideTouched') {
+      const touched = parseBooleanToken(state.currentToken);
+      if (touched === null) return { state: tokenError(state, 'INVALID_TOUCHED_FLAG', 'Choose Yes (Y) or No (N).', 'result.kick.onside.touched') };
+      tokens.onsideTouched = touched;
+      tokens.onsideToucher = undefined;
+      return next(touched ? 'onsideToucher' : 'onsideRecoverer');
+    }
+    if (state.currentStep === 'onsideToucher') {
+      if (['T', 'TM', 'TEAM'].includes(state.currentToken.trim().toUpperCase())) {
+        tokens.onsideToucher = { participantId: 'onside-touch-TM', playerId: 'TM', team: opposingTeam(context.play.actionTeam), role: 'fumbler', jersey: 'TM', displayName: 'TEAM', resolution: { source: 'explicitUnknown', jerseyToken: 'T', teamScope: opposingTeam(context.play.actionTeam), actionContext: 'specialTeams' } };
+        return next('onsideRecoverer');
+      }
+      return resolveJerseyToken(state, context, { role: 'returner', teamScope: opposingTeam(context.play.actionTeam), actionContext: 'specialTeams', nextStep: 'onsideRecoverer' });
+    }
+    if (state.currentStep === 'onsideRecoverer') {
+      return resolveJerseyToken(state, context, { role: 'recoverer', teamScope: tokens.onsideTeam!, actionContext: 'specialTeams', nextStep: 'onsideReturned' });
+    }
+    const returned = parseBooleanToken(state.currentToken);
+    if (returned === null) return { state: tokenError(state, 'INVALID_RETURNED_FLAG', 'Choose Yes (Y) or No (N).', 'result.kick.onside.returned') };
+    tokens.onsideReturned = returned;
+    tokens.returner = tokens.onsideRecoverer ? asRole(tokens.onsideRecoverer, 'returner') : undefined;
+    tokens.returnFlow = { type: tokens.onsideTeam === context.play.actionTeam ? 'Fumble' : 'Kickoff', fromSpot: tokens.onsideSpot, status: 'active' };
+    if (returned) return next('returnTerminalResult');
+    return finishReturnAtSpotOrClarifyOwnGoal({ ...state, tokens }, context, tokens.onsideSpot, tokens.onsideTeam);
   }
 
   if (state.currentStep === 'recoverTeam') {
@@ -3048,13 +3098,17 @@ function commitKickReceiveResult(
   state: FootballConfirmedQuickInputState,
   context: FootballQuickInputContext,
 ): FootballQuickInputTransitionResult {
+  if (['N', 'ONSIDE'].includes(state.currentToken.trim().toUpperCase())) {
+    return { state: { ...baseActiveState(state), status: 'token.awaiting', currentStep: 'onsideTeam', currentToken: '',
+      tokens: { ...cloneTokens(state.tokens), kickReceiveResult: 'onside', returnFlow: undefined } } };
+  }
   const result = parsePuntReceiveResult(state.currentToken);
   if (!result) {
     return {
       state: tokenError(
         state,
         'INVALID_KICK_RECEIVE_RESULT',
-        'Kick receive result must be R, T, C, O, M, or D.',
+        'Kick receive result must be R, T, C, O, M, D, or N.',
         'result.kick.receiveResultCode',
       ),
     };
@@ -3804,6 +3858,8 @@ function advanceAfterPlayerCommit(
   if (role === 'lateralRecipient') tokens.returner = asRole(participant, 'returner');
   if (role === 'punter') tokens.punter = participant;
   if (role === 'kicker') tokens.kicker = participant;
+  if (state.currentStep === 'onsideToucher') tokens.onsideToucher = asRole(participant, 'fumbler');
+  if (state.currentStep === 'onsideRecoverer') tokens.onsideRecoverer = participant;
   if (role === 'returner') {
     tokens.returner = participant;
     if (tokens.puntReceiveResult === 'muffed' || tokens.kickReceiveResult === 'muffed') {
@@ -4739,6 +4795,8 @@ function buildPuntDraft(
       }),
       penalizedPlayers: [],
       others: [
+        ...(state.tokens.onsideToucher && state.tokens.onsideToucher.playerId !== 'TM' ? [cloneParticipant(state.tokens.onsideToucher)] : []),
+        ...(state.tokens.onsideRecoverer ? [cloneParticipant(state.tokens.onsideRecoverer)] : []),
         ...(state.tokens.downingPlayer ? [cloneParticipant(state.tokens.downingPlayer)] : []),
         ...state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
       ],
@@ -4949,6 +5007,8 @@ function buildFieldGoalDraft(
       defenders: state.tokens.tacklers.map(cloneParticipant),
       penalizedPlayers: [],
       others: [
+        ...(state.tokens.onsideToucher && state.tokens.onsideToucher.playerId !== 'TM' ? [cloneParticipant(state.tokens.onsideToucher)] : []),
+        ...(state.tokens.onsideRecoverer ? [cloneParticipant(state.tokens.onsideRecoverer)] : []),
         ...(state.tokens.downingPlayer ? [cloneParticipant(state.tokens.downingPlayer)] : []),
         ...state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
       ],
@@ -5009,6 +5069,8 @@ function buildTryDraft(
       defenders: state.tokens.tacklers.map(cloneParticipant),
       penalizedPlayers: [],
       others: [
+        ...(state.tokens.onsideToucher && state.tokens.onsideToucher.playerId !== 'TM' ? [cloneParticipant(state.tokens.onsideToucher)] : []),
+        ...(state.tokens.onsideRecoverer ? [cloneParticipant(state.tokens.onsideRecoverer)] : []),
         ...(state.tokens.downingPlayer ? [cloneParticipant(state.tokens.downingPlayer)] : []),
         ...state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
       ],
@@ -5271,10 +5333,14 @@ function buildKickoffDraft(
         role: 'kicker',
         participantId: `kicker-${kicker.playerId}`,
       }),
-      returner: state.tokens.kickReceiveResult === 'muffed' && state.tokens.muffingPlayer
+      returner: state.tokens.kickReceiveResult === 'onside'
+        ? state.tokens.onsideReturned && state.tokens.onsideRecoverer ? cloneParticipant(asRole(state.tokens.onsideRecoverer, 'returner')) : undefined
+        : state.tokens.kickReceiveResult === 'muffed' && state.tokens.muffingPlayer
         ? cloneParticipant(state.tokens.muffingPlayer)
         : state.tokens.returner ? cloneParticipant(state.tokens.returner) : undefined,
-      fumbler: result.fumble && (state.tokens.muffingPlayer ?? state.tokens.returner)
+      fumbler: state.tokens.kickReceiveResult === 'onside'
+        ? state.tokens.returnFumblePlayer ? cloneParticipant(asRole(state.tokens.returnFumblePlayer, 'fumbler')) : undefined
+        : result.fumble && (state.tokens.muffingPlayer ?? state.tokens.returner)
         ? cloneParticipant(state.tokens.muffingPlayer ?? state.tokens.returner!)
         : undefined,
       forcedBy: state.tokens.forcedBy ? cloneParticipant(state.tokens.forcedBy) : undefined,
@@ -5282,6 +5348,8 @@ function buildKickoffDraft(
       defenders: state.tokens.tacklers.map(cloneParticipant),
       penalizedPlayers: [],
       others: [
+        ...(state.tokens.onsideToucher && state.tokens.onsideToucher.playerId !== 'TM' ? [cloneParticipant(state.tokens.onsideToucher)] : []),
+        ...(state.tokens.onsideRecoverer ? [cloneParticipant(state.tokens.onsideRecoverer)] : []),
         ...(state.tokens.downingPlayer ? [cloneParticipant(state.tokens.downingPlayer)] : []),
         ...state.tokens.laterals.map((lateral) => asRole(lateral.toPlayer, 'other')),
       ],
@@ -5293,6 +5361,7 @@ function buildKickoffDraft(
 }
 
 function kickoffSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']['subtype'] {
+  if (tokens.kickReceiveResult === 'onside') return 'onside';
   if (tokens.kickReceiveResult === 'return') return 'returned';
   if (tokens.kickReceiveResult === 'touchback') return 'touchback';
   if (tokens.kickReceiveResult === 'fairCatch') return 'fairCatch';
@@ -5302,7 +5371,29 @@ function kickoffSubtype(tokens: FootballFlowTokens): FootballDraftIntent['play']
   return 'returned';
 }
 
+function buildOnsideResult(tokens: FootballFlowTokens, context: FootballQuickInputContext): FootballDraftIntent['result'] {
+  const team = tokens.onsideTeam!;
+  const returnFumble = buildReturnFumble(tokens);
+  const returnEnd = tokens.returnFumbleSpot ?? finalReturnEndSpot(tokens);
+  const end = returnFumble ? (tokens.fumbleReturned ? tokens.returnEndSpot : tokens.recoverSpot) : tokens.onsideReturned ? returnEnd : tokens.onsideSpot;
+  const nextPossession = returnFumble?.recoveredByTeam ?? team;
+  const outcome = resolveReturnGoalOutcome(tokens, context, nextPossession, end);
+  return {
+    code: outcome.touchdown ? 'touchdown' : outcome.safety ? 'safety' : outcome.touchback ? 'touchback' : 'onside',
+    nextPossession, endYardLine: outcome.fieldEndYardLine, driveEnds: Boolean(outcome.scoring), scoring: outcome.scoring,
+    kick: { catchYardLine: tokens.kickReturnStartSpot, kickYards: deriveKickoffYards(context, tokens.kickReturnStartSpot!),
+      onside: { recoveredByTeam: team, recoveredByPlayerId: tokens.onsideRecoverer!.playerId, recoverySpot: tokens.onsideSpot!,
+        touched: tokens.onsideTouched ?? false, touchedByPlayerId: tokens.onsideToucher?.playerId, returned: tokens.onsideReturned ?? false } },
+    return: tokens.onsideReturned ? { type: team === context.play.actionTeam ? 'Fumble' : 'Kickoff',
+      returnerPlayerId: tokens.onsideRecoverer!.playerId, returnStartYardLine: tokens.onsideSpot, returnEndYardLine: returnEnd,
+      returnYards: deriveReturnYardsForTeam(tokens.onsideSpot!, returnEnd!, team),
+      resultCode: returnTerminalResultCode(tokens.returnTerminalResult), tackledByPlayerIds: tokens.tacklers.map(player => player.playerId) } : undefined,
+    fumble: returnFumble, laterals: buildDraftLaterals(tokens),
+  };
+}
+
 function buildKickoffResult(tokens: FootballFlowTokens, context: FootballQuickInputContext): FootballDraftIntent['result'] {
+  if (tokens.kickReceiveResult === 'onside') return buildOnsideResult(tokens, context);
   const receiveResult = tokens.kickReceiveResult;
   const catchYardLine = kickoffCatchSpot(tokens);
   const endYardLine = kickoffEndSpot(tokens, context);
@@ -6056,7 +6147,7 @@ function puntEndSpot(tokens: FootballFlowTokens, context: FootballQuickInputCont
   return tokens.puntSpot;
 }
 
-function puntResultCode(result: PuntReceiveResultSelection | undefined): FootballDraftIntent['result']['code'] {
+function puntResultCode(result: PuntReceiveResultSelection | 'onside' | undefined): FootballDraftIntent['result']['code'] {
   if (result === 'touchback') return 'touchback';
   if (result === 'fairCatch') return 'fairCatch';
   if (result === 'outOfBounds') return 'outOfBounds';
@@ -6722,7 +6813,7 @@ function parseReturnOwnGoalDecision(value: string): ReturnOwnGoalDecisionSelecti
   return null;
 }
 
-function puntReceiveResultCode(result: PuntReceiveResultSelection | undefined): 'R' | 'T' | 'C' | 'O' | 'M' | 'D' | undefined {
+function puntReceiveResultCode(result: PuntReceiveResultSelection | 'onside' | undefined): 'R' | 'T' | 'C' | 'O' | 'M' | 'D' | undefined {
   if (result === 'return') return 'R';
   if (result === 'touchback') return 'T';
   if (result === 'fairCatch') return 'C';
@@ -6745,6 +6836,8 @@ function nextStepAfterDuplicate(
   role: FootballQuickInputDuplicateResolution['role'],
   state: FootballConfirmedQuickInputState,
 ): FootballTokenStep | undefined {
+  if (state.currentStep === 'onsideToucher') return 'onsideRecoverer';
+  if (state.currentStep === 'onsideRecoverer') return 'onsideReturned';
   if (role === 'rusher') {
     if (state.flow === 'teamPlay' && state.tokens.teamPlaySelection === 'kneel') return 'endSpot';
     return state.flow === 'kick' && state.tokens.patType === 'rush' ? 'patRushResult' : 'result';
@@ -6811,6 +6904,7 @@ function stepForDuplicateRole(
   state?: FootballConfirmedQuickInputState,
 ): FootballTokenStep {
   if (state?.currentStep && String(state.currentStep).endsWith('Jersey')) return state.currentStep;
+  if (state.currentStep === 'onsideToucher' || state.currentStep === 'onsideRecoverer') return state.currentStep;
   if (role === 'rusher') return 'rusherJersey';
   if (role === 'passer') return 'passerJersey';
   if (role === 'receiver') return 'receiverJersey';
@@ -7330,6 +7424,9 @@ function cloneTokens(tokens: FootballFlowTokens): FootballFlowTokens {
     kickMenuSelection: tokens.kickMenuSelection,
     kicker: tokens.kicker ? cloneParticipant(tokens.kicker) : undefined,
     kickReceiveResult: tokens.kickReceiveResult,
+    onsideTeam: tokens.onsideTeam, onsideSpot: tokens.onsideSpot, onsideTouched: tokens.onsideTouched, onsideReturned: tokens.onsideReturned,
+    onsideToucher: tokens.onsideToucher ? cloneParticipant(tokens.onsideToucher) : undefined,
+    onsideRecoverer: tokens.onsideRecoverer ? cloneParticipant(tokens.onsideRecoverer) : undefined,
     kickReturnStartSpot: tokens.kickReturnStartSpot,
     kickTouchbackSpot: tokens.kickTouchbackSpot,
     kickFairCatchSpot: tokens.kickFairCatchSpot,

@@ -277,6 +277,7 @@ export type DraftPassResult = {
 };
 
 export type DraftKickResult = {
+  onside?: { recoveredByTeam: TeamCode; recoveredByPlayerId: string; recoverySpot: Spot; touched: boolean; touchedByPlayerId?: string; returned: boolean };
   kickYards?: number;
   catchYardLine?: Spot;
   outOfBoundsYardLine?: Spot;
@@ -1007,6 +1008,16 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
           errors.push(error('INVALID_SPOT', 'Each lateral requires a canonical spot', `result.laterals.${index}.spot`));
         }
       });
+    }
+  }
+
+  if (isRecord(result.kick) && result.kick.onside !== undefined) {
+    const onside = result.kick.onside;
+    if (!isRecord(onside) || !isTeamCode(onside.recoveredByTeam) || !isCanonicalSpot(onside.recoverySpot)
+      || !isNonEmptyString(onside.recoveredByPlayerId) || onside.recoveredByPlayerId === 'TM'
+      || typeof onside.touched !== 'boolean' || typeof onside.returned !== 'boolean'
+      || (onside.touched && !isNonEmptyString(onside.touchedByPlayerId))) {
+      errors.push(error('INVALID_RESULT', 'Onside kick requires a recovery team, player, spot, touch decision, and return decision.', 'result.kick.onside'));
     }
   }
 

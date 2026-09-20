@@ -7,7 +7,7 @@ import FootballFlowProgress from './FootballFlowProgress';
 const yardLineSteps = new Set([
   'endSpot',
   'teamPlayFumbleSpot',
-  'recoverSpot',
+  'recoverSpot', 'onsideSpot',
   'lateralSpot',
   'caughtAtSpot',
   'passYardLine',
@@ -36,7 +36,7 @@ const secondTacklerSteps = new Set([
 
 const normalizeVisibleInput = (step, value) => {
   if (step === 'gameControlClock') return formatFootballClockEntry(value);
-  return yardLineSteps.has(step) || step === 'recoverTeam' ? value.toUpperCase() : value;
+  return yardLineSteps.has(step) || ['recoverTeam', 'onsideTeam'].includes(step) ? value.toUpperCase() : value;
 };
 
 const stepCopy = {
@@ -100,6 +100,12 @@ const stepCopy = {
     helper: 'Enter the defender who forced the fumble, or press Enter to skip.',
     placeholder: '44',
   },
+  onsideTeam: { title: 'Onside kick', label: 'Recovering Team', helper: 'Choose the recovering team.', placeholder: 'H' },
+  onsideSpot: { title: 'Onside kick', label: 'Recover Spot', helper: 'Enter the recovery spot.', placeholder: 'H45' },
+  onsideTouched: { title: 'Onside kick', label: 'Did the receiving team touch the ball?', helper: '', placeholder: 'N' },
+  onsideToucher: { title: 'Onside kick', label: 'Who touched?', helper: 'Enter a jersey number, or T for Team.', placeholder: 'T' },
+  onsideRecoverer: { title: 'Onside kick', label: 'Recovering player', helper: 'Enter the recovering player’s jersey number.', placeholder: '22' },
+  onsideReturned: { title: 'Onside kick', label: 'Returned?', helper: 'Returned?', placeholder: 'N' },
   recoverTeam: {
     title: 'Fumble recovery',
     label: 'Recovering team',
@@ -687,7 +693,7 @@ const puntReceiveResultButtons = [
   { label: 'Blocked', hotkey: 'B', value: 'B' },
 ];
 
-const kickReceiveResultButtons = puntReceiveResultButtons.filter((button) => button.value !== 'B');
+const kickReceiveResultButtons = [...puntReceiveResultButtons.filter((button) => button.value !== 'B'), { label: 'Onside', hotkey: 'N', value: 'N' }];
 
 const returnTerminalResultButtons = rushResultButtons;
 
@@ -877,7 +883,7 @@ export default function FootballFlowModal({
   const activeButtons = state.currentStep === 'gameControlMenu'
     ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : button.value === 'I' ? participationEditable : button.value === 'R' && gameControlSettingsOnly ? startersEditable : !gameControlSettingsOnly)
     : stepButtons;
-  const buttonOnly = Boolean(activeButtons) && state.currentStep !== 'recoverPlayerJersey';
+  const buttonOnly = Boolean(activeButtons) && !['recoverPlayerJersey', 'onsideToucher'].includes(state.currentStep);
   const questionFirst = ['penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
@@ -1145,6 +1151,9 @@ const ModalFrame = ({ children, eyebrow, miscFumbleActive, onCancel, onStepClick
 );
 
 function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
+  if (step === 'onsideToucher') return [{ label: 'Team', hotkey: 'T', value: 'TM' }];
+  if (step === 'onsideTeam') return ['H', 'V'].map(team => ({ label: teamNames?.[team] || team, hotkey: aliases[team], value: team }));
+  if (['onsideTouched', 'onsideReturned'].includes(step)) return [{ label: 'Yes', hotkey: 'Y', value: 'Y' }, { label: 'No', hotkey: 'N', value: 'N' }];
   if (step === 'recoverPlayerJersey') return [{ label: 'Team recovery (no player)', hotkey: 'T', value: 'TM' }];
   if (step === 'teamPlayMenu') return teamPlayButtons;
   if (step === 'result') return rushResultButtons;
@@ -1285,6 +1294,10 @@ function stepCopyForState(state, aliases, teamNames) {
       ...copy,
       helper: `Free Kick Infraction · ${teamName}${player ? ` · ${player}` : ''} · 5 yards · Accepted · Previous Spot · Repeat Down · Rekick at ${state.tokens?.kickRekickSpot || 'calculated spot'}.`,
     };
+  }
+  if (step === 'onsideTouched') {
+    const receivingTeam = state.tokens?.kicker?.team === 'H' ? 'V' : 'H';
+    return { ...copy, helper: `Did ${teamNames?.[receivingTeam] || receivingTeam} touch the ball?` };
   }
   if (step === 'kickDownedTouchbackDecision') {
     return {

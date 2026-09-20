@@ -15,6 +15,7 @@ export const footballReturnTouchdown = (event) => {
   if ((String(turnover.type).toLowerCase() === 'interception' || ['interception', 'intercepted'].includes(event?.subtype)) && scoring.team !== offense) {
     return { type: 'interception', team: scoring.team, playerId: returned.returnerPlayerId || people.interceptor?.playerId || people.returner?.playerId, yards: returned.returnYards ?? turnover.returnYards ?? 0 };
   }
+  if (returned.type === 'Fumble') return { type: 'fumble', team: scoring.team, playerId: returned.returnerPlayerId, yards: returned.returnYards ?? 0 };
   if (['kickoff', 'punt'].includes(event?.type) && (people.returner?.playerId || returned.returnerPlayerId)) {
     return { type: event.type, team: scoring.team, playerId: returned.returnerPlayerId || people.returner?.playerId, yards: returned.returnYards ?? 0 };
   }

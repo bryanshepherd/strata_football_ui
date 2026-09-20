@@ -1,3 +1,4 @@
+import { footballFumbleRecords } from '../utils/footballOnsideKick';
 import { prepareFootballChallengeEvent } from '../utils/footballChallengeRescore';
 import { withFootballPenaltyIndicator, withFootballReviewIndicator } from '../utils/footballLiveIndicators';
 import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
@@ -1489,8 +1490,8 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     }
   }
 
-  if (result.fumble && !suppressPlayStats) {
-    const fumblerPlayerId = result.fumble.fumblerPlayerId;
+  for (const fumble of suppressPlayStats ? [] : footballFumbleRecords(event)) {
+    const fumblerPlayerId = fumble.fumblerPlayerId;
     const fumbler = event?.participants?.fumbler
       || [
         event?.participants?.returner,
@@ -1498,23 +1499,23 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         event?.participants?.secondary,
         event?.participants?.primary,
       ].find((participant) => participant?.playerId === fumblerPlayerId);
-    const fumbleTeam = teamCharged ? offense : fumbler?.team;
+    const fumbleTeam = fumble.fumblerTeam || (teamCharged ? offense : fumbler?.team);
     teams = updateTeamStat(teams, fumbleTeam, (current) => ({
       ...current,
       fumbles: {
         ...(typeof current.fumbles === 'object' ? current.fumbles : {}),
         num: finiteNumber(current.fumbles?.num ?? current.fumbles) + 1,
-        lost: finiteNumber(current.fumbles?.lost ?? current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
+        lost: finiteNumber(current.fumbles?.lost ?? current.fumblesLost) + (fumble.turnover ? 1 : 0),
       },
     }));
-    if (!teamCharged) {
+    if (!teamCharged && fumblerPlayerId !== 'TM') {
       players = updatePlayerStat(players, fumblerPlayerId, fumbleTeam, (current) => ({
         ...current,
         fumbles: finiteNumber(current.fumbles) + 1,
-        fumblesLost: finiteNumber(current.fumblesLost) + (result.fumble.turnover ? 1 : 0),
+        fumblesLost: finiteNumber(current.fumblesLost) + (fumble.turnover ? 1 : 0),
       }));
     }
-    if (result.fumble.recoveredByPlayerId === 'TM') teams = updateTeamStat(teams, result.fumble.recoveredByTeam, (current) => ({
+    if (fumble.recoveredByPlayerId === 'TM') teams = updateTeamStat(teams, fumble.recoveredByTeam, (current) => ({
       ...current,
       fumbles: {
         ...(typeof current.fumbles === 'object' ? current.fumbles : {}),

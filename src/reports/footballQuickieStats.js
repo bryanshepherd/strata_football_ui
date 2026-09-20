@@ -402,7 +402,7 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
       }
     }
 
-    if (!suppressed && event.type === 'kickoff') {
+    if (!suppressed && event.type === 'kickoff' && event.result?.return?.type !== 'Fumble') {
       const returnerParticipant = event?.participants?.returner;
       const returner = get(returnerParticipant?.playerId, returnerParticipant?.team);
       if (returner) {

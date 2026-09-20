@@ -1,3 +1,4 @@
+import { footballFumbleRecords } from '../utils/footballOnsideKick';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import {
@@ -305,9 +306,8 @@ const fumbleTotals = (players) => ({
 
 const buildTeamFumbleEntry = (events, team) => {
   const entry = { ...teamEntry(team, 'fumbles'), fumbles: 0, fumblesLost: 0 };
-  events.forEach((event) => {
-    const fumble = event?.result?.fumble;
-    if (!fumble || event.possession !== team || hasAcceptedPreviousSpotPenalty(event)) return;
+  events.forEach((event) => footballFumbleRecords(event).forEach((fumble) => {
+    if ((fumble.fumblerTeam || event.possession) !== team || hasAcceptedPreviousSpotPenalty(event)) return;
     const chargedToTeam = fumble.fumblerPlayerId === 'TM'
       || event.result.teamCharged === true
       || (event.type === 'rush' && event.subtype === 'aborted');
@@ -316,7 +316,7 @@ const buildTeamFumbleEntry = (events, team) => {
     entry.fumblesLost += Number(fumble.recoveredByTeam
       ? fumble.recoveredByTeam !== team
       : fumble.turnover === true);
-  });
+  }));
   return entry.fumbles > 0 ? entry : null;
 };
 

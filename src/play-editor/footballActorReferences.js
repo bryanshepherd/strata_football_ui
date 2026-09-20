@@ -30,6 +30,19 @@ const referenceGroups = event => {
   groups.push([actor('fumbler'), resultId('fumble', 'fumblerPlayerId')]);
   groups.push([actor('forcedBy', 'forcedFumble'), resultId('fumble', 'forcedByPlayerId')]);
   groups.push([actor('recoveredBy', 'fumbleRecovery'), resultId('fumble', 'recoveredByPlayerId')]);
+  const onside = event.result?.kick?.onside;
+  if (onside) {
+    for (const [field, role] of [['recoveredByPlayerId', 'recoverer'], ['touchedByPlayerId', 'fumbler']]) {
+      const id = onside[field];
+      const references = [{ path: ['result', 'kick', 'onside', field] }];
+      (event.participants?.others || []).forEach((person, index) => {
+        if (person.playerId === id && person.role === role) references.push({ path: ['participants', 'others', index], actor: true, role });
+      });
+      const group = field === 'recoveredByPlayerId'
+        ? groups.find(group => ['returner', 'recoveredBy'].includes(group[0].path[1]) && group.some(reference => id && idAt(event, reference) === id)) : null;
+      if (group) group.push(...references); else groups.push(references);
+    }
+  }
   const mergeRoles = (left, right) => {
     const a = groups.find(group => group[0].path[1] === left);
     const b = groups.find(group => group[0].path[1] === right);

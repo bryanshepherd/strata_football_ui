@@ -18,6 +18,23 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenLastCalledWith('N');
   });
 
+  it('offers Onside with N and scopes the touch question to the receiving team', () => {
+    const onTokenCommit = vi.fn();
+    const props = { onCancel: vi.fn(), onTokenCommit, teamNames: { H: 'Midway', V: 'Bellarmine' } };
+    const { rerender } = render(<FootballFlowModal {...props} state={{ status: 'token.awaiting', flow: 'kick', currentStep: 'kickReceiveResult', currentToken: '', tokens: {} }} />);
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('N');
+    expect(screen.getByRole('button', { name: /^Onside/ })).toBeInTheDocument();
+    rerender(<FootballFlowModal {...props} state={{ status: 'token.awaiting', flow: 'kick', currentStep: 'onsideTouched', currentToken: '', tokens: { kicker: { team: 'H' } } }} />);
+    expect(screen.getByText('Did Bellarmine touch the ball?')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'y' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
+    rerender(<FootballFlowModal {...props} state={{ status: 'token.awaiting', flow: 'kick', currentStep: 'onsideToucher', currentToken: '', tokens: {} }} />);
+    expect(screen.getByRole('textbox', { name: 'Who touched?' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 't' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('TM');
+  });
+
   it('offers Dropped as a button and D hotkey', () => {
     const onTokenCommit = vi.fn();
     render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{

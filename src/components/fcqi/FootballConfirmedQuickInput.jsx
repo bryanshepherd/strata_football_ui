@@ -39,6 +39,8 @@ export const getHighestFootballFcqiSeedCounter = (envelope) => (
 );
 
 export const getFootballFcqiAssistantMessage = (state) => {
+  const onsideHints = { onsideTeam: 'Choose the recovering team.', onsideSpot: 'Enter the recovery spot.', onsideTouched: 'Did the receiving team touch the ball?', onsideToucher: 'Enter who touched, or T for Team.', onsideRecoverer: 'Enter the recovering player.', onsideReturned: 'Was the onside kick returned?' };
+  if (onsideHints[state?.currentStep]) return onsideHints[state.currentStep];
   if (!state || state.status === 'idle' || state.status === 'cancelled') return 'Choose a play type.';
   if (state.queuedPenaltyRequested) return 'Penalty queued — resolve before submitting';
   if (state.miscFumbleRequested) return 'Misc. fumble added — play can be submitted normally.';

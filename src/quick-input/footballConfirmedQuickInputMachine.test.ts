@@ -1,3 +1,5 @@
+import { projectFootballStatsForEvents } from '../services/footballDashboardService';
+import { footballScoringPlayText } from '../scoring/footballDriveSummary';
 import { footballUnsportsmanlikeKey } from '../utils/footballUnsportsmanlike';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -287,7 +289,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.buildResult.event);
     expect(projected.envelope.liveState).toMatchObject({ possession: 'H', yardLine: 'H40', down: 3, distance: 10 });
     expect(projected.projection.driveTransition.shouldStartNew).toBe(false);
-    expect(projected.envelope.stats.teams.H.fumbles).toMatchObject({ num: 1, lost: 0, teamRecoveries: 1 });
+    expect(projected.envelope.stats.teams.H?.fumbles).toMatchObject({ num: 1, lost: 0, teamRecoveries: 1 });
     expect(projected.envelope.stats.players['H-22']).toMatchObject({ fumbles: 1, fumblesLost: 0 });
     expect(projected.envelope.stats.players.TM).toBeUndefined();
   });
@@ -3945,3 +3947,82 @@ function player(
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
+
+
+describe('onside kickoff', () => {
+  function enter(team: 'H' | 'V', touched: string, returned: boolean) {
+    let state = startKickoffReceiveSelection('H45');
+    const push = (value: string) => { state = commitToken(inputToken(state, value)); expect(state.error).toBeUndefined(); };
+    push('N'); expect(state.currentStep).toBe('onsideTeam');
+    push(team); expect(state.currentStep).toBe('onsideSpot');
+    push('H45');
+    if (team === 'H') { expect(state.currentStep).toBe('onsideTouched'); push(touched ? 'Y' : 'N'); if (touched) { expect(state.currentStep).toBe('onsideToucher'); push(touched); } }
+    expect(state.currentStep).toBe('onsideRecoverer'); push(team === 'H' ? '22' : '44');
+    expect(state.currentStep).toBe('onsideReturned'); push(returned ? 'Y' : 'N');
+    if (returned) { push('.'); push(team === 'H' ? 'V40' : 'H30'); }
+    return state;
+  }
+  it('preserves onside steps through duplicate-player selection', () => {
+    let state = startKickoffReceiveSelection('H45');
+    for (const value of ['N', 'H', 'H45', 'Y', '3']) state = commitToken(inputToken(state, value));
+    expect(state.status).toBe('jersey.disambiguating');
+    state = transition(state, { type: 'SELECT_DUPLICATE_PLAYER', playerId: 'V-3-WR' });
+    expect(state.currentStep).toBe('onsideRecoverer');
+    expect(state.tokens.onsideToucher?.playerId).toBe('V-3-WR');
+    state = commitToken(inputToken(state, '3'));
+    state = transition(state, { type: 'SELECT_DUPLICATE_PLAYER', playerId: 'H-3-LB' });
+    expect(state.currentStep).toBe('onsideReturned');
+    expect(state.tokens.onsideRecoverer?.playerId).toBe('H-3-LB');
+  });
+  it.each(['H', 'V'] as const)('scores a %s onside return in the correct return category', team => {
+    let state = startKickoffReceiveSelection('H45');
+    for (const value of ['N', team, 'H45', ...(team === 'H' ? ['N'] : []), team === 'H' ? '22' : '44', 'Y', '.', 'goal']) state = commitToken(inputToken(state, value));
+    expect(state.draft?.result.scoring).toMatchObject({ team, points: 6 });
+    const reviewed = transition(state, { type: 'GENERATE_SUMMARY' });
+    expect(reviewed.summary?.summaryText).toContain('for a touchdown');
+    const built = transition(reviewed, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' }).buildResult;
+    expect(built?.ok).toBe(true);
+    if (built?.ok) expect(footballScoringPlayText({}, built.event)).toContain(team === 'H' ? 'fumble return' : 'kickoff return');
+  });
+  it('keeps the initial touched onside recovery when the return is fumbled', () => {
+    let state = startKickoffReceiveSelection('H45');
+    for (const value of ['N', 'H', 'H45', 'Y', '44', '22', 'Y', 'F', 'V40', '', 'V', '90', 'V40', 'N']) state = commitToken(inputToken(state, value));
+    expect(state.error).toBeUndefined();
+    expect(state.draft?.result.kick?.onside).toMatchObject({ touchedByPlayerId: 'V-44', recoveredByPlayerId: 'H-22', recoveredByTeam: 'H' });
+    expect(state.draft?.result.fumble).toMatchObject({ fumblerPlayerId: 'H-22', recoveredByTeam: 'V', recoveredByPlayerId: 'V-90' });
+    expect(state.draft?.result.nextPossession).toBe('V');
+    expect(state.draft?.result.return?.returnYards).toBe(15);
+  });
+  for (const team of ['H', 'V'] as const) for (const touch of team === 'H' ? ['', '44', 'T'] : ['']) for (const returned of [false, true]) {
+    it(`${team} recovery, touch=${touch || 'no'}, returned=${returned}`, () => {
+      const ready = enter(team, touch, returned);
+      expect(ready.status).toBe('draft.ready');
+      expect(validateFootballDraftIntent(ready.draft).ok).toBe(true);
+      const reviewed = transition(ready, { type: 'GENERATE_SUMMARY' });
+      expect(reviewed.summary?.summaryText).toContain('onside kickoff');
+      expect(reviewed.summary?.summaryText).toContain('recovered by');
+      if (touch) expect(reviewed.summary?.summaryText).toContain('touched by');
+      const submitted = transition(reviewed, { type: 'CONFIRM_SUMMARY', confirmedAt: '2026-06-20T00:00:05Z' });
+      expect(submitted.buildResult?.ok, JSON.stringify(submitted.buildResult)).toBe(true);
+      if (!submitted.buildResult?.ok) return;
+      const event = { ...submitted.buildResult.event, status: 'accepted', sequence: 1 };
+      const context = makeContext();
+      const envelope = { gameId: 'onside-test', game: context.game, events: [event],
+        rosters: { teams: Object.fromEntries(['H', 'V'].map(side => [side, { players: Object.fromEntries(context.roster.filter(p => p.team === side).map(p => [p.playerId, p])) }])) } };
+      const stats = projectFootballStatsForEvents(envelope);
+      expect(stats.teams.V?.fumbles?.num || 0).toBe(touch ? 1 : 0);
+      expect(stats.teams.V?.fumbles?.lost || 0).toBe(touch ? 1 : 0);
+      expect(stats.teams.H?.fumbles?.num || 0).toBe(0);
+      expect(stats.teams.V?.kickReturns?.num || 0).toBe(team === 'V' && returned ? 1 : 0);
+      expect(stats.teams.H?.kickReturns?.num || 0).toBe(0);
+      const defense = buildFootballDefensiveStatsReport(envelope);
+      expect(defense.teamReports.H.totals.recoveries).toBe(team === 'H' ? 1 : 0);
+      expect(defense.teamReports.H.totals.recoveryYards).toBe(team === 'H' && returned ? 15 : 0);
+      const offense = buildFootballIndividualOffenseReport(envelope);
+      expect(offense.teamReports.V.fumbles.totals.fumbles).toBe(touch ? 1 : 0);
+      expect(buildFootballEditedPlaySummary(envelope, event)).toContain('onside kickoff');
+      if (returned) expect(event.result.return?.type).toBe(team === 'H' ? 'Fumble' : 'Kickoff');
+      else expect(event.result.return).toBeUndefined();
+    });
+  }
+});

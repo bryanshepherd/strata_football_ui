@@ -353,6 +353,28 @@ function kickoffSummary(context: SummaryContext): string {
   const kicker = requiredPlayer(context, participantByRole(intent, 'kicker') ?? primaryParticipant(intent), 'participants.primary');
   const team = teamAbbr(intent, intent.play.actionTeam);
 
+  const onside = intent.result.kick?.onside;
+  if (onside) {
+    const recovery = participantByPlayerId(intent, onside.recoveredByPlayerId);
+    const clauses = [`${team} ${formatPlayer(kicker)} onside kickoff ${distancePhrase(context, intent.result.kick?.kickYards, 'result.kick.kickYards')} ${spotPhrase(context, 'to', intent.result.kick?.catchYardLine, 'result.kick.catchYardLine')}`];
+    if (onside.touched) {
+      const toucher = participantByPlayerId(intent, onside.touchedByPlayerId);
+      clauses.push(`touched by ${onside.touchedByPlayerId === 'TM' ? `${teamAbbr(intent, (intent.play.actionTeam === 'H' ? 'V' : 'H'))} TEAM` : formatPlayer(toucher)}, fumbled`);
+    }
+    clauses.push(`recovered by ${formatPlayer(recovery)} for ${teamAbbr(intent, onside.recoveredByTeam)} ${spotPhrase(context, 'at', onside.recoverySpot, 'result.kick.onside.recoverySpot')}`);
+    if (onside.returned && intent.result.return) {
+      const returned = intent.result.return;
+      const terminal = intent.result.scoring?.type === 'touchdown' && intent.result.scoring.team === onside.recoveredByTeam
+        ? 'for a touchdown' : spotPhrase(context, 'to', returned.returnEndYardLine, 'result.return.returnEndYardLine');
+      clauses.push(`returned ${distancePhrase(context, returned.returnYards, 'result.return.returnYards')} ${terminal}`);
+      if (returned.resultCode === 'O') clauses.push('out-of-bounds');
+      const tacklers = tacklerPhrase(intent.participants.defenders);
+      if (tacklers) clauses.push(tacklers);
+      appendReturnFumbleClauses(context, clauses);
+    }
+    return sentence(joinClauses(clauses));
+  }
+
   if ((intent.result.code === 'touchback' || intent.play.subtype === 'touchback') && !intent.result.return && !intent.result.fumble) {
     return sentence(`${team} ${formatPlayer(kicker)} kickoff into the end zone, touchback`);
   }

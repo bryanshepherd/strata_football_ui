@@ -1,3 +1,4 @@
+import { footballRecoveryRecords } from '../utils/footballOnsideKick';
 import { splitFootballDefensiveYards } from '../utils/footballDefensiveCredit';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { repairFootballPassDefense, isFootballHurryDefender, isFootballBreakupDefender } from '../utils/footballPassDefense';
@@ -452,9 +453,8 @@ const creditDefense = (store, event, envelope) => {
     increment(row, event.type === 'punt' ? 'BlockedPunts' : event.type === 'try' ? 'BlockedPAT' : 'BlockedFG');
   }
 
-  const fumble = event?.result?.fumble;
-  if (fumble) {
-    const forcedBy = event?.participants?.forcedBy
+  for (const fumble of footballRecoveryRecords(event)) {
+    const forcedBy = fumble.fumblerTeam ? null : event?.participants?.forcedBy
       || eventParticipants(event).find((participant) => (
         participant.playerId === fumble.forcedByPlayerId || normalizedRole(participant) === 'forcedfumble'
       ))
@@ -467,7 +467,8 @@ const creditDefense = (store, event, envelope) => {
 
     const recoveredBy = fumble.recoveredByPlayerId === 'TM'
       ? { playerId: `TEAM:${fumble.recoveredByTeam}`, team: fumble.recoveredByTeam, jersey: 'TM', displayName: 'TEAM' }
-      : event?.participants?.recoveredBy
+      : eventParticipants(event).find((participant) => participant.playerId === fumble.recoveredByPlayerId)
+      || event?.participants?.recoveredBy
       || eventParticipants(event).find((participant) => (
         participant.playerId === fumble.recoveredByPlayerId || normalizedRole(participant) === 'recoverer'
       ))
@@ -476,7 +477,7 @@ const creditDefense = (store, event, envelope) => {
       || eventParticipants(event).find((participant) => participant.playerId === fumble.fumblerPlayerId)
       || store.identity.get(fumble.fumblerPlayerId);
     const recoveryTeam = fumble.recoveredByTeam || recoveredBy?.team;
-    const fumblerTeam = fumbler?.team || event.preState?.possession || event.possession;
+    const fumblerTeam = fumble.fumblerTeam || fumbler?.team || event.preState?.possession || event.possession;
     if (recoveredBy?.playerId && recoveryTeam && recoveryTeam !== fumblerTeam) {
       const row = store.get(recoveredBy.playerId, recoveryTeam, recoveredBy);
       initializeDefense(row);

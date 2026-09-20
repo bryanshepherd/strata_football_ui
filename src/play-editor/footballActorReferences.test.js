@@ -30,6 +30,17 @@ const edit = (envelope, update) => {
 };
 
 describe('edited actor reference consistency', () => {
+  it('edits the onside recoverer independently when the kicker also recovered the kick', () => {
+    const envelope = fixture('kickoff', 'onside');
+    Object.assign(envelope.events[0], {
+      participants: { primary: actor('OLD', 'kicker'), kicker: actor('OLD', 'kicker'), recoveredBy: actor('OLD', 'recoverer'), others: [actor('OLD', 'recoverer')], defenders: [] },
+      result: { code: 'onside', endYardLine: 'V45', nextPossession: 'V', kick: { kickYards: 10, catchYardLine: 'V45', onside: { recoveredByTeam: 'V', recoveredByPlayerId: 'OLD', recoverySpot: 'V45', touched: false, returned: false } } },
+    });
+    const updated = edit(envelope, event => { event.result.kick.onside.recoveredByPlayerId = 'NEW'; });
+    expect(updated.events[0].participants.kicker.playerId).toBe('OLD');
+    expect(updated.events[0].participants.recoveredBy.playerId).toBe('NEW');
+    expect(updated.events[0].description).toContain('recovered by #82 Wesley Oxce');
+  });
   it('can change a recovery to the team and back without retaining the old recovery actor', () => {
     const envelope = fixture('rush', null);
     Object.assign(envelope.events[0], {
