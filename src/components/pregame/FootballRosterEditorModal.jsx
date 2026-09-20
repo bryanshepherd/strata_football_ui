@@ -154,7 +154,7 @@ function validateDraft(teams) {
       const name = String(player.displayName || '').trim();
       if (!jersey && !name && !String(player.position || '').trim()) continue;
       if (player.active !== false && !/^\d+$/.test(jersey)) return `${TEAM_LABEL[team]} roster row ${index + 1} needs a numeric jersey number.`;
-      if (!name) return `${TEAM_LABEL[team]} roster row ${index + 1} needs a player name.`;
+
     }
   }
   return '';

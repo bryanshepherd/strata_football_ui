@@ -184,7 +184,7 @@ export type DraftParticipantRole =
   | 'other';
 
 export type DraftPlayerResolution = {
-  source: 'singleMatch' | 'duplicateConfirmed' | 'explicitUnknown';
+  source: 'singleMatch' | 'duplicateConfirmed' | 'rosterAdded' | 'explicitUnknown';
   jerseyToken: string;
   teamScope: TeamCode;
   duplicateCandidateIds?: string[];
@@ -590,6 +590,7 @@ const PARTICIPANT_ROLES = new Set<DraftParticipantRole>([
 
 const RESOLUTION_SOURCES = new Set<DraftPlayerResolution['source']>([
   'singleMatch',
+  'rosterAdded',
   'duplicateConfirmed',
   'explicitUnknown',
 ]);

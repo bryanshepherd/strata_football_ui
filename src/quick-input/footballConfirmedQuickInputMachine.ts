@@ -206,6 +206,7 @@ export type FootballTokenStep = RushTokenStep | PassTokenStep | PuntTokenStep | 
 
 export type FootballConfirmedQuickInputState = {
   status: FootballQuickInputStateName;
+  rosterAdditions?: PlayerResolutionRosterPlayer[];
   flow?: FootballQuickInputFlow;
   currentStep?: FootballTokenStep;
   currentToken: string;
@@ -2824,6 +2825,7 @@ function resolveJerseyToken(
     teamScope: options.teamScope,
     actionContext: options.actionContext,
     roster: context.roster,
+    allowUnnamed: true,
   });
 
   if (resolution.kind === 'error') {
@@ -2853,9 +2855,11 @@ function resolveJerseyToken(
     resolution: resolution.resolution,
   });
 
-  return {
-    state: advanceAfterPlayerCommit(state, participant, options.role, options.nextStep, context),
-  };
+  const nextState = advanceAfterPlayerCommit(state, participant, options.role, options.nextStep, context);
+  if (resolution.resolution.source === 'rosterAdded' || resolution.player.player.active === false) {
+    nextState.rosterAdditions = [{ ...resolution.player.player, playerId: resolution.player.playerId, team: resolution.player.team, jersey: resolution.player.jersey, active: true }];
+  }
+  return { state: nextState };
 }
 
 function selectDuplicatePlayer(
@@ -2897,9 +2901,9 @@ function selectDuplicatePlayer(
   });
   const duplicateNextStep = nextStepAfterDuplicate(state.duplicate.role, state);
 
-  return {
-    state: advanceAfterPlayerCommit(state, participant, state.duplicate.role, duplicateNextStep, context),
-  };
+  const nextState = advanceAfterPlayerCommit(state, participant, state.duplicate.role, duplicateNextStep, context);
+  if (selected.player.active === false) nextState.rosterAdditions = [{ ...selected.player, playerId: selected.playerId, team: selected.team, jersey: selected.jersey, active: true }];
+  return { state: nextState };
 }
 
 function commitRushResult(state: FootballConfirmedQuickInputState): FootballQuickInputTransitionResult {

@@ -95,6 +95,7 @@ export type ResolvePlayerOptions = {
   teamScope: TeamCode | string;
   actionContext: PlayerResolutionActionContext;
   roster: readonly PlayerResolutionRosterPlayer[];
+  allowUnnamed?: boolean;
 };
 
 const OFFENSE_POSITIONS = ['RB', 'TB', 'HB', 'FB', 'QB', 'WR', 'TE', 'LT', 'LG', 'C', 'RG', 'RT', 'OL', 'OT', 'OG'];
@@ -118,11 +119,25 @@ export function resolvePlayerByJersey(options: ResolvePlayerOptions): PlayerReso
     return blockingError('INVALID_TEAM_SCOPE', 'Team scope must be H or V', jerseyToken, teamScope, options.actionContext);
   }
 
-  const matches = options.roster
+  const candidates = options.roster
     .map((player, rosterIndex) => normalizeCandidate(player, rosterIndex))
     .filter((candidate): candidate is ResolvedPlayerCandidate => Boolean(candidate))
-    .filter((candidate) => candidate.player.active !== false)
     .filter((candidate) => candidate.team === teamScope && candidate.jersey === jerseyToken);
+  let matches = candidates.filter(candidate => candidate.player.active !== false);
+  // An explicitly entered inactive jersey keeps its existing identity.
+  if (!matches.length && options.allowUnnamed) matches = candidates;
+  if (!matches.length && options.allowUnnamed) {
+    const usedIds = new Set(options.roster.map(player => String(player.playerId ?? player.id ?? '')));
+    const baseId = `${teamScope}-local-unnamed-${jerseyToken}`;
+    let playerId = baseId;
+    for (let suffix = 2; usedIds.has(playerId); suffix++) playerId = `${baseId}-${suffix}`;
+    const player = { playerId, team: teamScope, jersey: jerseyToken, displayName: '', firstName: '', lastName: '', position: '', active: true };
+    return {
+      kind: 'resolved', jerseyToken, teamScope, actionContext: options.actionContext,
+      player: { player, playerId, team: teamScope, jersey: jerseyToken, displayName: '', rosterIndex: -1 },
+      resolution: createDraftPlayerResolution({ source: 'rosterAdded', jerseyToken, teamScope, actionContext: options.actionContext }),
+    };
+  }
 
   if (matches.length === 0) {
     return blockingError(
@@ -286,7 +301,7 @@ function normalizeCandidate(
     playerId,
     team,
     jersey,
-    displayName: displayNameForPlayer(player, playerId),
+    displayName: displayNameForPlayer(player),
     position: normalizeString(player.position ?? player.pos ?? player.off_position ?? player.def_position ?? player.st_position) || undefined,
     rosterIndex,
   };
@@ -295,7 +310,7 @@ function normalizeCandidate(
 function normalizeJerseyToken(value: unknown): string {
   const normalized = normalizeString(value).replace(/^#/, '');
   if (!/^\d+$/.test(normalized)) return '';
-  return String(Number(normalized));
+  return normalized.replace(/^0+(?=\d)/, '');
 }
 
 function normalizeTeam(value: unknown): TeamCode | null {
@@ -309,13 +324,13 @@ function isTeamScope(value: unknown): value is TeamCode {
   return value === 'H' || value === 'V';
 }
 
-function displayNameForPlayer(player: PlayerResolutionRosterPlayer, fallback: string): string {
-  const direct = normalizeString(player.displayName ?? player.name);
+function displayNameForPlayer(player: PlayerResolutionRosterPlayer): string {
+  const direct = normalizeString(player.displayName) || normalizeString(player.name);
   if (direct) return direct;
 
   const firstName = normalizeString(player.firstName ?? player.FirstName);
   const lastName = normalizeString(player.lastName ?? player.LastName);
-  return [firstName, lastName].filter(Boolean).join(' ') || fallback;
+  return [firstName, lastName].filter(Boolean).join(' ');
 }
 
 function blockingError(

@@ -260,3 +260,34 @@ function player(
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
+
+describe('unnamed roster entries', () => {
+  it.each(['0', '99', '101', '12345678901234567890'])('accepts numeric jersey %s without inventing a name', jerseyToken => {
+    const result = resolvePlayerByJersey({ jerseyToken, teamScope: 'H', actionContext: 'offense', roster: [], allowUnnamed: true });
+    expect(result.kind).toBe('resolved');
+    if (result.kind !== 'resolved') return;
+    expect(result.player).toMatchObject({ jersey: jerseyToken, displayName: '', team: 'H' });
+    expect(result.player.player).toMatchObject({ displayName: '', firstName: '', lastName: '', active: true });
+    expect(result.resolution.source).toBe('rosterAdded');
+  });
+  it('keeps IDs separate by team and avoids an existing ID after a jersey correction', () => {
+    const options = { jerseyToken: '99', actionContext: 'offense' as const, roster: [], allowUnnamed: true };
+    const home = resolvePlayerByJersey({ ...options, teamScope: 'H' });
+    const away = resolvePlayerByJersey({ ...options, teamScope: 'V' });
+    if (home.kind !== 'resolved' || away.kind !== 'resolved') throw new Error('Expected players');
+    expect(home.player.playerId).not.toBe(away.player.playerId);
+    const corrected = resolvePlayerByJersey({ ...options, teamScope: 'H', roster: [{ ...home.player.player, jersey: '98' }] });
+    if (corrected.kind !== 'resolved') throw new Error('Expected player');
+    expect(corrected.player.playerId).not.toBe(home.player.playerId);
+  });
+  it('reuses the same unnamed player on later entries and preserves an inactive player identity', () => {
+    const player = { playerId: 'existing', team: 'H', jersey: '99', displayName: '', active: false };
+    const result = resolvePlayerByJersey({ jerseyToken: '99', teamScope: 'H', actionContext: 'offense', roster: [player], allowUnnamed: true });
+    expect(result.kind).toBe('resolved');
+    if (result.kind === 'resolved') expect(result.player).toMatchObject({ playerId: 'existing', displayName: '' });
+  });
+  it.each(['', 'ABC', '-2', '1.5'])('still rejects a non-jersey token %s', jerseyToken => {
+    const result = resolvePlayerByJersey({ jerseyToken, teamScope: 'H', actionContext: 'offense', roster: [], allowUnnamed: true });
+    expect(result.kind).toBe('error');
+  });
+});

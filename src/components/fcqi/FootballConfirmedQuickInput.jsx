@@ -153,6 +153,7 @@ export default function FootballConfirmedQuickInput({
   onReviewPlays,
   interactionBlocked = false,
   onSubmitAccepted,
+  onRosterPlayersAdded,
   onStateChange,
   replacementMode = false,
   state,
@@ -178,6 +179,7 @@ export default function FootballConfirmedQuickInput({
   });
   const startCounter = useRef(0);
   const submitInFlightRef = useRef(false);
+  const rosterSaveInFlightRef = useRef(false);
   const modalStepHistoryRef = useRef([]);
   const context = useMemo(
     () => buildQuickInputContext(envelope, startMeta, teamAliases),
@@ -193,7 +195,7 @@ export default function FootballConfirmedQuickInput({
     && Boolean(envelope.liveState?.pendingTryTeam);
   const showPatPrompt = awaitingPatTry && !isActiveFcqiPlayFlow(currentState);
   const familyAvailable = (family) => (
-    !(envelope.liveState?.overtime && envelope.liveState.overtime.phase !== 'active')
+    !interactionBlocked && !(envelope.liveState?.overtime && envelope.liveState.overtime.phase !== 'active')
     && isPlayFamilyAvailable(gamePhase, family)
     && (!replacementMode || family !== 'gameControl')
   );
@@ -399,7 +401,22 @@ export default function FootballConfirmedQuickInput({
     publishState(applyEvent({ type: 'GENERATE_SUMMARY' }));
   }, [currentState.status, currentState.draft]);
 
-  const commitToken = (value) => {
+  const persistRosterAdditions = async (nextState, previousState) => {
+    if (!nextState.rosterAdditions?.length) return true;
+    rosterSaveInFlightRef.current = true;
+    try {
+      if (!onRosterPlayersAdded) throw new Error('Roster saving is unavailable.');
+      await onRosterPlayersAdded(nextState.rosterAdditions);
+      delete nextState.rosterAdditions;
+      return true;
+    } catch (error) {
+      publishState({ ...previousState, status: 'token.error', error: { code: 'ROSTER_SAVE_FAILED', message: `Player could not be added: ${error.message}` } });
+      return false;
+    } finally { rosterSaveInFlightRef.current = false; }
+  };
+
+  const commitToken = async (value) => {
+    if (rosterSaveInFlightRef.current) return;
     setPenaltyMessage('');
     clearSubmitStatus();
     const normalizedValue = String(value || '').trim().toUpperCase();
@@ -433,6 +450,7 @@ export default function FootballConfirmedQuickInput({
     }
     const tokenState = applyEvent({ type: 'INPUT_TOKEN', value });
     const nextState = transitionFootballQuickInput(tokenState, { type: 'COMMIT_TOKEN' }, context).state;
+    if (nextState.rosterAdditions?.length && !await persistRosterAdditions(nextState, tokenState)) return;
     const advanced = nextState.status !== 'token.error'
       && (nextState.status !== tokenState.status || nextState.currentStep !== tokenState.currentStep);
     if (advanced) {
@@ -475,10 +493,13 @@ export default function FootballConfirmedQuickInput({
     publishState(previousState);
   };
 
-  const selectDuplicatePlayer = (playerId) => {
+  const selectDuplicatePlayer = async (playerId) => {
+    if (rosterSaveInFlightRef.current) return;
     setPenaltyMessage('');
     clearSubmitStatus();
-    publishState(applyEvent({ type: 'SELECT_DUPLICATE_PLAYER', playerId }));
+    const nextState = applyEvent({ type: 'SELECT_DUPLICATE_PLAYER', playerId });
+    if (nextState.rosterAdditions?.length && !await persistRosterAdditions(nextState, currentState)) return;
+    publishState(nextState);
   };
 
   const submitConfirmedState = async (stateToConfirm) => {

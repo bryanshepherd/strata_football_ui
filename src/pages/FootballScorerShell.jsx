@@ -1,3 +1,6 @@
+import { buildFootballEditedPlaySummary } from '../play-editor/footballPlayEditEnvelope';
+import FootballUnnamedPlayersAlert from '../components/pregame/FootballUnnamedPlayersAlert';
+import { addFootballRosterPlayers } from '../utils/footballUnnamedPlayers';
 import { footballOvertimePending } from '../utils/footballOvertime';
 import { footballPenaltyPendingForInput, withFootballPenaltyIndicator } from '../utils/footballLiveIndicators';
 import FootballOvertimeModal from '../components/scorer/FootballOvertimeModal';
@@ -997,6 +1000,56 @@ export default function FootballScorerShell() {
     }
   }, [dashboardGameId, flushServerSync, requestedGameId]);
 
+  const saveQuickRosterEnvelope = useCallback(async (nextEnvelope) => {
+    const persisted = requestedGameId
+      ? saveDashboardSeededFootballEnvelope(requestedGameId, nextEnvelope)
+      : nextEnvelope;
+    if (!persisted) throw new Error('Roster changes could not be saved to this browser.');
+    setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+    if (requestedGameId && dashboardGameId) {
+      try {
+        enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+        void flushServerSync();
+      } catch (error) {
+        setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `Roster saved locally. Server sync could not be prepared: ${error.message}` });
+      }
+    }
+    return persisted;
+  }, [dashboardGameId, flushServerSync, requestedGameId]);
+
+  const addRosterPlayers = useCallback(async (players) => {
+    const persisted = await saveQuickRosterEnvelope(addFootballRosterPlayers(envelope, players));
+    if (replacementChallenge) {
+      setChallengeBaseEnvelope(persisted);
+      setChallengeWorkingEnvelope(current => current ? addFootballRosterPlayers(current, players) : current);
+    }
+  }, [envelope, replacementChallenge, saveQuickRosterEnvelope]);
+
+  const saveQuickPlayerName = useCallback(async (team, playerId, displayName) => {
+    const player = envelope.rosters?.teams?.[team]?.players?.[playerId];
+    if (!player) throw new Error('This player is no longer in the roster.');
+    const nextEnvelope = {
+      ...envelope,
+      rosters: { ...envelope.rosters, updatedAt: new Date().toISOString(), teams: {
+        ...envelope.rosters.teams,
+        [team]: { ...envelope.rosters.teams[team], players: {
+          ...envelope.rosters.teams[team].players, [playerId]: { ...player, displayName },
+        } },
+      } },
+    };
+    nextEnvelope.events = envelope.events.map(event => {
+      if (event.source?.kind !== 'fcqi' && !String(event.clientEventId || '').startsWith('fcqi-')) return event;
+      const participants = Object.values(event.participants || {}).flat().filter(Boolean);
+      const affected = participants.some(actor => actor.playerId === playerId && actor.team === team)
+        || (event.penalties || []).some(penalty => (penalty.playerId || penalty.penalizedPlayerId) === playerId && penalty.team === team);
+      if (!affected) return event;
+      const description = buildFootballEditedPlaySummary(nextEnvelope, event);
+      return { ...event, description, ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}) };
+    });
+    await saveQuickRosterEnvelope(nextEnvelope);
+  }, [envelope, saveQuickRosterEnvelope]);
+
   const openRosterEditor = useCallback(() => {
     setPregameEditorError('');
     setRosterEditorOpen(true);
@@ -1154,6 +1207,8 @@ export default function FootballScorerShell() {
             fcqiState={fcqiState}
             onCancelReplacement={cancelPlayReplacement}
             onFcqiStateChange={setFcqiState}
+            onRosterPlayersAdded={addRosterPlayers}
+            onSavePlayerName={saveQuickPlayerName}
             onOpenPenaltyEditor={openPenaltyCodeEditor}
             onOpenStarters={openStartersEditor}
             onOpenParticipation={openParticipation}
@@ -1477,6 +1532,8 @@ export const FootballInputSlot = ({
   fcqiResetKey,
   fcqiState,
   onCancelReplacement,
+  onRosterPlayersAdded,
+  onSavePlayerName,
   onFcqiStateChange,
   onOpenPenaltyEditor,
   onOpenTeamAliases,
@@ -1491,6 +1548,8 @@ export const FootballInputSlot = ({
   challengeRescore = false,
   submitAdapter,
 }) => {
+  const [namingPlayer, setNamingPlayer] = useState(false);
+  const standby = !fcqiState || ['idle', 'cancelled'].includes(fcqiState.status);
   const showPregameWorkspace = envelope.game.status === 'pregame';
   const teamAliases = footballTeamAliasesForEnvelope(envelope);
 
@@ -1525,6 +1584,7 @@ export const FootballInputSlot = ({
           teamAliases={teamAliases}
         />
       )}
+      <FootballUnnamedPlayersAlert envelope={envelope} onSaveName={onSavePlayerName} onEditingChange={setNamingPlayer} visible={standby && !replacementPlay && !interactionBlocked} />
       <FootballConfirmedQuickInput
         debug={debugMode}
         envelope={envelope}
@@ -1534,7 +1594,8 @@ export const FootballInputSlot = ({
         onOpenStarters={onOpenStarters}
         onOpenParticipation={onOpenParticipation}
         onReviewPlays={onReviewPlays}
-        interactionBlocked={interactionBlocked}
+        interactionBlocked={interactionBlocked || namingPlayer}
+        onRosterPlayersAdded={onRosterPlayersAdded}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
         replacementMode={Boolean(replacementPlay)}

@@ -3973,3 +3973,84 @@ const PAT_TYPE_BUTTON_EXPECTATIONS = [
   ['Pass', 'P'],
   ['Kick', 'K'],
 ];
+
+describe('unnamed scorer players', () => {
+  beforeEach(() => { window.localStorage.clear(); });
+  it('adds an unknown jersey immediately, keeps it when cancelled, and names it from the standby button', async () => {
+    const game = structuredClone(gameEnvelopeFixtures.normal);
+    game.gameId = 'FB-UNNAMED-QUICK';
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const view = renderScorer(`/scorer?envelopeGameId=${game.gameId}&local=1`);
+    await screen.findByRole('button', { name: 'Rush R' });
+    fireEvent.click(screen.getByRole('button', { name: 'Rush R' }));
+    submitTextToken(/rusher jersey/i, '99');
+    await screen.findByRole('dialog', { name: /rush result/i });
+    let saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    const unnamed = Object.values(saved.rosters.teams.H.players).find(player => player.jersey === '99');
+    expect(unnamed).toMatchObject({ displayName: '', active: true });
+    expect(saved.rosters.teams.H.jerseyIndex['99']).toEqual([unnamed.playerId]);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel quick input' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'HOM #99' }));
+    const dialog = screen.getByRole('dialog', { name: 'Name HOM #99' });
+    fireEvent.change(within(dialog).getByLabelText('Player name'), { target: { value: 'Taylor Quinn' } });
+    fireEvent.submit(within(dialog).getByRole('button', { name: 'Save name' }).closest('form'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'HOM #99' })).not.toBeInTheDocument());
+    saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+    expect(saved.rosters.teams.H.players[unnamed.playerId].displayName).toBe('Taylor Quinn');
+    expect(saved.events).toEqual(game.events);
+    view.unmount();
+    renderScorer(`/scorer?envelopeGameId=${game.gameId}&local=1`);
+    await screen.findByRole('button', { name: 'Rush R' });
+    fireEvent.click(screen.getByRole('button', { name: 'Rush R' }));
+    submitTextToken(/rusher jersey/i, '99');
+    await screen.findByRole('dialog', { name: /rush result/i });
+    expect(Object.values(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.rosters.teams.H.players).filter(player => player.jersey === '99')).toHaveLength(1);
+  });
+});
+
+it('names an already-scored unnamed player without changing their ID or statistics', async () => {
+  window.localStorage.clear();
+  const game = structuredClone(gameEnvelopeFixtures.normal);
+  game.gameId = 'FB-UNNAMED-SCORED';
+  saveDashboardSeededFootballEnvelope(game.gameId, game);
+  renderScorer(`/scorer?envelopeGameId=${game.gameId}&local=1`);
+  fireEvent.click(await screen.findByRole('button', { name: 'Rush R' }));
+  submitTextToken(/rusher jersey/i, '99');
+  await screen.findByRole('dialog', { name: /rush result/i });
+  fireEvent.keyDown(window, { key: '.' });
+  submitTextToken(/final ball spot/i, 'H47');
+  const summary = await screen.findByRole('dialog', { name: /play summary review/i });
+  expect(summary).toHaveTextContent('HOM #99 rush for 3 yards');
+  expect(summary).not.toHaveTextContent('unnamed');
+  fireEvent.click(within(summary).getByRole('button', { name: 'Submit Play' }));
+  const button = await screen.findByRole('button', { name: 'HOM #99' });
+  const before = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+  const playerId = before.events.at(-1).participants.primary.playerId;
+  fireEvent.click(button);
+  const dialog = screen.getByRole('dialog', { name: 'Name HOM #99' });
+  fireEvent.change(within(dialog).getByLabelText('Player name'), { target: { value: 'Taylor Quinn' } });
+  fireEvent.submit(within(dialog).getByRole('button', { name: 'Save name' }).closest('form'));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Name HOM #99' })).not.toBeInTheDocument());
+  const after = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+  expect(after.events.at(-1).participants.primary.playerId).toBe(playerId);
+  expect(after.events.at(-1).description).toContain('#99 Taylor Quinn rush for 3 yards');
+  expect(after.stats).toEqual(before.stats);
+  expect(after.liveState).toEqual(before.liveState);
+  expect(after.rosters.teams.H.players[playerId].displayName).toBe('Taylor Quinn');
+});
+
+it('keeps an unknown jersey at entry if its roster cannot be saved', async () => {
+  window.localStorage.clear();
+  const game = structuredClone(gameEnvelopeFixtures.normal);
+  game.gameId = 'FB-UNNAMED-FAILURE';
+  saveDashboardSeededFootballEnvelope(game.gameId, game);
+  renderScorer(`/scorer?envelopeGameId=${game.gameId}&local=1`);
+  fireEvent.click(await screen.findByRole('button', { name: 'Rush R' }));
+  const storeSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage unavailable'); });
+  try {
+    submitTextToken(/rusher jersey/i, '99');
+    expect(await screen.findByText('Player could not be added: Storage unavailable')).toBeInTheDocument();
+    expect(screen.getByLabelText(/rusher jersey/i)).toHaveValue('99');
+    expect(screen.queryByRole('dialog', { name: /rush result/i })).not.toBeInTheDocument();
+  } finally { storeSpy.mockRestore(); }
+});
