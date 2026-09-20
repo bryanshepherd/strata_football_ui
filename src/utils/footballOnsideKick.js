@@ -1,16 +1,16 @@
 // The initial onside recovery is separate from a later fumble during its return.
 export const footballOnsideRecovery = (event) => {
   const onside = event?.result?.kick?.onside;
-  if (!onside || (event.type ?? event.play?.family) !== 'kickoff') return null;
+  if (!onside || onside.disposition === 'spotBall' || (event.type ?? event.play?.family) !== 'kickoff') return null;
   const kickingTeam = event.participants?.kicker?.team || event.participants?.primary?.team || event.play?.actionTeam;
-  if (onside.recoveredByTeam !== kickingTeam) return null;
+  if (onside.recoveredByTeam !== kickingTeam && !onside.touched) return null;
   return {
     fumblerPlayerId: onside.touched ? onside.touchedByPlayerId : undefined,
     fumblerTeam: kickingTeam === 'H' ? 'V' : 'H',
     recoveredByPlayerId: onside.recoveredByPlayerId, recoveredByTeam: onside.recoveredByTeam,
     spot: event.result.kick.catchYardLine, recoverySpot: onside.recoverySpot,
     returnYards: onside.returned ? event.result.return?.returnYards ?? 0 : 0,
-    turnover: onside.touched === true,
+    turnover: onside.touched === true && onside.recoveredByTeam === kickingTeam,
   };
 };
 

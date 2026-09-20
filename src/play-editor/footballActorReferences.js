@@ -31,7 +31,7 @@ const referenceGroups = event => {
   groups.push([actor('forcedBy', 'forcedFumble'), resultId('fumble', 'forcedByPlayerId')]);
   groups.push([actor('recoveredBy', 'fumbleRecovery'), resultId('fumble', 'recoveredByPlayerId')]);
   const onside = event.result?.kick?.onside;
-  if (onside) {
+  if (onside && onside.disposition !== 'spotBall') {
     for (const [field, role] of [['recoveredByPlayerId', 'recoverer'], ['touchedByPlayerId', 'fumbler']]) {
       const id = onside[field];
       const references = [{ path: ['result', 'kick', 'onside', field] }];

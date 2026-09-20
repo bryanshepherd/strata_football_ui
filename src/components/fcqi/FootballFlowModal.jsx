@@ -7,7 +7,7 @@ import FootballFlowProgress from './FootballFlowProgress';
 const yardLineSteps = new Set([
   'endSpot',
   'teamPlayFumbleSpot',
-  'recoverSpot', 'onsideSpot',
+  'recoverSpot', 'onsideSpot', 'onsideAwardedSpot',
   'lateralSpot',
   'caughtAtSpot',
   'passYardLine',
@@ -100,6 +100,9 @@ const stepCopy = {
     helper: 'Enter the defender who forced the fumble, or press Enter to skip.',
     placeholder: '44',
   },
+  onsideShortChoice: { title: 'Onside kick', label: 'Short kick decision', helper: 'Kick did not travel 10 yards. Spot Ball for receiving team, continue recovery, or Enter Penalty?', placeholder: 'S' },
+  onsideAwardedSpot: { title: 'Spot Ball', label: 'Awarded spot', helper: 'Enter where the receiving team will take possession.', placeholder: 'H40' },
+  onsideAdvanceSpot: { title: 'Advance Ball To Touchback Spot?', label: 'Awarded spot', helper: 'Choose whether to advance the ball to the configured kickoff touchback spot.', placeholder: 'Y' },
   onsideTeam: { title: 'Onside kick', label: 'Recovering Team', helper: 'Choose the recovering team.', placeholder: 'H' },
   onsideSpot: { title: 'Onside kick', label: 'Recover Spot', helper: 'Enter the recovery spot.', placeholder: 'H45' },
   onsideTouched: { title: 'Onside kick', label: 'Did the receiving team touch the ball?', helper: '', placeholder: 'N' },
@@ -1151,6 +1154,8 @@ const ModalFrame = ({ children, eyebrow, miscFumbleActive, onCancel, onStepClick
 );
 
 function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
+  if (step === 'onsideShortChoice') return [{ label: 'Spot Ball', hotkey: 'S', value: 'S' }, { label: 'Recovery', hotkey: 'R', value: 'R' }, { label: 'Enter Penalty', hotkey: 'E', value: 'E' }];
+  if (step === 'onsideAdvanceSpot') return [{ label: 'Advance Ball', hotkey: 'Y', value: 'Y' }, { label: 'Keep Spot', hotkey: 'N', value: 'N' }];
   if (step === 'onsideToucher') return [{ label: 'Team', hotkey: 'T', value: 'TM' }];
   if (step === 'onsideTeam') return ['H', 'V'].map(team => ({ label: teamNames?.[team] || team, hotkey: aliases[team], value: team }));
   if (['onsideTouched', 'onsideReturned'].includes(step)) return [{ label: 'Yes', hotkey: 'Y', value: 'Y' }, { label: 'No', hotkey: 'N', value: 'N' }];
@@ -1191,7 +1196,8 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
     ? state.tokens.offsettingSecondUnsportsmanlikeCount : state.tokens?.penaltyUnsportsmanlikeCount) === 2
     ? [{ label: 'Yes', hotkey: 'Y', value: 'Y' }, { label: 'No', hotkey: 'N', value: 'N' }] : penaltyEjectedButtons;
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
-  if (step === 'penaltyDown') return penaltyDownButtons;
+  if (step === 'penaltyDown') return state.draft?.play?.family === 'kickoff'
+    ? penaltyDownButtons.map(button => button.value === 'R' ? { ...button, label: 'Rekick' } : button) : penaltyDownButtons;
   if (step === 'penaltyAfterPossession') return penaltyYesNoButtons;
   if (step === 'penaltyConfirmContext') return [
     { label: 'Yes, confirm', hotkey: 'Y', value: 'Y' },
@@ -1295,6 +1301,8 @@ function stepCopyForState(state, aliases, teamNames) {
       helper: `Free Kick Infraction · ${teamName}${player ? ` · ${player}` : ''} · 5 yards · Accepted · Previous Spot · Repeat Down · Rekick at ${state.tokens?.kickRekickSpot || 'calculated spot'}.`,
     };
   }
+  if (step === 'penaltyDown' && state.draft?.play?.family === 'kickoff') return { ...copy, title: 'Kickoff penalty', helper: 'Choose Rekick or the awarded down consequence.' };
+  if (step === 'onsideAdvanceSpot') return { ...copy, helper: `Advance the ball from ${state.tokens?.onsideSpot} to ${state.tokens?.onsideAdvanceTarget}?` };
   if (step === 'onsideTouched') {
     const receivingTeam = state.tokens?.kicker?.team === 'H' ? 'V' : 'H';
     return { ...copy, helper: `Did ${teamNames?.[receivingTeam] || receivingTeam} touch the ball?` };

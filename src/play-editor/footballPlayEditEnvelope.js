@@ -107,7 +107,7 @@ const summaryParticipants = (envelope, event) => {
     penalizedPlayers,
     others: [
       ...(participants.others || []),
-      ...(event.result?.kick?.onside ? [
+      ...(event.result?.kick?.onside?.recoveredByPlayerId ? [
         { playerId: event.result.kick.onside.recoveredByPlayerId, team: event.result.kick.onside.recoveredByTeam, role: 'recoverer' },
         ...(event.result.kick.onside.touched && event.result.kick.onside.touchedByPlayerId !== 'TM'
           ? [{ playerId: event.result.kick.onside.touchedByPlayerId, team: event.result.kick.onside.recoveredByTeam === 'H' ? 'V' : 'H', role: 'fumbler' }] : []),

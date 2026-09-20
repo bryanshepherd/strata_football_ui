@@ -786,3 +786,23 @@ describe('FootballFlowModal team aliases', () => {
     expect(input).toHaveAttribute('spellcheck', 'false');
   });
 });
+
+describe('short onside kick choices', () => {
+  it('offers the exact short-kick prompt with S, R, and E shortcuts', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{ status: 'token.awaiting', flow: 'kick', currentStep: 'onsideShortChoice', tokens: {} }} />);
+    expect(screen.getByText('Kick did not travel 10 yards. Spot Ball for receiving team, continue recovery, or Enter Penalty?')).toBeInTheDocument();
+    for (const key of ['s', 'r', 'e']) {
+      fireEvent.keyDown(window, { key });
+      expect(onTokenCommit).toHaveBeenLastCalledWith(key.toUpperCase());
+    }
+  });
+  it('calls the kickoff penalty repeat choice Rekick', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{ status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyDown', tokens: {}, draft: { play: { family: 'kickoff' } } }} />);
+    expect(screen.getByText('Rekick')).toBeInTheDocument();
+    expect(screen.queryByText('Repeat Down')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('R');
+  });
+});

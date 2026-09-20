@@ -4026,3 +4026,96 @@ describe('onside kickoff', () => {
     });
   }
 });
+
+describe('onside kicks shorter than ten yards', () => {
+  function enter(values: string[], context = makeContext(), kickedTo = 'H40') {
+    let state = commitPenaltyTokens(startKick(context), ['O', context.play.actionTeam === 'H' ? '9' : '44', kickedTo, 'N'], context);
+    expect(state.error).toBeUndefined();
+    return commitPenaltyTokens(state, values, context);
+  }
+  function submit(state: FootballConfirmedQuickInputState, context = makeContext()) {
+    expect(state.error).toBeUndefined();
+    expect(validateFootballDraftIntent(state.draft).ok).toBe(true);
+    const reviewed = transitionWithContext(state, { type: 'GENERATE_SUMMARY' }, context);
+    const built = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, context).buildResult;
+    expect(built?.ok, JSON.stringify(built)).toBe(true);
+    if (!built?.ok) throw new Error('Failed to build short onside kick');
+    return { event: { ...built.event, status: 'accepted', sequence: 1 }, summary: reviewed.summary?.summaryText || '' };
+  }
+  it.each([
+    ['H', 'H35', 'H44', true], ['H', 'H35', 'H45', false], ['H', 'H35', 'H46', false],
+    ['V', 'V35', 'V44', true], ['V', 'V35', 'V45', false],
+    ['H', 'H47', 'V45', true], ['V', 'V47', 'H43', false],
+    ['H', 'H30', 'H39', true],
+  ] as const)('measures %s kick from %s to %s in field direction', (team, from, to, short) => {
+    const context = makeContext({ play: { actionTeam: team, possession: null }, prePlay: { possession: null, yardLine: from } });
+    expect(enter([], context, to).currentStep).toBe(short ? 'onsideTouched' : 'onsideTeam');
+  });
+  it('offers recovery after no touch without asking the touch question again', () => {
+    expect(enter(['N']).currentStep).toBe('onsideShortChoice');
+    expect(enter(['N', 'R', 'H', 'H40']).currentStep).toBe('onsideRecoverer');
+    const { event } = submit(enter(['N', 'R', 'H', 'H40', '22', 'N']));
+    const envelope = { game: makeContext().game, events: [event] };
+    expect(buildFootballDefensiveStatsReport(envelope).teamReports.H.totals.recoveries).toBe(1);
+    expect(projectFootballStatsForEvents(envelope).teams.V?.fumbles?.num || 0).toBe(0);
+  });
+  it('spots the ball without recovery, fumble, or return statistics', () => {
+    const selected = enter(['N', 'S']);
+    expect(selected).toMatchObject({ currentStep: 'onsideAwardedSpot', currentToken: 'H40' });
+    const { event, summary } = submit(commitPenaltyTokens(selected, ['H40']));
+    expect(event.result).toMatchObject({ nextPossession: 'V', endYardLine: 'H40', kick: { kickYards: 5, onside: { disposition: 'spotBall' } } });
+    expect(event.result.return).toBeUndefined();
+    expect(summary).toContain('ball spotted at the H40 for VIS');
+    expect(summary).not.toContain('recovered');
+    const envelope = { game: makeContext().game, events: [event] };
+    const stats = projectFootballStatsForEvents(envelope);
+    expect(stats.teams.V?.fumbles?.num || 0).toBe(0);
+    expect(stats.teams.V?.kickReturns?.num || 0).toBe(0);
+    expect(buildFootballDefensiveStatsReport(envelope).teamReports.H.totals.recoveries).toBe(0);
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'V', down: 1, distance: 10, yardLine: 'H40' });
+  });
+  it.each(['Y', 'N'])('offers the fair-catch-style touchback advancement: %s', answer => {
+    const context = makeContext({ prePlay: { possession: null, yardLine: 'V10' } });
+    const state = enter(['N', 'S', 'V05'], context, 'V05');
+    expect(state.currentStep).toBe('onsideAdvanceSpot');
+    const { event } = submit(commitPenaltyTokens(state, [answer], context), context);
+    expect(event.result.endYardLine).toBe(answer === 'Y' ? 'V25' : 'V05');
+    expect(event.result.return).toBeUndefined();
+  });
+  it.each(['H', 'V'] as const)('records an initial touch followed by %s recovery', team => {
+    expect(enter(['Y', '44']).currentStep).toBe('onsideTeam');
+    const { event } = submit(enter(['Y', '44', team, 'H40', team === 'H' ? '22' : '44', 'N']));
+    const stats = projectFootballStatsForEvents({ game: makeContext().game, events: [event] });
+    expect(stats.teams.V.fumbles).toMatchObject({ num: 1, lost: team === 'H' ? 1 : 0 });
+  });
+  it('enters a penalty directly and can require a rekick', () => {
+    const penalty = enter(['N', 'E']);
+    expect(penalty).toMatchObject({ flow: 'penalty', currentStep: 'penaltyName', draft: { play: { family: 'kickoff', subtype: 'onside' } } });
+    const confirmation = commitPenaltyTokens(penalty, ['Free Kick Infraction', 'H', 'A', '', 'P', 'N', 'H30', 'R']);
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ setupContext: 'awaitingKickoff', startNewDrive: false, yardLine: 'H30' });
+    const ready = commitPenaltyTokens(confirmation, ['Y']);
+    // Penalty confirmation already generates the summary.
+    const built = transition(ready, { type: 'CONFIRM_SUMMARY' }).buildResult;
+    expect(built?.ok, JSON.stringify(ready.error)).toBe(true);
+    if (!built?.ok) return;
+    expect(ready.summary?.summaryText).toMatch(/rekick|Re-kick/);
+    expect(ready.summary?.summaryText).not.toContain('replay down');
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: null, down: null, kickoffTeam: 'H', nextPlayContext: 'awaitingKickoff', yardLine: 'H30' });
+    const stats = projectFootballStatsForEvents({ game: makeContext().game, events: [built.event] });
+    expect(stats.teams.H?.kickoffs?.num || 0).toBe(0);
+  });
+  it('can enforce from the end of the kick with receiving-team possession', () => {
+    const confirmation = commitPenaltyTokens(enter(['N', 'E']), ['Free Kick Infraction', 'H', 'A', '', 'S', 'Y', 'H35']);
+    expect(confirmation.currentStep, JSON.stringify(confirmation.error)).toBe('penaltyConfirmContext');
+    expect(confirmation.tokens.penaltyContext).toMatchObject({ possession: 'V', down: 1, distance: 10, yardLine: 'H35', startNewDrive: true });
+    const ready = commitPenaltyTokens(confirmation, ['Y']);
+    const built = transition(ready, { type: 'CONFIRM_SUMMARY' }).buildResult;
+    expect(built?.ok, JSON.stringify(ready.error)).toBe(true);
+    if (!built?.ok) return;
+    const projected = applyFootballScorerEventToEnvelope(getGameEnvelopeFixture('normal'), built.event);
+    expect(projected.envelope.liveState).toMatchObject({ possession: 'V', down: 1, distance: 10, yardLine: 'H35' });
+    expect(ready.summary?.summaryText).not.toMatch(/rekick|Re-kick/);
+  });
+});

@@ -277,7 +277,7 @@ export type DraftPassResult = {
 };
 
 export type DraftKickResult = {
-  onside?: { recoveredByTeam: TeamCode; recoveredByPlayerId: string; recoverySpot: Spot; touched: boolean; touchedByPlayerId?: string; returned: boolean };
+  onside?: { disposition?: 'spotBall'; recoveredByTeam: TeamCode; recoveredByPlayerId?: string; recoverySpot: Spot; touched: boolean; touchedByPlayerId?: string; returned: boolean };
   kickYards?: number;
   catchYardLine?: Spot;
   outOfBoundsYardLine?: Spot;
@@ -1014,7 +1014,8 @@ function validateResult(result: Record<string, unknown>, errors: FootballIntentV
   if (isRecord(result.kick) && result.kick.onside !== undefined) {
     const onside = result.kick.onside;
     if (!isRecord(onside) || !isTeamCode(onside.recoveredByTeam) || !isCanonicalSpot(onside.recoverySpot)
-      || !isNonEmptyString(onside.recoveredByPlayerId) || onside.recoveredByPlayerId === 'TM'
+      || (onside.disposition !== 'spotBall' && (!isNonEmptyString(onside.recoveredByPlayerId) || onside.recoveredByPlayerId === 'TM'))
+      || (onside.disposition === 'spotBall' && (onside.touched || onside.returned || onside.recoveredByPlayerId))
       || typeof onside.touched !== 'boolean' || typeof onside.returned !== 'boolean'
       || (onside.touched && !isNonEmptyString(onside.touchedByPlayerId))) {
       errors.push(error('INVALID_RESULT', 'Onside kick requires a recovery team, player, spot, touch decision, and return decision.', 'result.kick.onside'));

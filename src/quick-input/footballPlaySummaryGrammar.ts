@@ -355,6 +355,11 @@ function kickoffSummary(context: SummaryContext): string {
 
   const onside = intent.result.kick?.onside;
   if (onside) {
+    if (onside.disposition === 'spotBall') {
+      const lead = `${team} ${formatPlayer(kicker)} onside kickoff ${distancePhrase(context, intent.result.kick?.kickYards, 'result.kick.kickYards')} ${spotPhrase(context, 'to', intent.result.kick?.catchYardLine, 'result.kick.catchYardLine')}, kick did not travel 10 yards`;
+      if (isFootballKickoffReplay({ type: 'kickoff', result: intent.result, penalties: intent.penalties })) return sentence(lead);
+      return sentence(`${lead}, ball spotted ${spotPhrase(context, 'at', onside.recoverySpot, 'result.kick.onside.recoverySpot')} for ${teamAbbr(intent, onside.recoveredByTeam)}`);
+    }
     const recovery = participantByPlayerId(intent, onside.recoveredByPlayerId);
     const clauses = [`${team} ${formatPlayer(kicker)} onside kickoff ${distancePhrase(context, intent.result.kick?.kickYards, 'result.kick.kickYards')} ${spotPhrase(context, 'to', intent.result.kick?.catchYardLine, 'result.kick.catchYardLine')}`];
     if (onside.touched) {
@@ -603,7 +608,7 @@ function penaltyText(context: SummaryContext, penalty: DraftPenalty): string {
   if (penalty.status === 'accepted') parts.push(penaltyEnforcementText(context, penalty));
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
-  if ((penalty.downConsequence === 'REPEAT' || penalty.replayDown) && !context.intent.prePlay.setupContext) parts.push('replay down');
+  if ((penalty.downConsequence === 'REPEAT' || penalty.replayDown) && !context.intent.prePlay.setupContext) parts.push(context.intent.play.family === 'kickoff' ? 'rekick' : 'replay down');
   if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   appendPenaltyEjection(context, penalty, parts);
@@ -642,7 +647,7 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
   if (penalty.downConsequence === 'AUTO_FIRST' || penalty.automaticFirstDown) parts.push('automatic first down');
   if (penalty.downConsequence === 'LOSS_OF_DOWN' || penalty.lossOfDown) parts.push('loss of down');
   if ((penalty.downConsequence === 'REPEAT' || penalty.replayDown)
-    && !isFootballKickoffReplay({ type: context.intent.play.family, penalties: context.intent.penalties, result: context.intent.result })) parts.push('replay down');
+    && !isFootballKickoffReplay({ type: context.intent.play.family, penalties: context.intent.penalties, result: context.intent.result })) parts.push(context.intent.play.family === 'kickoff' ? 'rekick' : 'replay down');
   if (penalty.downConsequence === 'DOWN_COUNTS' || penalty.downCounts) parts.push('down counts');
   if (penalty.carryOverToKO) parts.push('enforced on the kickoff');
   appendPenaltyEjection(context, penalty, parts);
