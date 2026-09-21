@@ -944,6 +944,42 @@ const repairSameTeamMuffedPuntStoppedClock = (envelope) => {
   };
 };
 
+// The clock prompt can begin a new drive for the same team after it recovers
+// a punt return fumble. Older saves moved only the new drive's start clock.
+const repairSameTeamPuntRecoveryBoundaries = (envelope) => {
+  const completed = envelope?.drives?.completed || [];
+  const drives = [...completed, envelope?.drives?.current].filter(Boolean);
+  const repairedEnds = new Map();
+  for (const event of envelope?.events || []) {
+    if (event.type !== 'punt' || (event.status && event.status !== 'accepted')) continue;
+    const team = event.participants?.punter?.team || event.participants?.primary?.team || event.possession;
+    const recoveryTeam = event.result?.fumble?.recoveredByTeam
+      || event.result?.turnover?.recoveredBy || event.result?.turnover?.team;
+    if (!validTeamCode(team) || recoveryTeam !== team) continue;
+    const index = completed.findIndex((drive) => drive.driveId === event.preState?.driveId);
+    if (index < 0) continue;
+    const prior = drives[index];
+    const next = drives[index + 1];
+    if (prior.team !== team || next?.team !== team || next.startReason !== 'fumbleRecovery') continue;
+    if (prior.endPeriod !== event.period || next.startPeriod !== event.period) continue;
+    if (normalizeClockText(prior.endClock) !== normalizeClockText(event.clock)) continue;
+    const endSeconds = clockSeconds(prior.endClock);
+    const nextSeconds = clockSeconds(next.startClock);
+    if (endSeconds === null || nextSeconds === null || nextSeconds >= endSeconds) continue;
+    repairedEnds.set(prior.driveId, next.startClock);
+  }
+  if (!repairedEnds.size) return envelope;
+  return {
+    ...envelope,
+    drives: {
+      ...envelope.drives,
+      completed: completed.map((drive) => repairedEnds.has(drive.driveId)
+        ? { ...drive, endClock: repairedEnds.get(drive.driveId) }
+        : drive),
+    },
+  };
+};
+
 const ownTeamRuleSpot = (spot, team) => {
   if (!validTeamCode(team) || !spot) return spot || null;
   if (spot === '50' || spot === 'H50' || spot === 'V50') return '50';
@@ -1029,7 +1065,9 @@ export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptySt
   const repairedHalftimeEnvelope = repairHalfEndedDriveBoundaries(repairedSeriesEnvelope);
   const repairedReturnDriveEnvelope = repairReturnTouchdownDrives(repairedHalftimeEnvelope);
   const repairedDriveEnvelope = repairReturnFumbleDriveReasons(repairedReturnDriveEnvelope);
-  const repairedMuffClockEnvelope = repairSameTeamMuffedPuntStoppedClock(repairedDriveEnvelope);
+  const repairedMuffClockEnvelope = repairSameTeamPuntRecoveryBoundaries(
+    repairSameTeamMuffedPuntStoppedClock(repairedDriveEnvelope),
+  );
   const replayedStats = repairFootballStatsFromCompleteEventLog(repairedMuffClockEnvelope, rebuildEmptyStats);
   const repairedStats = repairFootballPossessionTimeFromDrives(repairedMuffClockEnvelope, replayedStats);
   const statsEnvelope = repairedStats === repairedMuffClockEnvelope?.stats
@@ -2206,7 +2244,16 @@ export function recordFootballPossessionClock(envelope, {
   const completedDrives = Array.isArray(envelope.drives?.completed)
     ? envelope.drives.completed.map((drive) => ({ ...drive }))
     : [];
-  if (validTeamCode(previousPossession) && previousPossession !== nextPossession) {
+  const sameTeamNewDrive = validTeamCode(previousPossession)
+    && previousPossession === nextPossession
+    && Boolean(envelope.drives?.current?.driveId)
+    && envelope.drives.current.team === nextPossession
+    && envelope.drives.current.driveId !== (endedDriveId || latestEvent?.preState?.driveId)
+    && completedDrives.some((drive) => (
+      drive.driveId === (endedDriveId || latestEvent?.preState?.driveId)
+      && drive.team === previousPossession
+    ));
+  if (validTeamCode(previousPossession) && (previousPossession !== nextPossession || sameTeamNewDrive)) {
     const targetDriveId = endedDriveId || latestEvent?.preState?.driveId;
     const targetIndex = targetDriveId
       ? completedDrives.findIndex((drive) => drive.driveId === targetDriveId)
@@ -2250,7 +2297,7 @@ export function recordFootballPossessionClock(envelope, {
       ))
     : envelope.events;
 
-  return {
+  const updatedEnvelope = {
     ...envelope,
     events,
     clock: {
@@ -2272,6 +2319,9 @@ export function recordFootballPossessionClock(envelope, {
       teams,
     },
   };
+  return sameTeamNewDrive
+    ? { ...updatedEnvelope, stats: repairFootballPossessionTimeFromDrives(updatedEnvelope, updatedEnvelope.stats) }
+    : updatedEnvelope;
 }
 
 const resolveTimeoutLimit = (rules = {}) => {

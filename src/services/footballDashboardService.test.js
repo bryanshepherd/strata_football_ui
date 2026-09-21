@@ -2974,6 +2974,71 @@ describe('local football test-game projection', () => {
     expect(recorded.drives.current).toMatchObject({ team: 'V', startPeriod: 1, startClock: '07:30' });
   });
 
+  const sameTeamPuntEnvelope = (subtype = 'returned') => {
+    const envelope = clone(getGameEnvelopeFixture('normal'));
+    envelope.clock = { ...envelope.clock, period: 2, clock: '01:09' };
+    envelope.stats.teams = {};
+    envelope.events = [{
+      eventId: 'SAME-TEAM-PUNT', sequence: 1, status: 'accepted', type: 'punt', subtype,
+      period: 2, clock: '01:49', possession: 'V',
+      preState: { possession: 'V', driveId: 'DRV-0017' },
+      participants: { punter: { team: 'V' }, returner: { team: 'H' } },
+      result: { code: subtype, nextPossession: 'V', driveEnds: true,
+        fumble: { recoveredByTeam: 'V', turnover: true },
+        turnover: { type: subtype === 'muffed' ? 'muffedKick' : 'fumble', recoveredBy: 'V' } },
+    }];
+    envelope.drives = {
+      completed: [{ driveId: 'DRV-0017', driveNumber: 17, team: 'V', startReason: 'turnoverOnDowns',
+        startPeriod: 2, startClock: '01:49', endPeriod: 2, endClock: '01:49', plays: 4, result: 'punt' }],
+      current: { driveId: 'DRV-0018', driveNumber: 18, team: 'V', startReason: 'fumbleRecovery',
+        startPeriod: 2, startClock: '01:49', plays: 0 },
+    };
+    return envelope;
+  };
+
+  it.each(['returned', 'muffed'])('records both drive boundaries when the kicking team recovers a %s punt', (subtype) => {
+    const envelope = sameTeamPuntEnvelope(subtype);
+    const recorded = recordFootballPossessionClock(envelope, {
+      previousPossession: 'V', nextPossession: 'V', period: 2, clock: '01:09', endedDriveId: 'DRV-0017',
+    });
+    expect(recorded.drives.completed[0].endClock).toBe('01:09');
+    expect(recorded.drives.current.startClock).toBe('01:09');
+    expect(recorded.stats.teams.V.timeOfPossession).toBe(40);
+    expect(recorded.stats.teams.V.possessionSegments).toEqual([
+      { startPeriod: 2, startClock: '01:49', endPeriod: 2, endClock: '01:09' },
+      { startPeriod: 2, startClock: '01:09' },
+    ]);
+    expect(envelope.drives.completed[0].endClock).toBe('01:49');
+  });
+
+  it.each([false, true])('repairs the saved same-team punt gap with a completed recovery drive: %s', (completed) => {
+    const envelope = sameTeamPuntEnvelope();
+    envelope.drives.current.startClock = '01:09';
+    envelope.clock.clock = '00:00';
+    if (completed) {
+      envelope.drives.completed.push({ ...envelope.drives.current, endPeriod: 2, endClock: '00:00', result: 'endOfHalf' });
+      envelope.drives.current = null;
+    }
+    const normalized = normalizeFootballScoringSetupEnvelope(envelope);
+    expect(normalized.drives.completed[0].endClock).toBe('01:09');
+    expect(normalized.stats.teams.V.timeOfPossession).toBe(109);
+    expect(normalizeFootballScoringSetupEnvelope(normalized)).toEqual(normalized);
+    expect(envelope.drives.completed[0].endClock).toBe('01:49');
+  });
+
+  it.each(['differentTeam', 'differentPeriod', 'correctedEnd', 'overlap', 'rejected', 'differentDrive'])('does not infer a same-team punt boundary for %s', (variation) => {
+    const envelope = sameTeamPuntEnvelope();
+    envelope.drives.current.startClock = '01:09';
+    if (variation === 'differentTeam') envelope.drives.current.team = 'H';
+    if (variation === 'differentPeriod') envelope.drives.current.startPeriod = 3;
+    if (variation === 'correctedEnd') envelope.drives.completed[0].endClock = '01:30';
+    if (variation === 'overlap') envelope.drives.current.startClock = '02:00';
+    if (variation === 'rejected') envelope.events[0].status = 'rejected';
+    if (variation === 'differentDrive') envelope.events[0].preState.driveId = 'OTHER';
+    const originalEnd = envelope.drives.completed[0].endClock;
+    expect(normalizeFootballScoringSetupEnvelope(envelope).drives.completed[0].endClock).toBe(originalEnd);
+  });
+
   it('uses the active drive start clock when possession is changed manually', () => {
     const envelope = clone(getGameEnvelopeFixture('normal'));
     envelope.stats.teams = {};
