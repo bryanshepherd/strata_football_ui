@@ -1,3 +1,4 @@
+import { footballSpotFoulStatisticalYards } from './footballStatisticalYardage';
 import { validPenaltyBallContext } from './footballPenaltyPossession.js';
 import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
 
@@ -556,7 +557,8 @@ function applyPenaltyOfficialOutcome(envelope, event, preState, official, option
         driveNumber: preState.driveNumber,
       }),
       driveTransition: continueDrive(preState.driveId),
-      yardsGained: calculateYardsGained(preState.yardLine, yardLine, possession),
+      yardsGained: footballSpotFoulStatisticalYards(event, rules.fieldLength || 100)
+        ?? calculateYardsGained(preState.yardLine, yardLine, possession),
       firstDown: official.firstDownAwarded === true,
       scoringUpdate: null,
     });
@@ -611,7 +613,8 @@ function applyPenaltyOfficialOutcome(envelope, event, preState, official, option
       reason: 'penaltyOfficialOutcome',
     },
     yardsGained: !kickoffEvent && previousPossession
-      ? calculateYardsGained(preState.yardLine, yardLine, previousPossession)
+      ? footballSpotFoulStatisticalYards(event, rules.fieldLength || 100)
+        ?? calculateYardsGained(preState.yardLine, yardLine, previousPossession)
       : null,
     firstDown: official.firstDownAwarded === true,
     scoringUpdate: null,

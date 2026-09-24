@@ -1,6 +1,7 @@
+import { withFootballReportYardage } from './footballReportYardage';
 import { formatFootballReportDate } from './footballScoringSummary';
 import { confirmedPenaltyAfterPossessionChange } from '../utils/footballPenaltyPossession';
-import { footballOffensivePlayYards } from '../scoring/footballReturnTouchdown';
+import { footballStatisticalFoulSpot, footballStatisticalRushYards, footballRushReportCorrection, footballPassReportCorrection } from '../utils/footballStatisticalYardage';
 import { footballReturnTouchdownDriveEnd, footballPointsOffTurnovers } from '../scoring/footballTurnoverScoring';
 
 const TEAM_CODES = ['V', 'H'];
@@ -106,11 +107,11 @@ export const firstDownBreakdown = (envelope, events, team, total, period = 0) =>
       || replayDownPenalty(event)
       || offenseLostPossession(event, team)
     ) return;
-    const touchdown = event?.result?.scoring?.type === 'touchdown';
+    const touchdown = !footballStatisticalFoulSpot(event) && event?.result?.scoring?.type === 'touchdown';
     const start = relativeSpot(event?.preState?.yardLine, team, length);
     const end = touchdown
       ? length
-      : relativeSpot(event?.result?.endYardLine, team, length);
+      : relativeSpot(footballStatisticalFoulSpot(event) || event?.result?.endYardLine, team, length);
     const gained = Number.isFinite(start) && Number.isFinite(end) ? end - start : finiteNumber(event?.result?.yards);
     const earned = touchdown
       ? touchdownFirstDown(events, event, team, length)
@@ -126,7 +127,7 @@ export const firstDownBreakdown = (envelope, events, team, total, period = 0) =>
   };
 };
 
-const rushingBreakdown = (events, team, authoritativeYards) => {
+const rushingBreakdown = (events, team, authoritativeYards, length) => {
   let gained = 0;
   let lost = 0;
   events.forEach((event) => {
@@ -134,7 +135,7 @@ const rushingBreakdown = (events, team, authoritativeYards) => {
     const sack = event.type === 'pass'
       && (event.subtype === 'sack' || event?.result?.pass?.outcome === 'sack');
     if (event.type !== 'rush' && !sack) return;
-    const yards = footballOffensivePlayYards(event);
+    const yards = footballStatisticalRushYards(event, length);
     if (yards >= 0) gained += yards;
     else lost += Math.abs(yards);
   });
@@ -264,19 +265,10 @@ const explicitReturnStats = (events, team, type) => {
   };
 };
 
-const completedPassTurnoverYardageCorrection = (events, team, length) => events.reduce((correction, event) => {
-  if (
-    event.type !== 'pass'
-    || event.possession !== team
-    || event?.result?.pass?.outcome !== 'complete'
-    || !event?.result?.fumble?.turnover
-  ) return correction;
-  const start = relativeSpot(event?.preState?.yardLine, team, length);
-  const terminal = relativeSpot(event?.result?.pass?.terminalYardLine, team, length);
-  if (!Number.isFinite(start) || !Number.isFinite(terminal)) return correction;
-  const credited = finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards);
-  return correction + ((terminal - start) - credited);
-}, 0);
+const completedPassTurnoverYardageCorrection = (events, team, length) => events.reduce((correction, event) => (
+  event.type === 'pass' && event.possession === team && !acceptedPreviousSpotPenalty(event)
+    ? correction + footballPassReportCorrection(event, length) : correction
+), 0);
 
 const returnStats = (events, team, source, type) => {
   const paths = {
@@ -404,9 +396,9 @@ const teamProjection = (envelope, events, team) => {
   const firstDownTypes = firstDownBreakdown(envelope, events, team, firstDowns);
   const rushAttempts = readNumber(source, ['rushAttempts', 'rush.att', 'rushing.att']);
   const rushCorrection = events.reduce((sum, event) => event.type === 'rush' && event.possession === team && !acceptedPreviousSpotPenalty(event)
-    ? sum + footballOffensivePlayYards(event, fieldLength(envelope)) - finiteNumber(event.result?.yards) : sum, 0);
+    ? sum + footballRushReportCorrection(event, fieldLength(envelope)) : sum, 0);
   const rushYards = readNumber(source, ['rushYards', 'rush.yds', 'rushing.yds']) + rushCorrection;
-  const rushing = rushingBreakdown(events, team, rushYards);
+  const rushing = rushingBreakdown(events, team, rushYards, fieldLength(envelope));
   const passCompletions = readNumber(source, ['pass.cmp', 'passing.cmp']);
   const passAttempts = readNumber(source, ['pass.att', 'passing.att']);
   const passInterceptions = readNumber(source, ['pass.int', 'passing.int']);
@@ -539,6 +531,7 @@ const reportRows = (teamStats) => {
 };
 
 export const buildFootballTeamStatsReport = (envelope) => {
+  envelope = withFootballReportYardage(envelope);
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the team stats report.');
   }

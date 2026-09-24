@@ -1480,7 +1480,9 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
         ? finiteNumber(projection?.yardsGained, result.pass?.passingYards ?? result.yards)
         : finiteNumber(result.pass?.passingYards ?? result.yards, projection?.yardsGained)
       : event.subtype === 'sack'
-        ? finiteNumber(result.yards)
+        ? hasAcceptedSpotOfFoulPenalty(event)
+          ? finiteNumber(projection?.yardsGained, result.yards)
+          : finiteNumber(result.yards)
         : 0;
     teams = updateTeamStat(teams, offense, (current) => {
       const pass = { ...(current.pass || {}) };
@@ -1514,7 +1516,9 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     }
 
     if (event.subtype === 'sack' || outcome === 'sack') {
-      const sackYards = finiteNumber(result.yards, projection?.yardsGained);
+      const sackYards = hasAcceptedSpotOfFoulPenalty(event)
+        ? finiteNumber(projection?.yardsGained, result.yards)
+        : finiteNumber(result.yards, projection?.yardsGained);
       teams = updateTeamStat(teams, offense, (current) => ({
         ...current,
         rushAttempts: finiteNumber(current.rushAttempts) + 1,

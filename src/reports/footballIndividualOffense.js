@@ -1,3 +1,4 @@
+import { footballStatisticalRushYards, footballStatisticalPassYards } from '../utils/footballStatisticalYardage';
 import { footballFumbleRecords } from '../utils/footballOnsideKick';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { formatFootballClockDisplay } from '../utils/footballClock';
@@ -76,7 +77,7 @@ const buildTeamChargedEntries = (envelope, events, team) => {
     const outcome = event?.result?.pass?.outcome || event?.subtype;
     const sack = event?.type === 'pass' && outcome === 'sack';
     if (event?.type === 'rush' || sack) {
-      const yards = finiteNumber(event?.result?.yards);
+      const yards = footballStatisticalRushYards(event, envelope?.game?.rules?.fieldLength || 100);
       rushing.rushAttempts += 1;
       rushing.rushYards += yards;
       if (yards >= 0) rushing.rushGain += yards;
@@ -87,7 +88,7 @@ const buildTeamChargedEntries = (envelope, events, team) => {
     if (event?.type === 'pass') {
       const isAttempt = ['complete', 'incomplete', 'interception'].includes(outcome);
       const yards = outcome === 'complete'
-        ? finiteNumber(event?.result?.pass?.passingYards ?? event?.result?.yards)
+        ? footballStatisticalPassYards(event, envelope?.game?.rules?.fieldLength || 100)
         : 0;
       passing.passAttempts += Number(isAttempt);
       passing.passCompletions += Number(outcome === 'complete');

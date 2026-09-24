@@ -1,3 +1,4 @@
+import { footballStatisticalFoulSpot } from '../utils/footballStatisticalYardage';
 import { formatFootballReportDate } from './footballScoringSummary';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { footballReturnTouchdownDriveEnd } from '../scoring/footballTurnoverScoring';
@@ -177,11 +178,11 @@ const conversionAttempt = (envelope, event) => {
 
   const length = fieldLength(envelope);
   const start = relativeSpot(event?.preState?.yardLine, team, length);
-  const end = relativeSpot(event?.result?.endYardLine, team, length);
+  const end = relativeSpot(footballStatisticalFoulSpot(event) || event?.result?.endYardLine, team, length);
   const yards = Number.isFinite(start) && Number.isFinite(end)
     ? end - start
     : finiteNumber(event?.result?.yards, 0);
-  const touchdown = event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === team;
+  const touchdown = !footballStatisticalFoulSpot(event) && event?.result?.scoring?.type === 'touchdown' && event.result.scoring.team === team;
   const madeWithoutPenalty = !possessionLost(event, team)
     && (touchdown || yards >= finiteNumber(event?.preState?.distance, Number.POSITIVE_INFINITY));
   if (!madeWithoutPenalty && penalties.some((penalty) => penalty.status === 'accepted' && penalty.automaticFirstDown)) return null;
