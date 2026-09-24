@@ -312,12 +312,17 @@ export function repairFootballPlayReadoutsInEnvelope(envelope) {
       : null;
     const staleChallengeReadout = challengeReadout && (event.description !== challengeReadout
       || event.confirmation && event.confirmation.summaryText !== challengeReadout);
-    const staleDisciplineReadout = penalties.some(penalty => penalty.unsportsmanlikeCount)
-      && /unsportsmanlike foul \d+ for this player/.test(event.description || '');
+    // Refresh counted ejection narratives with the count before the ejection.
+    // Only the readout changes; the operator's recorded decisions stay intact.
+    const disciplineDescription = penalties.some(penalty => penalty.unsportsmanlikeCount && penalty.ejected)
+      ? buildFootballEditedPlaySummary(repaired, { ...event, penalties }) : null;
+    const staleDisciplineReadout = (penalties.some(penalty => penalty.unsportsmanlikeCount)
+      && /unsportsmanlike foul \d+ for this player/.test(event.description || ''))
+      || (disciplineDescription && disciplineDescription !== event.description);
     if (!staleFumbleReadout && !staleDisciplineReadout && !disciplineChanged && !missingYardsRepaired && !missingRekickReadout && !staleChallengeReadout) return event;
     changed = true;
     const next = { ...event, penalties };
-    const description = challengeReadout || buildFootballEditedPlaySummary(repaired, next);
+    const description = challengeReadout || disciplineDescription || buildFootballEditedPlaySummary(repaired, next);
     return { ...next, description, ...(event.confirmation ? { confirmation: { ...event.confirmation, summaryText: description } } : {}) };
   });
   return changed ? { ...repaired, events } : repaired;

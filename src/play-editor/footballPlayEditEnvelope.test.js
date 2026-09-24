@@ -83,8 +83,15 @@ describe('football play edit envelope', () => {
     expect(repaired.events.map(e => e.penalties[0].unsportsmanlikeCount)).toEqual([1, 2]);
     expect(repaired.events[0].description).toContain('Wilson’s first unsportsmanlike foul of the game.');
     expect(repaired.events[1].description).toContain('Wilson’s second unsportsmanlike foul of the game.');
-    expect(repaired.events[1].description).toContain('#8 Mike Wilson ejected from the game');
+    expect(repaired.events[1].description).toMatch(/Wilson’s second unsportsmanlike foul of the game\. #8 Mike Wilson ejected from the game\.$/);
     expect(repairFootballPlayReadoutsInEnvelope(repaired)).toBe(repaired);
+    const oldOrder = structuredClone(repaired);
+    oldOrder.events[1].description = 'PENALTY WVSU Unsportsmanlike Conduct (#8 Mike Wilson), 15 yards, #8 Mike Wilson ejected from the game. Wilson’s second unsportsmanlike foul of the game.';
+    const reordered = repairFootballPlayReadoutsInEnvelope(oldOrder);
+    expect(reordered.events[1].description).toMatch(/Wilson’s second unsportsmanlike foul of the game\. #8 Mike Wilson ejected from the game\.$/);
+    expect(reordered.events[1].penalties).toEqual(oldOrder.events[1].penalties);
+    expect(reordered.events[1].result).toEqual(oldOrder.events[1].result);
+    expect(repairFootballPlayReadoutsInEnvelope(reordered)).toBe(reordered);
     const oldWording = structuredClone(repaired);
     oldWording.events[0].description = 'PENALTY WVSU Unsportsmanlike Conduct (#8 Mike Wilson), unsportsmanlike foul 1 for this player, 15 yards to the H27.';
     const refreshed = repairFootballPlayReadoutsInEnvelope(oldWording);

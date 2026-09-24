@@ -668,10 +668,14 @@ function penaltyLeadText(context: SummaryContext, penalty: DraftPenalty): string
 }
 
 function appendPenaltyEjection(context: SummaryContext, penalty: DraftPenalty, parts: string[]): void {
-  if (!penalty.ejected) return;
+  if (!penalty.ejected || penalty.unsportsmanlikeCount) return;
+  parts.push(penaltyEjectionText(context, penalty));
+}
+
+function penaltyEjectionText(context: SummaryContext, penalty: DraftPenalty): string {
   const playerId = penalty.ejectedPlayerId ?? penalty.penalizedPlayerId ?? penalty.playerId ?? undefined;
   const participant = participantByPlayerId(context.intent, playerId);
-  parts.push(`${participant ? formatPlayer(participant) : 'penalized person'} ejected from the game`);
+  return `${participant ? formatPlayer(participant) : 'penalized person'} ejected from the game`;
 }
 
 function penaltyDisplayYards(context: SummaryContext, penalty: DraftPenalty): string {
@@ -726,7 +730,8 @@ function penaltyDisciplineSentence(context: SummaryContext, penalty: DraftPenalt
   const possessive = lastName ? `${lastName}’s` : participant ? `${formatPlayer(participant)}’s` : 'This player’s';
   const ordinal = ['first', 'second', 'third'][count - 1]
     || `${count}${count % 100 >= 11 && count % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[count % 10] || 'th')}`;
-  return `${possessive} ${ordinal} unsportsmanlike foul of the game.`;
+  const countText = `${possessive} ${ordinal} unsportsmanlike foul of the game.`;
+  return penalty.ejected ? `${countText} ${sentence(penaltyEjectionText(context, penalty))}` : countText;
 }
 
 function primaryParticipant(intent: FootballDraftIntent): DraftParticipant | undefined {

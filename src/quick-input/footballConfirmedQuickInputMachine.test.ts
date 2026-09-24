@@ -1100,6 +1100,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' }, context);
     expect(reviewing.summary?.summaryText).toContain('Smith’s second unsportsmanlike foul of the game.');
     expect(reviewing.summary?.summaryText.includes('ejected from the game')).toBe(ejected);
+    if (ejected) expect(reviewing.summary?.summaryText).toMatch(/Smith’s second unsportsmanlike foul of the game\. #22 Jordan Smith ejected from the game\.$/);
     const confirmed = transition(reviewing, { type: 'CONFIRM_SUMMARY' }, context);
     expect(confirmed.buildResult?.ok).toBe(true);
     if (!confirmed.buildResult?.ok) throw new Error('Penalty must build');
