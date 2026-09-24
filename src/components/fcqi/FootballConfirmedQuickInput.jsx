@@ -135,6 +135,7 @@ export const getFootballFcqiAssistantMessage = (state) => {
     : 'Enter tackler jersey or skip.';
   if (state.currentStep === 'tackleBJersey') return 'Enter second tackler jersey or skip.';
   if (state.currentStep === 'tacklerJersey') return 'Enter tackler jersey or skip.';
+  if (state.currentStep === 'rushFumbleSpot') return 'Enter where the runner fumbled the ball.';
   if (state.currentStep === 'forcedByJersey') return 'Enter forced fumble player jersey.';
   if (state.currentStep === 'recoverTeam') return 'Enter recovering team.';
   if (state.currentStep === 'recoverPlayerJersey') return 'Enter recovery player jersey.';

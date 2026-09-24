@@ -91,7 +91,9 @@ function abortedPlaySummary(context: SummaryContext): string {
   const fumble = intent.result.fumble;
   const forcedBy = intent.participants.forcedBy ?? participantByPlayerId(intent, fumble?.forcedByPlayerId);
   const recoveredBy = intent.participants.recoveredBy ?? participantByPlayerId(intent, fumble?.recoveredByPlayerId);
-  const clauses = [`Aborted play, fumbled ${spotPhrase(context, 'at', fumble?.spot ?? intent.result.endYardLine, 'result.fumble.spot')}`];
+  const clauses = [fumble?.spot
+    ? `Aborted play, fumbled ${spotPhrase(context, 'at', fumble.spot, 'result.fumble.spot')}`
+    : 'Aborted play'];
   if (forcedBy) clauses.push(`forced by ${formatPlayer(forcedBy)}`);
   if (recoveredBy || fumble?.recoveredByTeam) {
     clauses.push(`recovered by ${formatFumbleRecovery(intent, recoveredBy)} ${spotPhrase(context, 'at', fumble?.recoverySpot, 'result.fumble.recoverySpot')}`);
@@ -105,13 +107,14 @@ function rushSummary(context: SummaryContext): string {
   const team = teamAbbr(intent, intent.play.actionTeam);
   const scoring = intent.result.scoring?.type === 'touchdown' || intent.result.code === 'touchdown';
   const safety = intent.result.scoring?.type === 'safety' || intent.result.code === 'safety';
+  const rushSpot = intent.result.fumble?.spot ?? intent.result.endYardLine;
   const base = `${team} ${formatPlayer(rusher)} rush`;
 
   const resultPhrase = scoring
     ? `${yardagePhrase(context, intent.result.yards, 'result.yards')}${intent.result.endYardLine ? ` ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}` : ''} for a touchdown`
     : safety
       ? `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')} for a safety`
-    : `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', intent.result.endYardLine, 'result.endYardLine')}`;
+    : `${yardagePhrase(context, intent.result.yards, 'result.yards')} ${spotPhrase(context, 'to', rushSpot, 'result.endYardLine')}`;
 
   const clauses = [`${base} ${resultPhrase}`];
   clauses.push(...lateralClauses(context));

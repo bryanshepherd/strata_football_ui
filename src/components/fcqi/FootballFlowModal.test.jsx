@@ -110,7 +110,7 @@ describe('FootballFlowModal team aliases', () => {
     expect(onTokenCommit).toHaveBeenCalledWith('K');
   });
 
-  it('asks for the fumble yard line first in the Aborted Play flow', () => {
+  it('asks where a runner fumbled before collecting recovery details', () => {
     render(
       <FootballFlowModal
         onCancel={vi.fn()}
@@ -118,11 +118,10 @@ describe('FootballFlowModal team aliases', () => {
         onTokenCommit={vi.fn()}
         state={{
           status: 'token.awaiting',
-          flow: 'teamPlay',
-          currentStep: 'teamPlayFumbleSpot',
+          flow: 'rush',
+          currentStep: 'rushFumbleSpot',
           currentToken: '',
           tokens: {
-            teamPlaySelection: 'aborted',
             result: 'fumble',
             laterals: [],
             tacklers: [],

@@ -1805,7 +1805,7 @@ describe('FootballScorerShell', () => {
     const cases = [
       ['T', /tackler jersey/i],
       ['O', /tackler jersey/i],
-      ['F', /forced by jersey/i],
+      ['F', /^fumbled at$/i],
       ['C', /lateral to jersey/i],
       ['.', /final ball spot/i],
     ];
@@ -3258,6 +3258,20 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('starts Aborted Play at recovering team and skips fumble spot and forced-by prompts', () => {
+    renderScorer('/scorer?fixture=normal&local=1');
+    fireEvent.click(screen.getByRole('button', { name: /^team play/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^aborted play/i }));
+    expect(screen.getByRole('dialog', { name: /fumble recovery/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^fumbled at$/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/forced by jersey/i)).not.toBeInTheDocument();
+    submitTextToken(/recovering team/i, 'H');
+    submitTextToken(/recovery player jersey/i, '22');
+    submitTextToken(/recovery spot/i, 'H40');
+    fireEvent.click(screen.getByRole('button', { name: /^no return n$/i }));
+    expect(screen.getByRole('dialog', { name: /play summary review/i })).toHaveTextContent(/Aborted play, recovered by/i);
+  });
+
   it('replaces scorer state with the authoritative defensive-fumble recovery envelope', async () => {
     const submitMock = mockSubmitSuccess((request) => {
       const payload = makeCanonicalSubmitSuccess(request);
@@ -3277,6 +3291,7 @@ describe('FootballScorerShell', () => {
       fireEvent.click(screen.getByRole('button', { name: /rush/i }));
       submitTextToken(/rusher jersey/i, '22');
       fireEvent.click(screen.getByRole('button', { name: /^fumble/i }));
+      submitTextToken(/^fumbled at$/i, 'H49');
       submitTextToken(/forced by jersey/i, '44');
       submitTextToken(/recovering team/i, 'V');
       submitTextToken(/recovery player jersey/i, '4');

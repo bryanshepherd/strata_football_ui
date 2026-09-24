@@ -273,9 +273,37 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it.each([['H', '22'], ['V', '44']])('credits the run to the fumble spot independently of recovery by %s', (team, jersey) => {
+    let state = startRush();
+    for (const value of ['22', 'F']) state = commitToken(inputToken(state, value));
+    expect(state.currentStep).toBe('rushFumbleSpot');
+    const invalid = commitToken(inputToken(state, ''));
+    expect(invalid.error?.code).toBe('INVALID_SPOT');
+    for (const value of ['H48', '', team, jersey, 'H42', 'N']) state = commitToken(inputToken(state, value));
+    expect(state.draft?.result).toMatchObject({ yards: 4, endYardLine: 'H42', fumble: { spot: 'H48', recoverySpot: 'H42', turnover: team === 'V' } });
+    const summary = transition(state, { type: 'GENERATE_SUMMARY' });
+    expect(summary.summary?.summaryText).toContain('rush for 4 yards to the H48');
+    expect(summary.summary?.summaryText).toContain('fumbled at the H48');
+    expect(summary.summary?.summaryText).toContain('at the H42');
+    const submitted = transition(summary, { type: 'CONFIRM_SUMMARY' });
+    expect(submitted.buildResult?.ok).toBe(true);
+    if (!submitted.buildResult?.ok) throw new Error(JSON.stringify(submitted.buildResult));
+    const base = getGameEnvelopeFixture('normal');
+    const projected = applyFootballScorerEventToEnvelope({ ...base, events: [], stats: { sourceEventSequence: 0, teams: {}, players: {} } }, submitted.buildResult.event);
+    expect(projected.envelope.stats.players['H-22']).toMatchObject({ rushAttempts: 1, rushYards: 4 });
+    expect(projected.envelope.liveState).toMatchObject({ possession: team, yardLine: 'H42' });
+    expect(buildFootballIndividualOffenseReport(projected.envelope).teamReports.H.rushing.totals.rushYards).toBe(4);
+    const revisited = transition(state, { type: 'JUMP_TO_STEP', stepId: 'rush.spot' });
+    expect(revisited).toMatchObject({ currentStep: 'rushFumbleSpot', currentToken: 'H48' });
+    expect(revisited.tokens.recoverSpot).toBeUndefined();
+    expect(revisited.tokens.yards).toBeUndefined();
+    const changed = commitToken(inputToken(revisited, 'H40'));
+    expect(changed.tokens).toMatchObject({ fumbleSpot: 'H40', yards: -4 });
+  });
+
   it.each(['T', 'TM'])('credits a team recovery with %s and retains the offense without a player return', (token) => {
     let state = startRush();
-    for (const value of ['22', 'F', '', 'H', token, 'H40']) state = commitToken(inputToken(state, value));
+    for (const value of ['22', 'F', 'H40', '', 'H', token, 'H40']) state = commitToken(inputToken(state, value));
     expect(state.status).toBe('draft.ready');
     expect(state.draft?.participants.recoveredBy).toBeUndefined();
     expect(state.draft?.result.fumble).toMatchObject({ recoveredByPlayerId: 'TM', recoveredByTeam: 'H', recoverySpot: 'H40', turnover: false });
@@ -3026,11 +3054,9 @@ describe('footballConfirmedQuickInputMachine', () => {
     const selected = commitToken(inputToken(startTeamPlay(), 'A'));
     expect(selected).toMatchObject({
       status: 'token.awaiting',
-      currentStep: 'teamPlayFumbleSpot',
+      currentStep: 'recoverTeam',
     });
-    const withFumbleSpot = commitToken(inputToken(selected, 'H42'));
-    const forcedBySkipped = commitToken(inputToken(withFumbleSpot, ''));
-    const withTeam = commitToken(inputToken(forcedBySkipped, 'H'));
+    const withTeam = commitToken(inputToken(selected, 'H'));
     const withRecoverer = commitToken(inputToken(withTeam, '22'));
     const withSpot = commitToken(inputToken(withRecoverer, 'H43'));
     const ready = commitToken(inputToken(withSpot, 'N'));
@@ -3044,10 +3070,9 @@ describe('footballConfirmedQuickInputMachine', () => {
         play: { family: 'rush', subtype: 'aborted' },
         result: {
           teamCharged: true,
-          yards: -2,
+          yards: -1,
           fumble: {
             fumblerPlayerId: 'TM',
-            spot: 'H42',
             recoveredByPlayerId: 'H-22',
             recoveredByTeam: 'H',
             recoverySpot: 'H43',
@@ -3055,6 +3080,9 @@ describe('footballConfirmedQuickInputMachine', () => {
         },
       },
     });
+    expect(ready.draft?.result.fumble?.spot).toBeUndefined();
+    expect(ready.draft?.result.fumble?.forcedByPlayerId).toBeUndefined();
+    expect(reviewing.summary?.summaryText).toBe('Aborted play, recovered by #22 Jordan Smith for HOM at the H43.');
     expect(ready.draft?.participants.primary).toBeUndefined();
     expect(ready.draft?.participants.fumbler).toBeUndefined();
     expect(submitting.buildResult).toMatchObject({
@@ -3064,12 +3092,25 @@ describe('footballConfirmedQuickInputMachine', () => {
         subtype: 'aborted',
         participants: { primary: null },
         result: {
-          yards: -2,
+          yards: -1,
           teamCharged: true,
-          fumble: { fumblerPlayerId: 'TM', spot: 'H42', recoverySpot: 'H43' },
+          fumble: { fumblerPlayerId: 'TM', recoverySpot: 'H43' },
         },
       },
     });
+  });
+
+  it('keeps aborted-snap team yardage separate from a defensive recovery return', () => {
+    let state = startTeamPlay();
+    for (const value of ['A', 'V', '44', 'H40', 'Y', '.', 'H15']) state = commitToken(inputToken(state, value));
+    expect(state.draft?.result).toMatchObject({ teamCharged: true, yards: -4, endYardLine: 'H15', fumble: { fumblerPlayerId: 'TM', recoverySpot: 'H40', returnYards: 25, turnover: true } });
+    expect(state.draft?.result.fumble?.spot).toBeUndefined();
+    const built = transition(transition(state, { type: 'GENERATE_SUMMARY' }), { type: 'CONFIRM_SUMMARY' });
+    expect(built.buildResult?.ok).toBe(true);
+    if (!built.buildResult?.ok) throw new Error(JSON.stringify(built.buildResult));
+    const envelope = { ...getGameEnvelopeFixture('normal'), events: [{ ...built.buildResult.event, sequence: 1, status: 'accepted' }] };
+    expect(projectFootballStatsForEvents(envelope).teams.H).toMatchObject({ rushYards: -4, fumbles: { num: 1, lost: 1 } });
+    expect(buildFootballIndividualOffenseReport(envelope).teamReports.H.rushing.players).toEqual(expect.arrayContaining([expect.objectContaining({ teamEntry: true, rushYards: -4 })]));
   });
 
   it('submits the three-yard rush with two independently awarded penalty first downs', () => {
@@ -3268,7 +3309,7 @@ describe('penalties on possession-change plays', () => {
   it.each(['interception', 'fumble'])('%s returned and fumbled back is also detected as multiple changes', (family) => {
     const base = family === 'interception'
       ? commitPenaltyTokens(startPass(), ['12', 'X', '44', 'V49', 'F', 'V31', '22', 'H', '12', 'V31', 'N'])
-      : commitPenaltyTokens(startRush(), ['22', 'F', '44', 'V', '44', 'V20', 'Y', 'F', 'V31', '22', 'H', '12', 'V31', 'N']);
+      : commitPenaltyTokens(startRush(), ['22', 'F', 'V20', '44', 'V', '44', 'V20', 'Y', 'F', 'V31', '22', 'H', '12', 'V31', 'N']);
     expect(base.status).toBe('draft.ready');
     expect(footballPossessionChanges(base.draft)).toMatchObject({ count: 2, finalTeam: 'H' });
     const question = commitPenaltyTokens(startQueuedPenalty(base), ['Holding', 'H', 'A', '', 'S']);
@@ -3479,7 +3520,8 @@ function completeRushDraft(options: {
 function completeFumbleDraft(options: { returned: 'yes' | 'no' }): FootballConfirmedQuickInputState {
   const withRusher = commitToken(inputToken(startRush(), '22'));
   const withResult = commitToken(inputToken(withRusher, 'F'));
-  const withForcedBy = commitToken(inputToken(withResult, '44'));
+  const withSpot = commitToken(inputToken(withResult, 'V49'));
+  const withForcedBy = commitToken(inputToken(withSpot, '44'));
   const withRecoverTeam = commitToken(inputToken(withForcedBy, 'H'));
   const withRecoverPlayer = commitToken(inputToken(withRecoverTeam, '22'));
   const withRecoverSpot = commitToken(inputToken(withRecoverPlayer, 'V49'));
@@ -3492,7 +3534,8 @@ function completeDefensiveFumbleReturnAt(
 ): FootballConfirmedQuickInputState {
   const withRusher = commitTokenWithContext(inputTokenWithContext(startRush(), '22', context), context);
   const withResult = commitTokenWithContext(inputTokenWithContext(withRusher, 'F', context), context);
-  const withForcedBy = commitTokenWithContext(inputTokenWithContext(withResult, '44', context), context);
+  const withSpot = commitTokenWithContext(inputTokenWithContext(withResult, 'V20', context), context);
+  const withForcedBy = commitTokenWithContext(inputTokenWithContext(withSpot, '44', context), context);
   const withRecoverTeam = commitTokenWithContext(inputTokenWithContext(withForcedBy, 'V', context), context);
   const withRecoverPlayer = commitTokenWithContext(inputTokenWithContext(withRecoverTeam, '44', context), context);
   const withRecoverSpot = commitTokenWithContext(inputTokenWithContext(withRecoverPlayer, 'V20', context), context);
@@ -3504,7 +3547,8 @@ function completeDefensiveFumbleReturnAt(
 function completeDefensiveFumbleRecoveryAt(recoverySpot: string): FootballConfirmedQuickInputState {
   const withRusher = commitToken(inputToken(startRush(), '22'));
   const withResult = commitToken(inputToken(withRusher, 'F'));
-  const withForcedBy = commitToken(inputToken(withResult, '44'));
+  const withSpot = commitToken(inputToken(withResult, recoverySpot));
+  const withForcedBy = commitToken(inputToken(withSpot, '44'));
   const withRecoverTeam = commitToken(inputToken(withForcedBy, 'V'));
   const withRecoverPlayer = commitToken(inputToken(withRecoverTeam, '44'));
   const withRecoverSpot = commitToken(inputToken(withRecoverPlayer, recoverySpot));

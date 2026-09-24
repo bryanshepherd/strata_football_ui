@@ -87,6 +87,7 @@ export type RushTokenStep =
   | 'tackleAJersey'
   | 'tackleBJersey'
   | 'tacklerJersey'
+  | 'rushFumbleSpot'
   | 'forcedByJersey'
   | 'recoverTeam'
   | 'recoverPlayerJersey'
@@ -97,8 +98,7 @@ export type RushTokenStep =
   | 'lateralSpot';
 export type TeamPlayTokenStep =
   | 'teamPlayMenu'
-  | 'teamPlayPlayerJersey'
-  | 'teamPlayFumbleSpot';
+  | 'teamPlayPlayerJersey';
 export type PassTokenStep =
   | 'passerJersey'
   | 'passResult'
@@ -910,7 +910,7 @@ function commitCurrentToken(
         state: {
           ...baseActiveState(state),
           status: 'token.awaiting',
-          currentStep: 'teamPlayFumbleSpot',
+          currentStep: 'recoverTeam',
           currentToken: '',
           tokens: {
             ...cloneTokens(state.tokens),
@@ -934,7 +934,7 @@ function commitCurrentToken(
     };
   }
 
-  if (state.flow === 'teamPlay' && state.currentStep === 'teamPlayFumbleSpot') {
+  if (state.flow === 'rush' && state.currentStep === 'rushFumbleSpot') {
     const fumbleSpot = parseSpot(state.currentToken, context);
     if (!fumbleSpot) {
       return { state: tokenError(state, 'INVALID_SPOT', 'Fumbled At must use canonical spot format', 'result.fumble.spot') };
@@ -4281,13 +4281,15 @@ function jumpToRushSpot(state: FootballConfirmedQuickInputState): FootballQuickI
   if (!state.tokens.rusher || !state.tokens.result) return { state: cloneState(state) };
 
   const tokens = cloneTokens(state.tokens);
+  const fumble = tokens.result === 'fumble';
+  if (fumble) clearRushContinuationTokens(tokens);
 
   return {
     state: {
       ...baseActiveState(state),
       status: 'token.awaiting',
-      currentStep: 'endSpot',
-      currentToken: tokens.endYardLine ?? '',
+      currentStep: fumble ? 'rushFumbleSpot' : 'endSpot',
+      currentToken: (fumble ? state.tokens.fumbleSpot : tokens.endYardLine) ?? '',
       tokens,
       draft: undefined,
       summary: undefined,
@@ -4298,6 +4300,9 @@ function jumpToRushSpot(state: FootballConfirmedQuickInputState): FootballQuickI
 }
 
 function clearRushContinuationTokens(tokens: FootballFlowTokens): void {
+  tokens.fumbleSpot = undefined;
+  tokens.yards = undefined;
+  tokens.recoverAsTeam = undefined;
   tokens.forcedBy = undefined;
   tokens.recoverTeam = undefined;
   tokens.recoverPlayer = undefined;
@@ -4463,6 +4468,8 @@ function buildTeamPlayDraft(
   const result = buildRushResult({
     ...cloneTokens(state.tokens),
     result: 'fumble',
+    // A fumbled snap is team yardage to recovery; any advance is a separate return.
+    yards: deriveRushYards(context, state.tokens.recoverSpot),
   }, context);
   return {
     schemaVersion: 'football.draftIntent.v1',
@@ -4496,7 +4503,7 @@ function buildTeamPlayDraft(
     result: {
       ...result,
       teamCharged: true,
-      fumble: result.fumble ? { ...result.fumble, fumblerPlayerId: 'TM' } : undefined,
+      fumble: result.fumble ? { ...result.fumble, spot: undefined, forcedByPlayerId: undefined, fumblerPlayerId: 'TM' } : undefined,
     },
     penalties: (context.penalties ?? []).map((penalty) => ({ ...penalty })),
     warnings: [],
@@ -6831,7 +6838,7 @@ function penaltyCodeFromName(name: string): string {
 function nextStepForRushResult(result: RushResultSelection): RushTokenStep {
   if (result === 'tackle') return 'tackleAJersey';
   if (result === 'outOfBounds') return 'tackleAJersey';
-  if (result === 'fumble') return 'forcedByJersey';
+  if (result === 'fumble') return 'rushFumbleSpot';
   return 'endSpot';
 }
 

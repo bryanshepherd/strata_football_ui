@@ -6,7 +6,7 @@ import FootballFlowProgress from './FootballFlowProgress';
 
 const yardLineSteps = new Set([
   'endSpot',
-  'teamPlayFumbleSpot',
+  'rushFumbleSpot',
   'recoverSpot', 'onsideSpot', 'onsideAwardedSpot',
   'lateralSpot',
   'caughtAtSpot',
@@ -52,12 +52,6 @@ const stepCopy = {
     helper: 'Enter the player for the play-by-play record. No individual attempt will be charged.',
     placeholder: '12',
   },
-  teamPlayFumbleSpot: {
-    title: 'Aborted Play',
-    label: 'Fumbled At',
-    helper: 'Enter the yard line where the aborted play was fumbled.',
-    placeholder: 'H43',
-  },
   rusherJersey: {
     title: 'Rush',
     label: 'Rusher jersey',
@@ -93,6 +87,12 @@ const stepCopy = {
     label: 'Tackler jersey',
     helper: 'Enter a tackler jersey number, or press Enter to skip.',
     placeholder: '44',
+  },
+  rushFumbleSpot: {
+    title: 'Fumble',
+    label: 'Fumbled At',
+    helper: 'Enter the yard line where the runner fumbled the ball.',
+    placeholder: 'H43',
   },
   forcedByJersey: {
     title: 'Fumble',

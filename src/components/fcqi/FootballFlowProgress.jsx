@@ -140,9 +140,9 @@ function buildRushProgressSteps(state) {
 
   steps.push({
     id: 'rush.spot',
-    label: 'Spot',
-    value: tokens.endYardLine,
-    complete: Boolean(tokens.endYardLine),
+    label: tokens.result === 'fumble' ? 'Fumbled At' : 'Spot',
+    value: tokens.result === 'fumble' ? tokens.fumbleSpot : tokens.endYardLine,
+    complete: Boolean(tokens.result === 'fumble' ? tokens.fumbleSpot : tokens.endYardLine),
   });
 
   return steps.map((step) => decorateStep(step, currentId));
@@ -183,7 +183,7 @@ function currentRushStepId(state) {
   if (state.currentStep === 'tackleAJersey' || state.currentStep === 'tackleBJersey' || state.currentStep === 'tacklerJersey') {
     return 'rush.tacklers';
   }
-  if (state.currentStep === 'endSpot') return 'rush.spot';
+  if (state.currentStep === 'endSpot' || state.currentStep === 'rushFumbleSpot') return 'rush.spot';
   return null;
 }
 
