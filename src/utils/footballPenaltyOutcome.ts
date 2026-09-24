@@ -7,6 +7,13 @@ import type {
 import { calculateFootballPenaltyFinalSpot } from './footballPenaltyEnforcement';
 import { validPenaltyBallContext } from './footballPenaltyPossession';
 
+export type FootballFirstDownAward = {
+  id: string;
+  team: TeamCode;
+  source: 'play' | 'penalty';
+  penaltyId?: string;
+};
+
 export type FootballPenaltyOfficialState = {
   possession: TeamCode;
   down: number;
@@ -14,6 +21,8 @@ export type FootballPenaltyOfficialState = {
   yardLine: Spot;
   lineToGain: Spot;
   firstDownAwarded: boolean;
+  // Absent on legacy events: retain their existing single-credit behavior.
+  firstDownAwards?: FootballFirstDownAward[];
   firstDownAwardedTo?: TeamCode;
   firstDownSource?: 'play' | 'penalty';
 };
@@ -149,6 +158,10 @@ export function resolveFootballDraftPenaltyOutcome(
     yardLine: currentSpot,
     lineToGain,
     firstDownAwarded,
+    firstDownAwards: firstDownAwarded ? orderedFirstDownAwards({
+      accepted, possession, observedEnd, originalLineToGain, yardsToFirst,
+      playEarnedFirstDown: !immediateNoPlay && playEarnedFirstDown,
+    }) : [],
     ...(firstDownAwarded ? { firstDownAwardedTo: possession } : {}),
     ...(firstDownAwarded
       ? { firstDownSource: automaticFirstDown || enforcementEarnedFirstDown ? 'penalty' as const : 'play' as const }
@@ -164,6 +177,8 @@ export function resolveFootballDraftPenaltyOutcome(
           distance: confirmedContext.distance,
           yardLine: confirmedContext.yardLine,
           lineToGain: lineToGainFromDistance(confirmedContext.yardLine, confirmedContext.possession, confirmedContext.distance),
+          firstDownAwards: !confirmedContext.startNewDrive && confirmedContext.down === 1
+            && confirmedContext.possession === calculated.possession ? calculated.firstDownAwards : [],
           firstDownAwarded: !confirmedContext.startNewDrive && confirmedContext.down === 1 && calculated.firstDownAwarded,
           ...(!confirmedContext.startNewDrive && confirmedContext.down === 1 && calculated.firstDownAwarded
             ? { firstDownAwardedTo: confirmedContext.possession, firstDownSource: calculated.firstDownSource }
@@ -219,15 +234,51 @@ function verifiedOfficialState(
     yardLine: verified.yardLine,
     lineToGain,
     firstDownAwarded,
+    firstDownAwards: firstDownAwarded
+      ? calculated.firstDownAwards?.length ? calculated.firstDownAwards
+        : [{ id: 'operator', team: calculated.possession, source: 'penalty' }]
+      : [],
     ...(firstDownAwarded ? { firstDownAwardedTo: calculated.possession } : {}),
     ...(firstDownAwarded ? { firstDownSource: calculated.firstDownSource ?? 'penalty' } : {}),
   };
 }
 
+
+// A live play and its live-ball enforcement establish one series. Each
+// subsequent dead-ball enforcement can establish another. Recompute this
+// ledger from the draft; never increment saved totals or infer legacy awards.
+function orderedFirstDownAwards({ accepted, possession, observedEnd, originalLineToGain, yardsToFirst, playEarnedFirstDown }: {
+  accepted: DraftPenalty[]; possession: TeamCode; observedEnd: Spot;
+  originalLineToGain: Spot; yardsToFirst: number; playEarnedFirstDown: boolean;
+}): FootballFirstDownAward[] {
+  const awards: FootballFirstDownAward[] = [];
+  let lineToGain = originalLineToGain;
+  const add = (spot: Spot, penalty?: DraftPenalty) => {
+    const id = penalty ? `penalty:${penalty.penaltyId}` : 'play';
+    if (awards.some((award) => award.id === id)) return;
+    awards.push({ id, team: possession, source: penalty ? 'penalty' : 'play',
+      ...(penalty ? { penaltyId: penalty.penaltyId } : {}) });
+    lineToGain = lineToGainFromDistance(spot, possession, yardsToFirst);
+  };
+  const live = accepted.filter((penalty) => !penalty.deadBall);
+  const liveSpot = live.at(-1)?.finalSpot ?? observedEnd;
+  if (playEarnedFirstDown) add(liveSpot);
+  else if (live.length) {
+    const automatic = live.find((penalty) => penalty.automaticFirstDown && penalty.team !== possession);
+    if (automatic || reachedLineToGain(liveSpot, lineToGain, possession)) add(liveSpot, automatic ?? live[live.length - 1]);
+  }
+  for (const penalty of accepted) {
+    if (!penalty.deadBall || !penalty.finalSpot) continue;
+    if ((penalty.automaticFirstDown && penalty.team !== possession)
+      || reachedLineToGain(penalty.finalSpot, lineToGain, possession)) add(penalty.finalSpot, penalty);
+  }
+  return awards;
+}
+
 function orderPenalties(penalties: DraftPenalty[], requested: string[] | undefined): DraftPenalty[] {
   if (!requested?.length) return penalties;
   const byId = new Map(penalties.map((penalty) => [penalty.penaltyId, penalty]));
-  const ordered = requested.map((id) => byId.get(id)).filter((penalty): penalty is DraftPenalty => Boolean(penalty));
+  const ordered = [...new Set(requested)].map((id) => byId.get(id)).filter((penalty): penalty is DraftPenalty => Boolean(penalty));
   const used = new Set(ordered.map((penalty) => penalty.penaltyId));
   return [...ordered, ...penalties.filter((penalty) => !used.has(penalty.penaltyId))];
 }

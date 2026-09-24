@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballPenaltyEnforcementReviewModal from './FootballPenaltyEnforcementReviewModal';
 
 describe('FootballPenaltyEnforcementReviewModal', () => {
+  it('shows both first downs in the final review', () => {
+    const play = draft();
+    play.prePlay = { possession: 'H', down: 1, distance: 17, yardLine: 'H08', lineToGain: 'H25' };
+    play.result = { code: 'tackle', yards: 3, endYardLine: 'H11' };
+    Object.assign(play.penalties[0], { team: 'V', enforcedFrom: 'END', yards: 15, finalSpot: 'H26', replayDown: false, automaticFirstDown: true });
+    Object.assign(play.penalties[1], { yards: 15, finalSpot: 'H41', automaticFirstDown: true });
+    render(<FootballPenaltyEnforcementReviewModal draft={play} onCancel={vi.fn()} onConfirm={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.getByText('First downs awarded: 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /first down awarded/i }));
+    expect(screen.queryByText('First downs awarded: 2')).not.toBeInTheDocument();
+  });
+
   it('reorders fouls and submits one verified official state', () => {
     const onConfirm = vi.fn();
     render(

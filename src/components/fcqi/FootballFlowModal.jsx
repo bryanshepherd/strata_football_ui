@@ -580,6 +580,12 @@ const stepCopy = {
     helper: 'Enter the ball spot after enforcement.',
     placeholder: 'H45',
   },
+  penaltyDeadBallFirstDown: {
+    title: 'Deadball foul',
+    label: 'Automatic first down',
+    helper: 'Does the deadball foul award an automatic first down?',
+    placeholder: '',
+  },
   penaltyDown: {
     title: 'Down',
     label: 'Down',
@@ -1198,7 +1204,7 @@ function resultButtonsForStep(step, aliases, teamNames, state, actionTeam) {
   if (step === 'penaltyEnforcedFrom') return penaltyEnforcedFromButtons;
   if (step === 'penaltyDown') return state.draft?.play?.family === 'kickoff'
     ? penaltyDownButtons.map(button => button.value === 'R' ? { ...button, label: 'Rekick' } : button) : penaltyDownButtons;
-  if (step === 'penaltyAfterPossession') return penaltyYesNoButtons;
+  if (step === 'penaltyAfterPossession' || step === 'penaltyDeadBallFirstDown') return penaltyYesNoButtons;
   if (step === 'penaltyConfirmContext') return [
     { label: 'Yes, confirm', hotkey: 'Y', value: 'Y' },
     { label: 'No, correct context', hotkey: 'N', value: 'N' },

@@ -1669,7 +1669,9 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     ? result.officialOutcome.verified || result.officialOutcome.calculated
     : null;
   const firstDownCredits = officialOutcome
-    ? Number(officialOutcome.firstDownAwarded === true && officialOutcome.firstDownAwardedTo === offense)
+    ? Array.isArray(officialOutcome.firstDownAwards)
+      ? new Set(officialOutcome.firstDownAwards.filter((award) => award?.team === offense && typeof award.id === 'string').map((award) => award.id)).size
+      : Number(officialOutcome.firstDownAwarded === true && officialOutcome.firstDownAwardedTo === offense)
     : Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
   if (
     validTeamCode(offense)

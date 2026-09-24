@@ -660,6 +660,18 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(visitorPenalty.currentStep).toBe('penaltyResolution');
   });
 
+  it.each([['Y', true], ['N', false]])('asks explicitly whether an accepted deadball awards a first down (%s)', (answer, automaticFirstDown) => {
+    const question = commitPenaltyTokens(startPenalty('immediate'), ['Offside', 'V', 'A', '', 'H49']);
+    expect(question.currentStep).toBe('penaltyDeadBallFirstDown');
+    expect(question.currentToken).toBe('');
+    expect(commitPenaltyTokens(question, ['']).error?.code).toBe('MISSING_DEAD_BALL_FIRST_DOWN');
+    const ready = commitPenaltyTokens(question, [String(answer)]);
+    expect(ready.status).toBe('draft.ready');
+    expect(ready.draft?.penalties[0]).toMatchObject({ automaticFirstDown, replayDown: !automaticFirstDown });
+    const confirmed = transition(transition(ready, { type: 'GENERATE_SUMMARY' }), { type: 'CONFIRM_SUMMARY' });
+    expect(confirmed.buildResult?.ok).toBe(true);
+  });
+
   it('accepted immediate penalty forces previous spot and repeat down', () => {
     const ready = completeAcceptedImmediatePenalty();
 
@@ -707,7 +719,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
     const ready = commitPenaltyTokens(
       startPenalty('immediate', context),
-      ['Offside', 'V', 'A', '', 'V01'],
+      ['Offside', 'V', 'A', '', 'V01', 'N'],
       context,
     );
 
@@ -908,7 +920,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
   it('overriding suggested final spot updates derived signed yards', () => {
     const context = makeContext({ prePlay: { yardLine: 'H35' } });
-    const state = commitPenaltyTokens(startPenalty('immediate', context), ['FS', 'H', 'A', '', 'H28'], context);
+    const state = commitPenaltyTokens(startPenalty('immediate', context), ['FS', 'H', 'A', '', 'H28', 'N'], context);
 
     expect(state.status).toBe('draft.ready');
     expect(state.draft?.penalties[0]).toMatchObject({
@@ -964,7 +976,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
     expect(state.tokens.penaltyDefinition?.yards).toBe(10);
 
-    const ready = commitPenaltyTokens(state, ['H49'], context);
+    const ready = commitPenaltyTokens(state, ['H49', 'N'], context);
     expect(ready.draft?.penalties[0]).toMatchObject({
       tableYards: 10,
       yards: 10,
@@ -1043,7 +1055,7 @@ describe('footballConfirmedQuickInputMachine', () => {
   it('records the first unsportsmanlike foul without an ejection prompt', () => {
     const state = commitPenaltyTokens(startPenalty('immediate'), ['Unsportsmanlike Conduct', 'H', 'A', '22']);
     expect(state.currentStep).toBe('penaltyFinalSpot');
-    const ready = commitPenaltyTokens(state, ['H29']);
+    const ready = commitPenaltyTokens(state, ['H29', 'N']);
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' });
     expect(reviewing.draft?.penalties[0]).toMatchObject({ unsportsmanlikeCount: 1, playerId: 'H-22' });
     expect(reviewing.summary?.summaryText).toContain('Smith’s first unsportsmanlike foul of the game.');
@@ -1056,7 +1068,7 @@ describe('footballConfirmedQuickInputMachine', () => {
     expect(question.currentStep).toBe('penaltyEjected');
     expect(question.currentToken).toBe('');
     expect(commitPenaltyTokens(question, [''], context).status).toBe('token.error');
-    const ready = commitPenaltyTokens(question, [answer, 'H29'], context);
+    const ready = commitPenaltyTokens(question, [answer, 'H29', 'N'], context);
     const reviewing = transition(ready, { type: 'GENERATE_SUMMARY' }, context);
     expect(reviewing.summary?.summaryText).toContain('Smith’s second unsportsmanlike foul of the game.');
     expect(reviewing.summary?.summaryText.includes('ejected from the game')).toBe(ejected);
@@ -1124,7 +1136,7 @@ describe('footballConfirmedQuickInputMachine', () => {
   it('records an ejection and adds it to penalty play-by-play wording', () => {
     const state = commitPenaltyTokens(
       startPenalty('immediate'),
-      ['TH', 'H', 'A', '22', 'Y', 'H30'],
+      ['TH', 'H', 'A', '22', 'Y', 'H30', 'N'],
     );
 
     expect(state.status).toBe('draft.ready');
@@ -3031,6 +3043,29 @@ describe('footballConfirmedQuickInputMachine', () => {
     });
   });
 
+  it('submits the three-yard rush with two independently awarded penalty first downs', () => {
+    const context = makeContext({ prePlay: { down: 1, distance: 17, yardLine: 'H08', lineToGain: 'H25' } });
+    const rush = completeRushDraft({ spot: 'H11' });
+    rush.draft!.prePlay = { ...rush.draft!.prePlay, ...context.prePlay };
+    rush.draft!.result.yards = 3;
+    const queued = transitionWithContext(rush, { type: 'QUEUE_PENALTY_REQUEST' }, context);
+    const first = commitPenaltyTokens(startQueuedPenalty(queued, context), ['FMB', 'V', 'A', '', 'S', 'H26', 'A'], context);
+    expect(first.draft?.penalties[0]).toMatchObject({ automaticFirstDown: true });
+    const question = commitPenaltyTokens(startQueuedPenalty(first, context), ['UC', 'V', 'D', 'A', '', 'S', 'H41'], context);
+    expect(question.currentStep).toBe('penaltyDeadBallFirstDown');
+    const two = commitPenaltyTokens(question, ['Y'], context);
+    expect(two.draft?.penalties[1]).toMatchObject({ automaticFirstDown: true, downCounts: false });
+    const reviewed = transitionWithContext(two, {
+      type: 'VERIFY_PENALTY_ENFORCEMENT', enforcementOrder: two.draft!.penalties.map((penalty) => penalty.penaltyId),
+      down: 1, distance: 10, yardLine: 'H41', firstDownAwarded: true,
+    }, context);
+    const confirmed = transitionWithContext(reviewed, { type: 'CONFIRM_SUMMARY' }, context);
+    expect(confirmed.buildResult?.ok).toBe(true);
+    if (!confirmed.buildResult?.ok) throw new Error('Two-foul rush must build');
+    expect(confirmed.buildResult.event.result.officialOutcome?.verified?.firstDownAwards).toHaveLength(2);
+    expect(confirmed.buildResult.event.description).not.toContain('down counts');
+  });
+
   it('requires ordered official-state verification before submitting multiple accepted fouls', () => {
     const queued = transition(completeRushDraft(), { type: 'QUEUE_PENALTY_REQUEST' });
     const firstFoul = commitPenaltyTokens(
@@ -3048,7 +3083,7 @@ describe('footballConfirmedQuickInputMachine', () => {
 
     const twoFouls = commitPenaltyTokens(
       selectedSecondTeam,
-      ['D', 'A', '', 'S', 'V44'],
+      ['D', 'A', '', 'S', 'V44', 'N'],
     );
     expect(twoFouls.error).toBeUndefined();
     expect(twoFouls.status).toBe('summary.reviewing');
@@ -3383,7 +3418,7 @@ function commitPenaltyTokens(
 }
 
 function completeAcceptedImmediatePenalty(): FootballConfirmedQuickInputState {
-  return commitPenaltyTokens(startPenalty('immediate'), ['Offside', 'V', 'A', '', 'H49']);
+  return commitPenaltyTokens(startPenalty('immediate'), ['Offside', 'V', 'A', '', 'H49', 'N']);
 }
 
 function completeRushDraft(options: {

@@ -187,6 +187,9 @@ export default function FootballPenaltyEnforcementReviewModal({
                 <span className="grid h-7 min-w-7 place-items-center rounded border border-current bg-white px-2 text-xs">F</span>
               </span>
             </button>
+            {firstDownAwarded && calculated.firstDownAwards?.length > 1 && (
+              <p className="text-sm font-semibold text-zinc-800">First downs awarded: {calculated.firstDownAwards.length}</p>
+            )}
             {error && <p className="rounded border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
             <div className="flex justify-end gap-2 border-t border-zinc-200 pt-4">
               <button className="rounded border border-zinc-300 px-4 py-2 text-sm font-semibold" onClick={() => { setError(''); setStage('order'); }} type="button">

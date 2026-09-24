@@ -188,6 +188,7 @@ export type PenaltyTokenStep =
   | 'penaltyContextSpot'
   | 'penaltySpotOfFoul'
   | 'penaltyFinalSpot'
+  | 'penaltyDeadBallFirstDown'
   | 'penaltyDown'
   | 'offsettingSecondName'
   | 'offsettingSecondTeam'
@@ -2412,6 +2413,12 @@ function commitPenaltyToken(
         penaltyFinalSpot: finalSpot,
       },
     };
+    if (nextState.tokens.penaltyTiming === 'deadBall') {
+      if (['afterChange', 'multipleChanges'].includes(nextState.tokens.penaltyPossessionDecision ?? '')) {
+        nextState.tokens.penaltyDownConsequence = 'NEW_SERIES';
+      }
+      return { state: { ...nextState, status: 'token.awaiting', currentStep: 'penaltyDeadBallFirstDown', currentToken: '' } };
+    }
     if (source === 'immediate') return finalizePenaltyEntry(nextState, context);
     if (['afterChange', 'multipleChanges'].includes(nextState.tokens.penaltyPossessionDecision ?? '')) {
       nextState.tokens.penaltyDownConsequence = 'NEW_SERIES';
@@ -2436,6 +2443,22 @@ function commitPenaltyToken(
         currentToken: downDefault,
       },
     };
+  }
+
+  if (state.currentStep === 'penaltyDeadBallFirstDown') {
+    const automaticFirstDown = parseBooleanToken(state.currentToken);
+    if (automaticFirstDown === null) {
+      return { state: tokenError(state, 'MISSING_DEAD_BALL_FIRST_DOWN', 'Choose Yes (Y) or No (N).', 'penalties.automaticFirstDown') };
+    }
+    return finalizePenaltyEntry({
+      ...baseActiveState(state),
+      tokens: {
+        ...cloneTokens(state.tokens),
+        penaltyDownConsequence: automaticFirstDown ? 'AUTO_FIRST'
+          : state.tokens.penaltySource === 'immediate' ? 'REPEAT'
+          : state.tokens.penaltyDownConsequence === 'NEW_SERIES' ? 'NEW_SERIES' : 'DOWN_COUNTS',
+      },
+    }, context);
   }
 
   if (state.currentStep === 'penaltyDown') {
@@ -6048,7 +6071,7 @@ function buildSingleDraftPenalty(
     penalty.spot = tokens.penaltySpotOfFoul;
     penalty.finalSpot = tokens.penaltyFinalSpot;
     penalty.yards = derivePenaltyYards(context, tokens, baseDraft, penalty.enforcedFrom, penalty.finalSpot);
-    penalty.downConsequence = input.source === 'immediate'
+    penalty.downConsequence = input.source === 'immediate' && tokens.penaltyDownConsequence !== 'AUTO_FIRST'
       ? 'REPEAT'
       : tokens.penaltyDownConsequence;
     penalty.automaticFirstDown = penalty.downConsequence === 'AUTO_FIRST';
@@ -7311,6 +7334,7 @@ function isPenaltySpecificTokenStep(step: FootballTokenStep): step is PenaltyTok
     'penaltyContextSpot',
     'penaltySpotOfFoul',
     'penaltyFinalSpot',
+    'penaltyDeadBallFirstDown',
     'penaltyDown',
     'offsettingSecondName',
     'offsettingSecondTeam',

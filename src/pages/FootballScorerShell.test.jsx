@@ -3023,6 +3023,7 @@ describe('FootballScorerShell', () => {
       expect(finalSpotInput).toHaveValue('H49');
       fireEvent.change(finalSpotInput, { target: { value: 'H48' } });
       fireEvent.submit(finalSpotInput.closest('form'));
+      fireEvent.click(screen.getByRole('button', { name: /^no n$/i }));
 
       const summaryDialog = await screen.findByRole('dialog', { name: /play summary review/i });
       expect(summaryDialog).toHaveTextContent(/penalty vis offsides/i);
@@ -3742,6 +3743,7 @@ async function submitHoldingBeforeOperatorCorrection() {
   fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
   submitTextToken(/penalized player/i, '');
   submitTextToken(/^final spot$/i, 'H19');
+  fireEvent.click(screen.getByRole('button', { name: /^no n$/i }));
   await submitOperatorSummary();
 }
 

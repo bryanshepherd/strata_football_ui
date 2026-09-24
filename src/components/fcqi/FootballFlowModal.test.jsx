@@ -4,6 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import FootballFlowModal from './FootballFlowModal';
 
 describe('FootballFlowModal team aliases', () => {
+  it('asks the deadball first-down question with Yes and No controls', () => {
+    const onTokenCommit = vi.fn();
+    render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{
+      status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyDeadBallFirstDown', currentToken: '', tokens: {},
+    }} />);
+    expect(screen.getByText('Does the deadball foul award an automatic first down?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Yes/ }));
+    expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(onTokenCommit).toHaveBeenLastCalledWith('N');
+  });
+
   it('asks the exact second-unsportsmanlike question and accepts Yes or No', () => {
     const onTokenCommit = vi.fn();
     render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit}
