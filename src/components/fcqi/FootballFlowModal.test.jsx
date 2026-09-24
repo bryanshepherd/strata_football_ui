@@ -9,7 +9,9 @@ describe('FootballFlowModal team aliases', () => {
     render(<FootballFlowModal onCancel={vi.fn()} onTokenCommit={onTokenCommit} state={{
       status: 'token.awaiting', flow: 'penalty', currentStep: 'penaltyDeadBallFirstDown', currentToken: '', tokens: {},
     }} />);
-    expect(screen.getByText('Does the deadball foul award an automatic first down?')).toBeInTheDocument();
+    const question = screen.getByText('Does the deadball foul award an automatic first down?');
+    expect(question).toHaveClass('font-semibold');
+    expect(question.compareDocumentPosition(screen.getByRole('button', { name: /^Yes/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Yes/ }));
     expect(onTokenCommit).toHaveBeenLastCalledWith('Y');
     fireEvent.keyDown(window, { key: 'n' });

@@ -3743,7 +3743,6 @@ async function submitHoldingBeforeOperatorCorrection() {
   fireEvent.click(screen.getByRole('button', { name: /^accepted a$/i }));
   submitTextToken(/penalized player/i, '');
   submitTextToken(/^final spot$/i, 'H19');
-  fireEvent.click(screen.getByRole('button', { name: /^no n$/i }));
   await submitOperatorSummary();
 }
 

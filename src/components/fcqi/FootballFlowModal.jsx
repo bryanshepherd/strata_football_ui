@@ -893,7 +893,7 @@ export default function FootballFlowModal({
     ? stepButtons.filter((button) => button.value === 'A' ? teamAliasesEditable : button.value === 'I' ? participationEditable : button.value === 'R' && gameControlSettingsOnly ? startersEditable : !gameControlSettingsOnly)
     : stepButtons;
   const buttonOnly = Boolean(activeButtons) && !['recoverPlayerJersey', 'onsideToucher'].includes(state.currentStep);
-  const questionFirst = ['penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);
+  const questionFirst = ['penaltyDeadBallFirstDown', 'penaltyAfterPossession', 'penaltyPossessionTeam', 'penaltyConfirmContext', 'penaltyContextTeam'].includes(state.currentStep);
   const penaltyOptions = isPenaltySelectionStep(state.currentStep)
     ? searchFootballPenaltyTable(value, 100, penaltyRuleset)
     : [];

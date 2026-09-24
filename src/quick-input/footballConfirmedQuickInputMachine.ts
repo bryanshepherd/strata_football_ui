@@ -2417,6 +2417,12 @@ function commitPenaltyToken(
       if (['afterChange', 'multipleChanges'].includes(nextState.tokens.penaltyPossessionDecision ?? '')) {
         nextState.tokens.penaltyDownConsequence = 'NEW_SERIES';
       }
+      const possession = ['afterChange', 'multipleChanges'].includes(nextState.tokens.penaltyPossessionDecision ?? '')
+        ? nextState.tokens.penaltyPossessionTeam
+        : state.draft?.prePlay.possession ?? context.prePlay.possession ?? context.play.possession ?? context.play.actionTeam;
+      if (possession && nextState.tokens.penaltyTeam === possession) {
+        return finalizeDeadBallPenalty(nextState, context, false);
+      }
       return { state: { ...nextState, status: 'token.awaiting', currentStep: 'penaltyDeadBallFirstDown', currentToken: '' } };
     }
     if (source === 'immediate') return finalizePenaltyEntry(nextState, context);
@@ -2450,15 +2456,7 @@ function commitPenaltyToken(
     if (automaticFirstDown === null) {
       return { state: tokenError(state, 'MISSING_DEAD_BALL_FIRST_DOWN', 'Choose Yes (Y) or No (N).', 'penalties.automaticFirstDown') };
     }
-    return finalizePenaltyEntry({
-      ...baseActiveState(state),
-      tokens: {
-        ...cloneTokens(state.tokens),
-        penaltyDownConsequence: automaticFirstDown ? 'AUTO_FIRST'
-          : state.tokens.penaltySource === 'immediate' ? 'REPEAT'
-          : state.tokens.penaltyDownConsequence === 'NEW_SERIES' ? 'NEW_SERIES' : 'DOWN_COUNTS',
-      },
-    }, context);
+    return finalizeDeadBallPenalty(state, context, automaticFirstDown);
   }
 
   if (state.currentStep === 'penaltyDown') {
@@ -5639,6 +5637,22 @@ function continuePenaltyDiscipline(state: FootballConfirmedQuickInputState, cont
     currentToken: nextStep === 'penaltyFinalSpot' ? suggestedPenaltyFinalSpot(context, tokens, state.draft) ?? ''
       : penaltyEnforcedFromInputCode(tokens.penaltyEnforcedFrom), tokens,
   } };
+}
+
+function finalizeDeadBallPenalty(
+  state: FootballConfirmedQuickInputState,
+  context: FootballQuickInputContext,
+  automaticFirstDown: boolean,
+): FootballQuickInputTransitionResult {
+  return finalizePenaltyEntry({
+    ...baseActiveState(state),
+    tokens: {
+      ...cloneTokens(state.tokens),
+      penaltyDownConsequence: automaticFirstDown ? 'AUTO_FIRST'
+        : state.tokens.penaltySource === 'immediate' ? 'REPEAT'
+        : state.tokens.penaltyDownConsequence === 'NEW_SERIES' ? 'NEW_SERIES' : 'DOWN_COUNTS',
+    },
+  }, context);
 }
 
 function finalizePenaltyEntry(
