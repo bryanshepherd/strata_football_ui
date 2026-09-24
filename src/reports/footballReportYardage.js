@@ -3,7 +3,7 @@ import { projectFootballStatsForEvents, repairFootballStatsFromCompleteEventLog 
 import { footballSpotFoulStatisticalYards } from '../utils/footballStatisticalYardage';
 
 // Older mirrors can retain totals computed from the final enforcement spot.
-// Refresh only the affected yardage fields, and only with a complete play log.
+// Refresh affected yardage and legacy first-down totals with a complete play log.
 // This is a report projection; it does not save or rewrite any recorded event.
 export const withFootballReportYardage = (envelope) => {
   const events = [...(envelope?.events || [])]
@@ -13,9 +13,23 @@ export const withFootballReportYardage = (envelope) => {
   if (events.some(hasAcceptedDpiSpotPenalty)) {
     envelope = repairDpiSpotDrivePlayCounts({ ...envelope, stats: repairFootballStatsFromCompleteEventLog(envelope) });
   }
+  const legacyFirstDownTeams = new Set(events.filter(event => (
+    event.result?.firstDown === true
+    && event.result?.officialOutcome?.source !== 'penaltyEnforcement'
+    && (event.penalties || []).some(penalty => penalty.status === 'accepted' && penalty.automaticFirstDown)
+  )).map(event => event.possession).filter(team => ['H', 'V'].includes(team)));
+  let projected;
+  if (legacyFirstDownTeams.size) {
+    projected = projectFootballStatsForEvents(envelope);
+    const teams = { ...(envelope.stats?.teams || {}) };
+    for (const team of legacyFirstDownTeams) {
+      teams[team] = { ...teams[team], firstDowns: projected.teams?.[team]?.firstDowns || 0 };
+    }
+    envelope = { ...envelope, stats: { ...(envelope.stats || {}), teams } };
+  }
   const affected = events.filter(event => footballSpotFoulStatisticalYards(event, envelope?.game?.rules?.fieldLength || 100) !== null);
   if (!affected.length) return envelope;
-  const projected = projectFootballStatsForEvents(envelope);
+  projected ||= projectFootballStatsForEvents(envelope);
   const teams = { ...(envelope.stats?.teams || {}) };
   const players = { ...(envelope.stats?.players || {}) };
   const seen = new Set();

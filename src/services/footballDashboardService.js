@@ -1311,7 +1311,8 @@ const playEarnedFirstDown = (event, projection, eventHistory) => {
     || hasAcceptedDpiSpotPenalty(event)
     || hasReplayDownPenalty(event)
   ) return false;
-  if (event?.result?.firstDown === true) return true;
+  // Legacy firstDown flags include penalty awards. A separate play-earned
+  // credit must come from the statistical gain, not that aggregate flag.
   if (
     event?.result?.scoring?.type === 'touchdown'
     || projection?.scoringUpdate?.type === 'touchdown'
