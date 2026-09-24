@@ -154,6 +154,29 @@ describe('football historical play replacement', () => {
     expect(working.liveState).toEqual(envelope.events[0].preState);
   });
 
+  it('uses an explicitly selected corrected start for both replacement entry and saving', () => {
+    const envelope = baseEnvelope();
+    const target = envelope.events[1];
+    target.type = 'penalty';
+    target.preState = series({ down: 2, distance: 5, yardLine: 'H20', lineToGain: 'H25' });
+    target.result = { code: 'accepted', endYardLine: 'H10' };
+    target.penalties = [{ code: 'DOG', team: 'H', status: 'accepted', yards: 10, enforcedFrom: 'previousSpot', finalSpot: 'H10', replayDown: true }];
+    const startingContext = series({ down: 3, distance: 10, yardLine: 'H15', lineToGain: 'H25' });
+    const working = buildFootballPlayReplacementEnvelope(envelope, target, { startingContext });
+    expect(working.liveState).toEqual(startingContext);
+    expect(buildFootballPlayReplacementEnvelope(envelope, target).liveState).toEqual(target.preState);
+    const draft = { ...clone(target), preState: startingContext, penalties: [{ ...target.penalties[0], yards: 5 }] };
+    const result = replaceFootballPlayInEnvelope(envelope, target, draft, { startingContext });
+    expect(result.ok).toBe(true);
+    expect(result.event.preState).toEqual(startingContext);
+    expect(result.event.postState).toMatchObject({ down: 3, distance: 15, yardLine: 'H10', lineToGain: 'H25' });
+    expect(result.event.penalties[0].yards).toBe(5);
+    expect(result.event.eventId).toBe(target.eventId);
+    expect(result.envelope.events[0]).toEqual(envelope.events[0]);
+    expect(result.envelope.game.status).toBe('final');
+    expect(envelope.events[1].preState.yardLine).toBe('H20');
+  });
+
   it('replaces one final-game event in place and recalculates its statistics', () => {
     const envelope = baseEnvelope();
     const result = replaceFootballPlayInEnvelope(

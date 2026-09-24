@@ -205,6 +205,7 @@ export default function FootballScorerShell() {
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
   const [editingPlay, setEditingPlay] = useState(null);
   const [replacementPlay, setReplacementPlay] = useState(null);
+  const [replacementContext, setReplacementContext] = useState(null);
   const [insertionSession, setInsertionSession] = useState(null);
   const [challengeReview, setChallengeReview] = useState(null);
   const [dismissedChallenge, setDismissedChallenge] = useState(null);
@@ -223,9 +224,9 @@ export default function FootballScorerShell() {
     insertionSession?.inputEnvelope || (envelope && replacementPlay
       ? replacementChallenge
         ? buildFootballChallengeRescoreEnvelope(challengeWorkingEnvelope || envelope, replacementPlay)
-        : buildFootballPlayReplacementEnvelope(envelope, replacementPlay)
+        : buildFootballPlayReplacementEnvelope(replacementContext?.baseEnvelope || envelope, replacementPlay, replacementContext || {})
       : envelope)
-  ), [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope, insertionSession]);
+  ), [envelope, replacementPlay, replacementContext, replacementChallenge, challengeWorkingEnvelope, insertionSession]);
   const pendingChallenge = pendingFootballChallengeRescore(envelope);
   useEffect(() => {
     if (pendingChallenge && !replacementPlay && !insertionSession && footballChallengeEventKey(pendingChallenge) !== dismissedChallenge) {
@@ -262,6 +263,7 @@ export default function FootballScorerShell() {
     setWrapUpSaveState({ saving: false, error: '' });
     setEditingPlay(null);
     setReplacementPlay(null);
+    setReplacementContext(null);
     setInsertionSession(null);
     setChallengeReview(null);
     setDismissedChallenge(null);
@@ -383,6 +385,7 @@ export default function FootballScorerShell() {
       setFcqiResetKey((current) => current + 1);
       setEditingPlay(null);
       setReplacementPlay(null);
+    setReplacementContext(null);
       setInsertionSession(null);
       setPlayEditFeedback(null);
       setWrapUpOpen(false);
@@ -839,7 +842,13 @@ export default function FootballScorerShell() {
 
   const requestPlayReplacement = useCallback((play) => {
     try {
-      buildFootballPlayReplacementEnvelope(envelope, play);
+      const review = reviewFootballPlayContexts(envelope).reviews.get(footballContextEventKey(play));
+      const context = {
+        baseEnvelope: envelope,
+        startingContext: review?.fields.length && !review.unavailable ? review.expected : undefined,
+      };
+      buildFootballPlayReplacementEnvelope(envelope, play, context);
+      setReplacementContext(context);
       setEditingPlay(null);
       setReplacementPlay(play);
       setFcqiState(createInitialFootballQuickInputState());
@@ -858,6 +867,7 @@ export default function FootballScorerShell() {
 
   const cancelPlayReplacement = useCallback(() => {
     setReplacementPlay(null);
+    setReplacementContext(null);
     setReplacementChallenge(null);
     setChallengeBaseEnvelope(null);
     setChallengeWorkingEnvelope(null);
@@ -883,10 +893,11 @@ export default function FootballScorerShell() {
   };
 
   const replacementSubmitAdapter = useCallback(async (submitRequest) => {
+    if (!replacementChallenge && replacementContext?.baseEnvelope !== envelope) return { ok: false, errors: [{ code: 'REPLACEMENT_GAME_CHANGED', message: 'The game changed during replacement. Cancel and reopen the play to use the latest saved game.' }] };
     if (replacementChallenge && challengeBaseEnvelope !== envelope) return { ok: false, errors: [{ code: 'CHALLENGE_GAME_CHANGED', message: 'The game changed during this correction. Cancel and reopen the challenge to use the latest saved game.' }] };
     const result = replacementChallenge
       ? rescoreOverturnedFootballPlay(challengeWorkingEnvelope || envelope, replacementChallenge, replacementPlay, submitRequest?.event)
-      : replaceFootballPlayInEnvelope(envelope, replacementPlay, submitRequest?.event);
+      : replaceFootballPlayInEnvelope(envelope, replacementPlay, submitRequest?.event, replacementContext || {});
     if (!result.ok) {
       return {
         ok: false,
@@ -906,7 +917,7 @@ export default function FootballScorerShell() {
       warnings: result.warnings || [],
       rawResponse: { success: true, status: 'replaced', warnings: result.warnings || [] },
     };
-  }, [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope, challengeBaseEnvelope]);
+  }, [envelope, replacementPlay, replacementContext, replacementChallenge, challengeWorkingEnvelope, challengeBaseEnvelope]);
 
   const handleReplacementAccepted = useCallback((result) => {
     const replacementEnvelope = result?.gameEnvelope || result?.envelope;
@@ -925,6 +936,7 @@ export default function FootballScorerShell() {
     setLocalUndoStack((current) => [...current, envelope]);
     setAcceptedScorerState({ gameEnvelope: persistedEnvelope, projection: null, acceptedEvents: [] });
     setReplacementPlay(null);
+    setReplacementContext(null);
     setReplacementChallenge(null);
     setChallengeBaseEnvelope(null);
     setChallengeWorkingEnvelope(null);
@@ -1650,7 +1662,7 @@ export const FootballInputSlot = ({
               <p className="mt-1 text-sm">
                 {challengeRescore
                   ? 'Enter the corrected play. The original will remain in history. Following context and statistics will be recalculated when the correction is complete.'
-                  : `The original sequence, Q${replacementPlay.period} ${formatFootballClockDisplay(replacementPlay.clock, '--:--')}, and starting context are locked. If its result disagrees with the next recorded play, the replacement will be saved and the inconsistency will be flagged for review.`}
+                  : `The original play number and time (Q${replacementPlay.period} ${formatFootballClockDisplay(replacementPlay.clock, '--:--')}) are retained. Starting context: ${playContextLabel(envelope, envelope.liveState)}. If its result disagrees with the next recorded play, the replacement will be saved and the inconsistency will be flagged for review.`}
               </p>
             </div>
             <button

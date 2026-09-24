@@ -4,6 +4,7 @@ import {
   recalculateFootballDriveTotals,
 } from '../services/footballDashboardService';
 import { applyFootballEventToEnvelope, calculateYardsGained } from '../utils/footballRulesEngine';
+import { calculateEditedPenaltyYards, normalizeEnforcementSpot } from './footballPlayEditYardage';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
 import { applyFootballPlayEditToEnvelope, buildFootballEditedPlaySummary } from './footballPlayEditEnvelope';
 
@@ -168,16 +169,34 @@ export function recalculateFootballPlayContext(envelope, target, {
     const simpleScrimmage = ['rush', 'pass'].includes(event.type)
       && !event.result.turnover && !event.result.fumble && !event.result.laterals?.length
       && !event.penalties?.length && !['interception', 'fumble'].includes(event.result.code);
-    if (!simpleScrimmage) throw new Error('The starting spot changed on a kick, penalty, or possession-change play. Use Replace This Play to confirm its yardage and enforcement.');
-    const yards = event.result.code === 'incomplete' ? 0
-      : calculateYardsGained(event.preState.yardLine, event.result.endYardLine, event.possession);
-    if (yards == null) throw new Error('This play needs a recorded ending spot before its yardage can be recalculated.');
-    event.result.yards = yards;
-    if (event.result.code === 'incomplete') event.result.endYardLine = event.preState.yardLine;
-    if (event.result.pass) {
-      event.result.pass.startYardLine = event.preState.yardLine;
-      for (const field of ['passingYards', 'receivingYards']) {
-        if (field in event.result.pass) event.result.pass[field] = yards;
+    const penalty = event.penalties?.[0];
+    const previousSpotPenalty = event.type === 'penalty' && event.penalties?.length === 1
+      && penalty.status === 'accepted' && !penalty.carryOverToKickoff && !penalty.carryOverToKO
+      && ['previous', 'previousspot'].includes(normalizeEnforcementSpot(penalty.enforcedFrom))
+      && original.preState.possession === event.preState.possession
+      && !event.result.turnover && !event.result.fumble && !event.result.penaltyContext
+      && !official?.operatorVerified && !official?.operatorAdjusted;
+    if (previousSpotPenalty) {
+      // An explicit repair keeps the recorded enforcement destination. Only its
+      // distance from the corrected previous spot and the series are rebuilt.
+      const yards = calculateEditedPenaltyYards(event, penalty);
+      const movement = calculateYardsGained(event.preState.yardLine, penalty.finalSpot, event.possession);
+      const correctDirection = penalty.team === event.possession ? movement < 0 : movement > 0;
+      if (yards == null || !correctDirection) throw new Error('The recorded penalty destination cannot be enforced from the corrected starting spot. Use Replace This Play to confirm enforcement.');
+      penalty.yards = yards;
+      event.result.endYardLine = penalty.finalSpot;
+    } else {
+      if (!simpleScrimmage) throw new Error('The starting spot changed on a kick, penalty, or possession-change play. Use Replace This Play to confirm its yardage and enforcement.');
+      const yards = event.result.code === 'incomplete' ? 0
+        : calculateYardsGained(event.preState.yardLine, event.result.endYardLine, event.possession);
+      if (yards == null) throw new Error('This play needs a recorded ending spot before its yardage can be recalculated.');
+      event.result.yards = yards;
+      if (event.result.code === 'incomplete') event.result.endYardLine = event.preState.yardLine;
+      if (event.result.pass) {
+        event.result.pass.startYardLine = event.preState.yardLine;
+        for (const field of ['passingYards', 'receivingYards']) {
+          if (field in event.result.pass) event.result.pass[field] = yards;
+        }
       }
     }
   }

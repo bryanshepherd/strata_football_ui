@@ -376,7 +376,10 @@ export default function FootballPlayEditorModal({
             tone="amber"
             title="Replace this play?"
           >
-            Use replacement when the play type, result family, or penalty presence is wrong. The existing play will not be edited in place.
+            Use replacement when the play type, result family, or penalty presence is wrong. The original stays saved until you finish.
+            {contextReview?.fields.length > 0 && !contextReview.unavailable && (
+              <span className="mt-2 block font-bold">Replacement will start from the preceding result: {contextReview.expectedLabel}.</span>
+            )}
           </ConfirmationDialog>
         )}
       </form>

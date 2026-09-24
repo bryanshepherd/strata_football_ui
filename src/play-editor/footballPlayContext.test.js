@@ -160,6 +160,57 @@ describe('football play context continuity and repair', () => {
     expect(result.events[1].postState).toMatchObject({ down: 2, distance: 8 });
   });
 
+  it('repairs a previous-spot penalty after a corrected play and stale timeout, keeping its final spot', () => {
+    const game = base();
+    const corrected = context({ down: 3, distance: 10, yardLine: 'H15', lineToGain: 'H25' });
+    const stale = context({ down: 2, distance: 5, yardLine: 'H20', lineToGain: 'H25' });
+    game.events = [
+      play(1, { ...corrected, down: 2 }, 0, 'H15', { type: 'pass', result: { code: 'incomplete', yards: 0, endYardLine: 'H15' }, postState: corrected }),
+      { ...control(2, 'timeout', { teamSide: 'V' }), preState: stale },
+      play(3, stale, 0, 'H10', {
+        type: 'penalty', participants: {},
+        penalties: [{ penaltyId: 'dog-1', code: 'DOG', name: 'Delay of Game', team: 'H', timing: 'deadBall', status: 'accepted', yards: 10, enforcedFrom: 'previousSpot', finalSpot: 'H10', replayDown: true }],
+        result: { code: 'accepted', endYardLine: 'H10', officialOutcome: { operatorVerified: false, calculated: { ...stale, yardLine: 'H10', distance: 15 } } },
+        confirmation: { summaryText: 'old ten-yard text' },
+      }),
+      play(4, { ...corrected, down: 2 }, 12, 'H27'),
+    ];
+    const before = structuredClone(game);
+    const result = recalculateFootballPlayContext(game, game.events[2]);
+    const repaired = result.events[2];
+    expect(repaired.preState).toMatchObject(corrected);
+    expect(repaired.postState).toMatchObject({ down: 3, distance: 15, yardLine: 'H10', lineToGain: 'H25' });
+    expect(repaired.penalties[0]).toEqual({ ...game.events[2].penalties[0], yards: 5 });
+    expect(repaired.result.officialOutcome).toBeUndefined();
+    expect(repaired.description).toContain('5 yards from the H15 to the H10');
+    expect(repaired.confirmation.summaryText).toBe(repaired.description);
+    expect(result.events.filter((_, i) => i !== 2)).toEqual(game.events.filter((_, i) => i !== 2));
+    expect(result.liveState).toEqual(game.liveState);
+    expect(result.game).toEqual(game.game);
+    expect(review(result, 3).fields).toEqual(expect.arrayContaining(['down', 'distance', 'yardLine']));
+    expect(game).toEqual(before);
+    // A later recalculation remains an explicit operator action.
+    const following = recalculateFootballPlayContext(result, result.events[3]);
+    expect(following.events[3].result.yards).toBe(17);
+    expect(following.events[3].postState).toMatchObject({ down: 1, distance: 10, yardLine: 'H27' });
+  });
+
+  it.each(['multiple', 'carryover', 'verified', 'spotFoul', 'wrongDirection', 'missingSpot'])('requires replacement for ambiguous moved-spot penalty enforcement: %s', (kind) => {
+    const game = chain();
+    game.events[1].preState.yardLine = 'V44';
+    game.events[1].type = 'penalty';
+    game.events[1].result = { code: 'accepted', endYardLine: 'V49' };
+    const penalty = { code: 'DOG', team: 'H', status: 'accepted', yards: 5, enforcedFrom: 'previousSpot', finalSpot: 'V49', replayDown: true };
+    game.events[1].penalties = [penalty];
+    if (kind === 'multiple') game.events[1].penalties.push({ ...penalty });
+    if (kind === 'carryover') penalty.carryOverToKickoff = true;
+    if (kind === 'verified') game.events[1].result.officialOutcome = { operatorVerified: true };
+    if (kind === 'spotFoul') penalty.enforcedFrom = 'spotOfFoul';
+    if (kind === 'wrongDirection') penalty.finalSpot = 'V40';
+    if (kind === 'missingSpot') delete penalty.finalSpot;
+    expect(() => recalculateFootballPlayContext(game, game.events[1])).toThrow('Use Replace This Play');
+  });
+
   it('requires replacement when correcting possession conflicts with recorded players', () => {
     const game = chain();
     game.events[0].postState.possession = 'V';

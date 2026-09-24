@@ -729,6 +729,9 @@ describe('FootballScorerShell', () => {
       driveId: 'DRV-0002',
       driveNumber: 2,
     };
+    finalEnvelope.events[0].postState = {
+      ...finalEnvelope.events[1].preState, down: 3, distance: 10, yardLine: 'H15', lineToGain: 'H25',
+    };
     saveDashboardSeededFootballEnvelope(finalEnvelope.gameId, finalEnvelope);
 
     renderScorer('/scorer?envelopeGameId=FB-FINAL-REPLACE-UI');
@@ -738,7 +741,11 @@ describe('FootballScorerShell', () => {
     const editor = screen.getByRole('dialog', { name: /edit play 2/i });
     fireEvent.click(within(editor).getAllByRole('button', { name: /replace this play/i })[0]);
     const confirmation = within(editor).getByRole('alertdialog', { name: /replace this play/i });
+    expect(confirmation).toHaveTextContent('Replacement will start from the preceding result:');
+    expect(confirmation).toHaveTextContent('H15');
     fireEvent.click(within(confirmation).getByRole('button', { name: /start replacement/i }));
+    expect(screen.getByText(/Starting context:/)).toHaveTextContent('H15');
+    expect(screen.getByText(/Starting context:/)).not.toHaveTextContent('H32');
 
     expect(screen.getByRole('heading', { name: /replacement entry/i })).toBeInTheDocument();
     expect(screen.getByText('Replacing play #2')).toBeInTheDocument();
@@ -786,6 +793,9 @@ describe('FootballScorerShell', () => {
       participants: { primary: { playerId: 'H-22', team: 'H', role: 'rusher', jersey: '22', displayName: 'Jordan Smith' } },
       result: { code: 'tackle', yards: 0, endYardLine: 'H44' },
       description: 'Home State #22 Jordan Smith rush for no gain to the H44.',
+    };
+    finalEnvelope.events[0].postState = {
+      ...finalEnvelope.events[1].preState, yardLine: 'H43', distance: 7,
     };
     const replacementPostState = {
       possession: 'H',
@@ -846,6 +856,8 @@ describe('FootballScorerShell', () => {
       sequence: 2,
       type: 'pass',
       subtype: 'complete',
+      preState: { yardLine: 'H43', down: 2, distance: 7 },
+      result: { yards: 8 },
       postState: replacementPostState,
       source: { replacement: { previousType: 'rush' } },
     });

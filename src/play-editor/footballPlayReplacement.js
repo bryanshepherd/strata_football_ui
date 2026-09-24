@@ -96,7 +96,7 @@ const applyScoringDelta = (teams, originalProjection, replacementProjection) => 
   return next;
 };
 
-const replacementAuditSource = (original, replacement, editedAt) => ({
+const replacementAuditSource = (original, replacement, editedAt, startingContext) => ({
   ...(clone(replacement.source || {})),
   replacement: {
     replacedAt: editedAt,
@@ -105,10 +105,11 @@ const replacementAuditSource = (original, replacement, editedAt) => ({
     replacementDraftClientEventId: replacement.clientEventId || null,
     previousType: original.type || null,
     previousSubtype: original.subtype ?? null,
+    ...(startingContext ? { previousPreState: clone(original.preState) } : {}),
   },
 });
 
-const canonicalReplacementEvent = (original, replacement, editedAt) => ({
+const canonicalReplacementEvent = (original, replacement, editedAt, startingContext) => ({
   ...clone(replacement),
   eventId: original.eventId,
   clientEventId: original.clientEventId,
@@ -120,8 +121,8 @@ const canonicalReplacementEvent = (original, replacement, editedAt) => ({
   status: original.status || 'accepted',
   period: original.period,
   clock: original.clock,
-  preState: clone(original.preState || replacement.preState || {}),
-  source: replacementAuditSource(original, replacement, editedAt),
+  preState: { ...clone(original.preState || replacement.preState || {}), ...clone(startingContext || {}) },
+  source: replacementAuditSource(original, replacement, editedAt, startingContext),
 });
 
 const setupStateForTarget = (events, eventIndex, target) => {
@@ -157,7 +158,7 @@ const setupStateForTarget = (events, eventIndex, target) => {
   return preState;
 };
 
-export function buildFootballPlayReplacementEnvelope(envelope, play) {
+export function buildFootballPlayReplacementEnvelope(envelope, play, { startingContext } = {}) {
   if (!envelope || !Array.isArray(envelope.events) || !play) {
     throw new Error('A game envelope and selected play are required.');
   }
@@ -175,7 +176,9 @@ export function buildFootballPlayReplacementEnvelope(envelope, play) {
   if (checkpointEvent && !checkpointEvent.preState) {
     throw new Error(`Play #${checkpointEvent.sequence || eventIndex + 2} does not contain a recorded starting context, so this replacement cannot be verified safely.`);
   }
-  const replacementState = setupStateForTarget(envelope.events, eventIndex, target);
+  const replacementState = setupStateForTarget(envelope.events, eventIndex, {
+    ...target, preState: { ...target.preState, ...clone(startingContext || {}) },
+  });
   return {
     ...clone(envelope),
     game: {
@@ -206,7 +209,7 @@ export function replaceFootballPlayInEnvelope(
   envelope,
   play,
   replacement,
-  { editedAt = new Date().toISOString() } = {},
+  { editedAt = new Date().toISOString(), startingContext } = {},
 ) {
   if (!envelope || !Array.isArray(envelope.events) || !play || !replacement) {
     return {
@@ -266,7 +269,7 @@ export function replaceFootballPlayInEnvelope(
   const checkpoint = clone(checkpointEvent?.preState || envelope.liveState || {});
   const nextEventLabel = checkpointEvent?.sequence ? `play #${checkpointEvent.sequence}` : 'the final game state';
   const nextDriveId = checkpoint?.driveId || undefined;
-  const event = canonicalReplacementEvent(original, replacement, editedAt);
+  const event = canonicalReplacementEvent(original, replacement, editedAt, startingContext);
 
   let originalProjection;
   let replacementProjection;
