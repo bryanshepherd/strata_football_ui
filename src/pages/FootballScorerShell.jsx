@@ -16,6 +16,7 @@ import FootballConfirmedQuickInput, {
   getFootballFcqiAssistantMessage,
 } from '../components/fcqi/FootballConfirmedQuickInput';
 import FootballScoreboard from '../components/scorer/FootballScoreboard';
+import FootballActivePlayFlags from '../components/scorer/FootballActivePlayFlags';
 import FootballDriveSummaryModal from '../components/scorer/FootballDriveSummaryModal';
 import FootballGameWrapUpModal from '../components/scorer/FootballGameWrapUpModal';
 import FootballPossessionClockModal from '../components/scorer/FootballPossessionClockModal';
@@ -1323,7 +1324,17 @@ export default function FootballScorerShell() {
             onUndoLastEvent={useLocalTestGame ? undoLastLocalEvent : undefined}
           />
         )}
-        inputAssistant={<FootballInputAssistantSlot envelope={envelope} fcqiState={fcqiState} />}
+        inputAssistant={<>
+          <FootballInputAssistantSlot envelope={envelope} fcqiState={fcqiState} />
+          {(!fcqiState || ['idle', 'cancelled'].includes(fcqiState.status)) && !replacementPlay && !insertionSession && (
+            <FootballActivePlayFlags
+              envelope={envelope}
+              onEditPlay={openPlayEditor}
+              onChallengeRescore={setChallengeReview}
+              disabled={Boolean(editingPlay || playReviewOpen || challengeReview)}
+            />
+          )}
+        </>}
       />
 
       <FootballRosterEditorModal

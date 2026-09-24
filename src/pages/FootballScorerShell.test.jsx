@@ -521,13 +521,16 @@ describe('FootballScorerShell', () => {
       expect(screen.getByLabelText('Context mismatch for play 2')).toBeInTheDocument();
       expect(screen.queryByLabelText('Context mismatch for play 3')).not.toBeInTheDocument();
       const repair = (sequence) => {
-        fireEvent.click(screen.getByRole('button', { name: `Edit play ${sequence}` }));
+        fireEvent.click(within(screen.getByRole('region', { name: 'Active play flags' })).getByRole('button', { name: `Review context mismatch for play ${sequence}` }));
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Recalculate this play' }));
       };
+      expect(screen.getByRole('region', { name: 'Active play flags' })).toHaveTextContent('Play #2');
       repair(2);
       expect(screen.getByRole('status')).toHaveTextContent('Play #2 was recalculated.');
       expect(screen.queryByLabelText('Context mismatch for play 2')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Context mismatch for play 3')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Active play flags' })).toHaveTextContent('Play #3');
+      expect(screen.getByRole('region', { name: 'Active play flags' })).not.toHaveTextContent('Play #2');
       await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events[1].postState).toMatchObject({ down: 2, distance: 8 }));
       const afterTwo = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
       expect(afterTwo.events[2].preState).toEqual(game.events[2].preState);
@@ -546,6 +549,7 @@ describe('FootballScorerShell', () => {
       view = renderScorer('/scorer?dashboardGameId=DASH-RECALCULATE&envelopeGameId=FB-CONTEXT-RECALCULATE');
       await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
       expect(screen.queryByLabelText(/Context mismatch for play/)).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Active play flags' })).toHaveTextContent('No active play flags');
       expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events[2].postState).toMatchObject({ down: 3, distance: 5 });
     } finally {
       view?.unmount();
@@ -2915,6 +2919,7 @@ describe('FootballScorerShell', () => {
       renderScorer();
 
       fireEvent.click(screen.getByRole('button', { name: /rush/i }));
+      expect(screen.queryByRole('region', { name: 'Active play flags' })).not.toBeInTheDocument();
       const jerseyInput = screen.getByLabelText(/rusher jersey/i);
       fireEvent.change(jerseyInput, { target: { value: '22' } });
       fireEvent.submit(jerseyInput.closest('form'));
