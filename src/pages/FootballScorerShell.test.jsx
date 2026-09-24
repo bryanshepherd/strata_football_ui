@@ -643,6 +643,69 @@ describe('FootballScorerShell', () => {
     expect(screen.queryByRole('button', { name: /resume challenge rescore/i })).not.toBeInTheDocument();
   });
 
+  it('previews, saves, mirrors, reloads and undoes an insertion without rewriting following plays', async () => {
+    const game = cloneNormalEnvelope();
+    game.gameId = 'FB-INSERT-UI'; game.rosters.gameId = game.gameId;
+    game.game.status = 'final'; game.pregame = { ...game.pregame, gamePhase: 'final' };
+    game.events.forEach((event,index) => { event.sequence = index + 1; });
+    game.events[1].preState = { possession: 'H', down: 1, distance: 10, yardLine: 'H32', lineToGain: 'H42', goalToGo: false, redZone: false, driveId: 'DRV-0002', driveNumber: 2 };
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const before = structuredClone(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope);
+    const mock = mockSubmitSuccess();
+    try {
+      const view = renderScorer(`/scorer?envelopeGameId=${game.gameId}&dashboardGameId=DASH-INSERT`);
+      fireEvent.click(await screen.findByRole('tab', { name: `Q${game.events[1].period}` }));
+      fireEvent.click(screen.getByRole('button', { name: 'Insert before play 2' }));
+      const setup = screen.getByRole('dialog', { name: 'Insert play before' });
+      fireEvent.keyDown(within(setup).getByLabelText('Insertion clock'), { key: 'r' });
+      expect(screen.queryByLabelText(/rusher jersey/i)).not.toBeInTheDocument();
+      fireEvent.click(within(setup).getByRole('button', { name: 'Start Insertion' }));
+      expect(screen.getByRole('heading', { name: 'Insert Play' })).toBeInTheDocument();
+      completeRushFlowInputs();
+      const summary = await screen.findByRole('dialog', { name: /play summary review/i });
+      fireEvent.click(within(summary).getByRole('button', { name: 'Preview Insertion' }));
+      const preview = await screen.findByRole('dialog', { name: 'Preview play insertion' });
+      expect(within(preview).getByLabelText('Insertion statistics preview')).toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toEqual(before.events);
+      fireEvent.click(within(preview).getByRole('button', { name: 'Save Inserted Play' }));
+      await waitFor(() => expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toHaveLength(3));
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.events[1].eventId).toMatch(/^INSERT-/);
+      expect(saved.events[2].eventId).toBe(before.events[1].eventId);
+      expect(saved.events[2].preState).toEqual(before.events[1].preState);
+      expect(saved.events[2].result).toEqual(before.events[1].result);
+      expect(saved.game.status).toBe('final');
+      expect(saved.liveState).toEqual(before.liveState);
+      await waitFor(() => expect(mock.fetchSpy.mock.calls.some(([,init]) => {
+        const request = JSON.parse(init.body); return request.schemaVersion === 'football.localEnvelopeMirrorRequest.v1' && request.envelope?.events?.length === 3;
+      })).toBe(true));
+      fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+      await waitFor(() => expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toEqual(before.events));
+      view.unmount();
+      renderScorer(`/scorer?envelopeGameId=${game.gameId}&dashboardGameId=DASH-INSERT`);
+      await screen.findByRole('heading', { name: /visitor tech at home state/i });
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toEqual(before.events);
+    } finally { mock.restore(); }
+  });
+
+  it('cancels an insertion preview without saving and can start insertion from Review Plays', async () => {
+    const game = cloneNormalEnvelope(); game.gameId='FB-INSERT-CANCEL';
+    game.events.forEach((event,index) => { event.sequence=index+1; });
+    game.events[1].preState = { possession: 'H', down: 1, distance: 10, yardLine: 'H32', lineToGain: 'H42', goalToGo: false, redZone: false, driveId: 'DRV-0002', driveNumber: 2 };
+    saveDashboardSeededFootballEnvelope(game.gameId,game);
+    renderScorer(`/scorer?envelopeGameId=${game.gameId}&local=1`);
+    await screen.findByRole('heading', {name:/visitor tech at home state/i});
+    fireEvent.click(screen.getByRole('button',{name:/^review plays v$/i}));
+    fireEvent.click(within(screen.getByRole('dialog',{name:'Review Plays'})).getByRole('button',{name:'Insert before reviewed play 2'}));
+    fireEvent.click(within(screen.getByRole('dialog',{name:'Insert play before'})).getByRole('button',{name:'Start Insertion'}));
+    completeRushFlowInputs();
+    fireEvent.click(within(await screen.findByRole('dialog',{name:/play summary review/i})).getByRole('button',{name:'Preview Insertion'}));
+    const preview=await screen.findByRole('dialog',{name:'Preview play insertion'});
+    fireEvent.click(within(preview).getByRole('button',{name:'Cancel Insertion'}));
+    expect(await screen.findByRole('dialog',{name:'Review Plays'})).toBeInTheDocument();
+    expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events).toHaveLength(2);
+  });
+
   it('starts a historical replacement from a final game without reopening ordinary scoring', async () => {
     const finalEnvelope = cloneNormalEnvelope();
     finalEnvelope.gameId = 'FB-FINAL-REPLACE-UI';

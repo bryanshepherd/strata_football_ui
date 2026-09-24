@@ -10,6 +10,8 @@ import { useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
 import FootballBallContextRevisionModal from '../components/editor/FootballBallContextRevisionModal';
 import FootballPlayEditorModal from '../components/editor/FootballPlayEditorModal';
+import FootballPlayInsertionModal from '../components/editor/FootballPlayInsertionModal';
+import { buildFootballPlayInsertionEnvelope, previewFootballPlayInsertion } from '../play-editor/footballPlayInsertion';
 import FootballConfirmedQuickInput, {
   getFootballFcqiAssistantMessage,
 } from '../components/fcqi/FootballConfirmedQuickInput';
@@ -203,6 +205,7 @@ export default function FootballScorerShell() {
   const [wrapUpSaveState, setWrapUpSaveState] = useState({ saving: false, error: '' });
   const [editingPlay, setEditingPlay] = useState(null);
   const [replacementPlay, setReplacementPlay] = useState(null);
+  const [insertionSession, setInsertionSession] = useState(null);
   const [challengeReview, setChallengeReview] = useState(null);
   const [dismissedChallenge, setDismissedChallenge] = useState(null);
   const [replacementChallenge, setReplacementChallenge] = useState(null);
@@ -217,21 +220,21 @@ export default function FootballScorerShell() {
     [acceptedScorerState, baseEnvelope],
   );
   const inputEnvelope = useMemo(() => (
-    envelope && replacementPlay
+    insertionSession?.inputEnvelope || (envelope && replacementPlay
       ? replacementChallenge
         ? buildFootballChallengeRescoreEnvelope(challengeWorkingEnvelope || envelope, replacementPlay)
         : buildFootballPlayReplacementEnvelope(envelope, replacementPlay)
-      : envelope
-  ), [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope]);
+      : envelope)
+  ), [envelope, replacementPlay, replacementChallenge, challengeWorkingEnvelope, insertionSession]);
   const pendingChallenge = pendingFootballChallengeRescore(envelope);
   useEffect(() => {
-    if (pendingChallenge && !replacementPlay && footballChallengeEventKey(pendingChallenge) !== dismissedChallenge) {
+    if (pendingChallenge && !replacementPlay && !insertionSession && footballChallengeEventKey(pendingChallenge) !== dismissedChallenge) {
       setChallengeReview(pendingChallenge);
       setPossessionClockChange(null);
       setDriveSummary(null);
       setWrapUpOpen(false);
     }
-  }, [pendingChallenge, dismissedChallenge, replacementPlay]);
+  }, [pendingChallenge, dismissedChallenge, replacementPlay, insertionSession]);
   const traceEntries = useMemo(
     () => (debugMode && envelope ? buildFootballFixtureDebugTrace(envelope) : []),
     [debugMode, envelope],
@@ -259,6 +262,7 @@ export default function FootballScorerShell() {
     setWrapUpSaveState({ saving: false, error: '' });
     setEditingPlay(null);
     setReplacementPlay(null);
+    setInsertionSession(null);
     setChallengeReview(null);
     setDismissedChallenge(null);
     setReplacementChallenge(null);
@@ -338,9 +342,9 @@ export default function FootballScorerShell() {
     }
   }, [dashboardGameId, requestedGameId]);
 
-  const penaltyPending = !replacementPlay && footballPenaltyPendingForInput(fcqiState);
+  const penaltyPending = !replacementPlay && !insertionSession && footballPenaltyPendingForInput(fcqiState);
   useEffect(() => {
-    if (!envelope || (requestedGameId && envelope.gameId !== requestedGameId)) return;
+    if (insertionSession || !envelope || (requestedGameId && envelope.gameId !== requestedGameId)) return;
     // Drafts are not restored after reload, so an abandoned flag clears here.
     // Status changes use the normal mirror without adding a play or undo entry.
     const current = requestedGameId
@@ -359,7 +363,7 @@ export default function FootballScorerShell() {
     } catch (error) {
       setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `The live penalty indicator could not be synced: ${error.message}` });
     }
-  }, [dashboardGameId, envelope, flushServerSync, penaltyPending, requestedGameId]);
+  }, [dashboardGameId, envelope, flushServerSync, penaltyPending, requestedGameId, insertionSession]);
 
   const handleFetchFromServer = useCallback(async () => {
     if (!requestedGameId || recoveryState.recovering) return;
@@ -379,6 +383,7 @@ export default function FootballScorerShell() {
       setFcqiResetKey((current) => current + 1);
       setEditingPlay(null);
       setReplacementPlay(null);
+      setInsertionSession(null);
       setPlayEditFeedback(null);
       setWrapUpOpen(false);
       setLoadedGameState({
@@ -772,6 +777,66 @@ export default function FootballScorerShell() {
     }
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
 
+  const requestPlayInsertion = (play) => {
+    try {
+      if (fcqiState.flow && !['idle', 'cancelled', 'submitted', 'submitting.confirmed'].includes(fcqiState.status)) {
+        throw new Error('Finish or cancel the current play before inserting a historical play.');
+      }
+      buildFootballPlayInsertionEnvelope(envelope, play);
+      setEditingPlay(null);
+      setPlayEditFeedback(null);
+      setInsertionSession({ target: play, baseEnvelope: envelope, clock: play.clock, phase: 'setup' });
+    } catch (error) { setPlayEditFeedback({ tone: 'error', message: error.message }); }
+  };
+  const cancelPlayInsertion = () => {
+    setInsertionSession(null);
+    setFcqiState(createInitialFootballQuickInputState());
+    setFcqiResetKey(value => value + 1);
+    setPlayEditFeedback({ tone: 'warning', message: 'Insertion canceled. No play was changed.' });
+  };
+  const startPlayInsertion = clock => {
+    try {
+      if (insertionSession.baseEnvelope !== envelope) throw new Error('The game changed. Cancel and reopen insertion.');
+      const historical = buildFootballPlayInsertionEnvelope(envelope, insertionSession.target, clock);
+      if (insertionSession.inputEnvelope) historical.rosters = insertionSession.inputEnvelope.rosters;
+      setInsertionSession({ ...insertionSession, clock, inputEnvelope: historical, phase: 'entry', preview: null });
+      setPlayEditFeedback(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey(value => value + 1);
+    } catch (error) { setPlayEditFeedback({ tone: 'error', message: error.message }); }
+  };
+  const insertionSubmitAdapter = async request => {
+    try {
+      if (insertionSession.baseEnvelope !== envelope) throw new Error('The game changed. Cancel and reopen insertion.');
+      const preview = previewFootballPlayInsertion(
+        { ...envelope, rosters: insertionSession.inputEnvelope.rosters },
+        insertionSession.target, request.event, { clock: insertionSession.clock },
+      );
+      return { ok: true, status: 'insertionPreview', preview };
+    } catch (error) { return { ok: false, errors: [{ code: 'INSERTION_FAILED', message: error.message }] }; }
+  };
+  const savePlayInsertion = () => {
+    try {
+      if (insertionSession.baseEnvelope !== envelope) throw new Error('The game changed during the preview. Cancel and reopen insertion.');
+      const { preview } = insertionSession;
+      const saved = requestedGameId
+        ? saveDashboardSeededFootballEnvelope(requestedGameId, preview.envelope) || preview.envelope : preview.envelope;
+      setLocalUndoStack(current => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: saved, projection: null, acceptedEvents: [] });
+      setInsertionSession(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey(value => value + 1);
+      setPlayEditFeedback({ tone: preview.affected.length ? 'warning' : 'success', message: `Play #${preview.event.sequence} inserted. Later plays were renumbered.${preview.affected.length ? ` Review play #${preview.affected[0].sequence} next; its recorded starting context was preserved.` : ''} Use Undo Last Change to restore the previous game.` });
+      if (requestedGameId && dashboardGameId) {
+        try {
+          enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: saved });
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+          void flushServerSync();
+        } catch (error) { setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `Insertion saved locally; server sync could not be prepared: ${error.message}` }); }
+      }
+    } catch (error) { setPlayEditFeedback({ tone: 'error', message: error.message }); }
+  };
+
   const requestPlayReplacement = useCallback((play) => {
     try {
       buildFootballPlayReplacementEnvelope(envelope, play);
@@ -1019,12 +1084,17 @@ export default function FootballScorerShell() {
   }, [dashboardGameId, flushServerSync, requestedGameId]);
 
   const addRosterPlayers = useCallback(async (players) => {
+    if (insertionSession) {
+      const updatedInput = addFootballRosterPlayers(insertionSession.inputEnvelope, players);
+      setInsertionSession(current => ({ ...current, inputEnvelope: updatedInput }));
+      return;
+    }
     const persisted = await saveQuickRosterEnvelope(addFootballRosterPlayers(envelope, players));
     if (replacementChallenge) {
       setChallengeBaseEnvelope(persisted);
       setChallengeWorkingEnvelope(current => current ? addFootballRosterPlayers(current, players) : current);
     }
-  }, [envelope, replacementChallenge, saveQuickRosterEnvelope]);
+  }, [envelope, insertionSession, replacementChallenge, saveQuickRosterEnvelope]);
 
   const saveQuickPlayerName = useCallback(async (team, playerId, displayName) => {
     const player = envelope.rosters?.teams?.[team]?.players?.[playerId];
@@ -1199,13 +1269,15 @@ export default function FootballScorerShell() {
         scoreboard={<FootballScoreboardSlot envelope={envelope} />}
         stats={<FootballStatsSlot envelope={envelope} />}
         input={(
-          pendingChallenge && !replacementPlay ? <div className="p-4"><p className="font-bold">An overturned challenge needs a corrected play before scoring continues.</p><button className="mt-3 rounded bg-emerald-700 px-4 py-2 font-bold text-white" onClick={() => setChallengeReview(pendingChallenge)}>Resume Challenge Rescore</button></div>
-          : footballOvertimePending(envelope) && !replacementPlay ? <p className="p-4 font-semibold">Confirm the overtime possession to continue.</p> : <FootballInputSlot
+          pendingChallenge && !replacementPlay && !insertionSession ? <div className="p-4"><p className="font-bold">An overturned challenge needs a corrected play before scoring continues.</p><button className="mt-3 rounded bg-emerald-700 px-4 py-2 font-bold text-white" onClick={() => setChallengeReview(pendingChallenge)}>Resume Challenge Rescore</button></div>
+          : footballOvertimePending(envelope) && !replacementPlay && !insertionSession ? <p className="p-4 font-semibold">Confirm the overtime possession to continue.</p> : <FootballInputSlot
             debugMode={debugMode}
             envelope={inputEnvelope}
             fcqiResetKey={fcqiResetKey}
             fcqiState={fcqiState}
             onCancelReplacement={cancelPlayReplacement}
+            insertionSession={insertionSession}
+            onCancelInsertion={cancelPlayInsertion}
             onFcqiStateChange={setFcqiState}
             onRosterPlayersAdded={addRosterPlayers}
             onSavePlayerName={saveQuickPlayerName}
@@ -1213,14 +1285,14 @@ export default function FootballScorerShell() {
             onOpenStarters={openStartersEditor}
             onOpenParticipation={openParticipation}
             onReviewPlays={() => { setPlayEditFeedback(null); setPlayReviewOpen(true); }}
-            interactionBlocked={playReviewOpen && !replacementPlay}
-            onSubmitAccepted={replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
+            interactionBlocked={Boolean(insertionSession && insertionSession.phase !== 'entry') || (playReviewOpen && !replacementPlay && !insertionSession)}
+            onSubmitAccepted={insertionSession ? result => setInsertionSession(current => ({ ...current, phase: 'preview', preview: result.preview })) : replacementPlay ? handleReplacementAccepted : handleSubmitAccepted}
             onPregameEnvelopeChange={handlePregameEnvelopeChange}
             onTeamAliasesChange={saveTeamAliases}
             onOpenTeamAliases={openTeamAliasesEditor}
             replacementPlay={replacementPlay}
             challengeRescore={Boolean(replacementChallenge)}
-            submitAdapter={replacementPlay
+            submitAdapter={insertionSession ? insertionSubmitAdapter : replacementPlay
               ? replacementSubmitAdapter
               : useLocalTestGame
                 ? localSubmitAdapter
@@ -1231,7 +1303,8 @@ export default function FootballScorerShell() {
           <FootballEventLogSlot
             canUndo={localUndoStack.length > 0}
             editFeedback={playEditFeedback}
-            editingDisabled={Boolean(replacementPlay)}
+            editingDisabled={Boolean(replacementPlay || insertionSession)}
+            onInsertBefore={requestPlayInsertion}
             envelope={envelope}
             onEditEvent={openPlayEditor}
             onChallengeRescore={setChallengeReview}
@@ -1283,7 +1356,7 @@ export default function FootballScorerShell() {
         open={Boolean(pendingSecondHalfStart)}
         teams={envelope.game.teams}
       />
-      {footballOvertimePending(envelope) && !pendingChallenge && !replacementPlay && <FootballOvertimeModal key={`${footballOvertimePending(envelope).round}-${footballOvertimePending(envelope).series}`} envelope={envelope} pending={footballOvertimePending(envelope)} onConfirm={confirmOvertime} />}
+      {footballOvertimePending(envelope) && !pendingChallenge && !replacementPlay && !insertionSession && <FootballOvertimeModal key={`${footballOvertimePending(envelope).round}-${footballOvertimePending(envelope).series}`} envelope={envelope} pending={footballOvertimePending(envelope)} onConfirm={confirmOvertime} />}
       <FootballChallengeRescoreModal envelope={envelope} challenge={challengeReview} onClose={() => { setDismissedChallenge(footballChallengeEventKey(challengeReview)); setChallengeReview(null); }} onConfirm={startChallengeRescore} error={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''} />
       <FootballGameWrapUpModal
         envelope={envelope}
@@ -1296,10 +1369,17 @@ export default function FootballScorerShell() {
       {playReviewOpen && <FootballPlayReviewModal
         envelope={envelope}
         feedback={playEditFeedback}
-        hidden={Boolean(editingPlay || replacementPlay || challengeReview || possessionClockChange || driveSummary)}
+        hidden={Boolean(editingPlay || replacementPlay || insertionSession || challengeReview || possessionClockChange || driveSummary)}
         key={envelope.gameId}
         onClose={() => setPlayReviewOpen(false)}
         onEdit={openPlayEditor}
+        onInsertBefore={requestPlayInsertion}
+      />}
+      {insertionSession && insertionSession.phase !== 'entry' && <FootballPlayInsertionModal
+        session={insertionSession} teams={envelope.game.teams}
+        error={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''}
+        onStart={startPlayInsertion} onSave={savePlayInsertion} onCancel={cancelPlayInsertion}
+        onReenter={() => startPlayInsertion(insertionSession.clock)}
       />}
       <FootballPlayEditorModal
         contextReview={editingContextReview}
@@ -1532,6 +1612,8 @@ export const FootballInputSlot = ({
   fcqiResetKey,
   fcqiState,
   onCancelReplacement,
+  insertionSession,
+  onCancelInsertion,
   onRosterPlayersAdded,
   onSavePlayerName,
   onFcqiStateChange,
@@ -1555,6 +1637,11 @@ export const FootballInputSlot = ({
 
   return (
     <div className="space-y-4 p-4">
+      {insertionSession && <section className="rounded border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950" role="status">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-black">Inserting before play #{insertionSession.target.sequence}</div>
+          <p className="mt-1 text-sm">Q{insertionSession.target.period} {insertionSession.clock}. Enter the missing play, then preview before saving. Following recorded contexts stay unchanged until reviewed.</p></div>
+          <button className="rounded border border-amber-600 bg-white px-3 py-2 text-sm font-black" onClick={onCancelInsertion} type="button">Cancel Insertion</button></div>
+      </section>}
       {replacementPlay && (
         <section className="rounded border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950" role="status">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1584,7 +1671,7 @@ export const FootballInputSlot = ({
           teamAliases={teamAliases}
         />
       )}
-      <FootballUnnamedPlayersAlert envelope={envelope} onSaveName={onSavePlayerName} onEditingChange={setNamingPlayer} visible={standby && !replacementPlay && !interactionBlocked} />
+      <FootballUnnamedPlayersAlert envelope={envelope} onSaveName={onSavePlayerName} onEditingChange={setNamingPlayer} visible={standby && !replacementPlay && !insertionSession && !interactionBlocked} />
       <FootballConfirmedQuickInput
         debug={debugMode}
         envelope={envelope}
@@ -1598,7 +1685,8 @@ export const FootballInputSlot = ({
         onRosterPlayersAdded={onRosterPlayersAdded}
         onSubmitAccepted={onSubmitAccepted}
         onStateChange={onFcqiStateChange}
-        replacementMode={Boolean(replacementPlay)}
+        replacementMode={Boolean(replacementPlay || insertionSession)}
+        insertionMode={Boolean(insertionSession)}
         state={fcqiState}
         submitAdapter={submitAdapter}
         teamAliases={teamAliases}
@@ -1607,7 +1695,7 @@ export const FootballInputSlot = ({
   );
 };
 
-export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onChallengeRescore, onUndoLastEvent }) => (
+export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDisabled = false, envelope, onEditEvent, onInsertBefore, onChallengeRescore, onUndoLastEvent }) => (
   <div className="h-[65vh] min-h-[18rem] p-4 lg:h-full lg:min-h-0">
     <GameLogColumn
       canUndo={canUndo}
@@ -1615,6 +1703,7 @@ export const FootballEventLogSlot = ({ canUndo = false, editFeedback, editingDis
       editingDisabled={editingDisabled}
       envelope={envelope}
       onEditEvent={onEditEvent}
+      onInsertBefore={onInsertBefore}
       onChallengeRescore={onChallengeRescore}
       onUndoLastEvent={onUndoLastEvent}
     />
@@ -1752,7 +1841,7 @@ const playContextLabel = (envelope, context) => {
   return `${team ? `${team} ball` : 'No possession'}${context.down ? `, ${context.down} & ${context.goalToGo ? 'Goal' : context.distance ?? '—'}` : ''} on ${spot}`;
 };
 
-const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onChallengeRescore, onUndoLastEvent }) => {
+const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEditEvent, onInsertBefore, onChallengeRescore, onUndoLastEvent }) => {
   const contextReviews = useMemo(() => reviewFootballPlayContexts(envelope).reviews, [envelope]);
   const regulationPeriods = Math.max(1, Number(envelope.game?.rules?.periods) || 4);
   const currentPeriod = Math.max(1, Number(envelope.clock?.period || envelope.game?.period) || 1);
@@ -1879,6 +1968,7 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {onChallengeRescore && isOverturnedFootballChallenge(item.event) && item.event.result.gameControl.rescore?.status !== 'complete' && <button className="rounded border border-amber-500 px-2 py-1 text-xs font-bold" disabled={editingDisabled} onClick={() => onChallengeRescore(item.event)}>Rescore</button>}
+                    {onInsertBefore && item.event.preState && <button aria-label={`Insert before play ${item.event.sequence}`} className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold hover:border-emerald-600 disabled:opacity-40" disabled={editingDisabled} onClick={() => onInsertBefore(item.event)} type="button">Insert Before</button>}
                     {onEditEvent && isEditableGameLogEvent(item.event) && (
                       <button
                         aria-label={isFootballBallContextRevision(item.event)

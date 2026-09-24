@@ -156,6 +156,7 @@ export default function FootballConfirmedQuickInput({
   onRosterPlayersAdded,
   onStateChange,
   replacementMode = false,
+  insertionMode = false,
   state,
   submitAdapter = submitFootballFcqiEvent,
   teamAliases,
@@ -553,7 +554,7 @@ export default function FootballConfirmedQuickInput({
           ? 'Submit accepted as duplicate.'
           : result.status === 'replaced'
             ? 'Replaced play.'
-            : 'Submitted play.',
+            : result.status === 'insertionPreview' ? 'Insertion ready for review.' : 'Submitted play.',
         error: '',
         result,
       });
@@ -626,7 +627,7 @@ export default function FootballConfirmedQuickInput({
     <section className="rounded border border-zinc-300 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">{replacementMode ? 'Replacement Entry' : 'Play Entry'}</h2>
+          <h2 className="text-base font-semibold">{insertionMode ? 'Insert Play' : replacementMode ? 'Replacement Entry' : 'Play Entry'}</h2>
         </div>
         {submitStatus.status === 'submitting' && (
           <span className="rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-800">
@@ -841,7 +842,7 @@ export default function FootballConfirmedQuickInput({
         progressSteps={progressSteps}
         requiresPenaltyReview={requiresPenaltyReview}
         submitError={submitStatus.status === 'error' ? submitStatus.error : ''}
-        submitLabel={replacementMode ? 'Replace Play' : 'Submit Play'}
+        submitLabel={insertionMode ? 'Preview Insertion' : replacementMode ? 'Replace Play' : 'Submit Play'}
         unresolvedQueuedPenalty={Boolean(currentState.queuedPenaltyRequested)}
         miscFumbleActive={Boolean(currentState.miscFumbleRequested)}
         miscFumbleAvailable={isMiscFumbleFcqiFlow(currentState)}

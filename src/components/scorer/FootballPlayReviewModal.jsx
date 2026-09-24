@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { buildFootballPlayReview, footballReviewMatches, isEditableFootballReviewEvent } from '../../utils/footballPlayReview';
 
-export default function FootballPlayReviewModal({ envelope, hidden = false, onClose, onEdit, feedback }) {
+export default function FootballPlayReviewModal({ envelope, hidden = false, onClose, onEdit, onInsertBefore, feedback }) {
   const [view, setView] = useState('all');
   const [team, setTeam] = useState('V');
   const [playerId, setPlayerId] = useState('');
@@ -81,7 +81,7 @@ export default function FootballPlayReviewModal({ envelope, hidden = false, onCl
             <div aria-label="Reviewed plays" className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onScroll={() => { if (!hidden) scrollRef.current = listRef.current.scrollTop; }} ref={listRef} tabIndex={0}>
               <ol className="divide-y divide-zinc-200">{rows.map(row => <li aria-label={`Review play ${row.event.sequence}`} className="px-5 py-4" key={row.key}>
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-xs font-semibold text-zinc-600">#{row.event.sequence} · {row.context}</div><p className="mt-1 text-sm text-zinc-900">{row.description}</p></div>
-                  {isEditableFootballReviewEvent(row.event) && <button aria-label={`Edit reviewed play ${row.event.sequence}`} className="shrink-0 rounded border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-emerald-700 hover:bg-emerald-50" onClick={event => edit(row.event, event.currentTarget)} type="button">Edit</button>}
+                  <div className="flex shrink-0 gap-2">{onInsertBefore && row.event.preState && <button aria-label={`Insert before reviewed play ${row.event.sequence}`} className="rounded border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-emerald-700" onClick={event => { scrollRef.current = listRef.current?.scrollTop || 0; focusRef.current = event.currentTarget; onInsertBefore(row.event); }} type="button">Insert Before</button>}{isEditableFootballReviewEvent(row.event) && <button aria-label={`Edit reviewed play ${row.event.sequence}`} className="shrink-0 rounded border border-zinc-300 px-3 py-1.5 text-sm font-semibold hover:border-emerald-700 hover:bg-emerald-50" onClick={event => edit(row.event, event.currentTarget)} type="button">Edit</button>}</div>
                 </div>
                 {view === 'player' && <p className="mt-2 text-xs font-semibold text-emerald-800">{[...(row.involvement.get(playerId) || [])].join(' · ')}</p>}
               </li>)}</ol>
