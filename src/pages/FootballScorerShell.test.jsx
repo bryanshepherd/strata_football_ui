@@ -557,6 +557,58 @@ describe('FootballScorerShell', () => {
     }
   });
 
+  it('edits and recalculates a flagged timeout, mirrors the correction, supports undo and reload, and opens from Review Plays', async () => {
+    const submitMock = mockSubmitSuccess();
+    const game = finalEnvelopeWithBallContextRevision('FB-TIMEOUT-EDIT');
+    const context = { possession: 'H', down: 3, distance: 10, yardLine: 'H15', lineToGain: 'H25', goalToGo: false, driveId: 'DRV-0002', driveNumber: 2 };
+    game.events[0] = { ...game.events[0], period: 1, clock: '06:00', postState: context };
+    game.events[1] = {
+      eventId: 'TIMEOUT-2', clientEventId: 'timeout-2', sequence: 2, type: 'gameControl', subtype: 'timeout', status: 'accepted', period: 1, clock: '05:59', possession: 'H',
+      preState: { ...context, down: 2, distance: 5, yardLine: 'H20' },
+      result: { code: 'noPlay', clock: '05:59', gameControl: { action: 'timeout', clock: '05:59', teamSide: 'V', possession: 'V' } },
+      description: '(5:59) Timeout called by Visitor Tech.',
+    };
+    game.events[2] = { ...game.events[2], period: 1, clock: '05:50', preState: context };
+    saveDashboardSeededFootballEnvelope(game.gameId, game);
+    const route = '/scorer?dashboardGameId=DASH-TIMEOUT&envelopeGameId=FB-TIMEOUT-EDIT';
+    let view;
+    try {
+      view = renderScorer(route);
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('tab', { name: 'Q1' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Edit play 2' }));
+      let editor = screen.getByRole('dialog', { name: 'Edit Timeout 2' });
+      expect(within(editor).getByRole('region', { name: 'Timeout context' })).toHaveTextContent('H ball, 3 & 10 on H15');
+      fireEvent.click(within(editor).getByRole('button', { name: 'Recalculate context' }));
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events[1].preState).toMatchObject(context));
+      expect(screen.queryByLabelText('Context mismatch for play 2')).not.toBeInTheDocument();
+      expect(getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope.events[2]).toEqual(game.events[2]);
+      fireEvent.click(screen.getByRole('button', { name: 'Undo Last Change' }));
+      expect(screen.getByLabelText('Context mismatch for play 2')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Review context mismatch for play 2' }));
+      editor = screen.getByRole('dialog', { name: 'Edit Timeout 2' });
+      fireEvent.change(within(editor).getByLabelText('Timeout Team'), { target: { value: 'H' } });
+      fireEvent.change(within(editor).getByLabelText('Timeout Clock'), { target: { value: '5:55' } });
+      fireEvent.click(within(editor).getByRole('button', { name: 'Save Changes' }));
+      await waitFor(() => expect(submittedRequestAt(submitMock.fetchSpy).envelope.events[1]).toMatchObject({ clock: '05:55', preState: context, result: { gameControl: { teamSide: 'H' } } }));
+      const saved = getDashboardSeededFootballEnvelopeRecord(game.gameId).envelope;
+      expect(saved.game.status).toBe('final');
+      expect(saved.clock).toEqual(game.clock);
+      expect(saved.liveState.timeouts).toEqual(game.liveState.timeouts);
+      expect(saved.events[1].description).toBe('(5:55) Timeout called by Home State.');
+      view.unmount(); view = renderScorer(route);
+      await waitFor(() => expect(screen.getByText('No server sync pending')).toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: 'Review context mismatch for play 2' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /^review plays v$/i }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Review Plays' })).getByRole('button', { name: 'Edit reviewed play 2' }));
+      editor = screen.getByRole('dialog', { name: 'Edit Timeout 2' });
+      expect(within(editor).getByLabelText('Timeout Clock')).toHaveValue('05:55');
+      expect(within(editor).getByLabelText('Timeout Team')).toHaveValue('H');
+      fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByRole('dialog', { name: 'Review Plays' })).toBeInTheDocument();
+    } finally { view?.unmount(); submitMock.restore(); }
+  });
+
   it('edits a ball context revision in a final game without rewriting the next play context', async () => {
     const finalEnvelope = finalEnvelopeWithBallContextRevision('FB-FINAL-CONTEXT-EDIT');
     const nextPlayContext = structuredClone(finalEnvelope.events[2].preState);

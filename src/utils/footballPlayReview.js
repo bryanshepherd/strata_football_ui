@@ -8,8 +8,10 @@ import { footballTeamAliasesForEnvelope } from './footballTeamAliases';
 import { formatFootballClockDisplay } from './footballClock';
 import { formatFootballSpotForDisplay } from './footballSpotNormalization';
 
+import { isFootballTimeout } from './footballTimeout';
+
 const EDITABLE_TYPES = new Set(['rush', 'pass', 'punt', 'kickoff', 'fieldGoal', 'try', 'penalty']);
-export const isEditableFootballReviewEvent = event => EDITABLE_TYPES.has(event?.type) || isFootballBallContextRevision(event);
+export const isEditableFootballReviewEvent = event => EDITABLE_TYPES.has(event?.type) || isFootballBallContextRevision(event) || isFootballTimeout(event);
 const humanize = value => String(value || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ');
 const ROLES = {
   intendedReceiver: 'Target', target: 'Target', receiver: 'Receiver', passer: 'Passer', quarterback: 'Passer',

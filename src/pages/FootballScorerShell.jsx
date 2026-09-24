@@ -8,6 +8,9 @@ import { formatFootballSafetyReadout } from '../utils/footballSafety';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import FootballDebugTracePanel from '../components/FootballDebugTracePanel';
+import FootballTimeoutEditorModal from '../components/editor/FootballTimeoutEditorModal';
+import { isFootballTimeout } from '../utils/footballTimeout';
+import { updateFootballTimeout } from '../play-editor/footballTimeoutEdit';
 import FootballBallContextRevisionModal from '../components/editor/FootballBallContextRevisionModal';
 import FootballPlayEditorModal from '../components/editor/FootballPlayEditorModal';
 import FootballPlayInsertionModal from '../components/editor/FootballPlayInsertionModal';
@@ -656,6 +659,26 @@ export default function FootballScorerShell() {
       setPlayEditFeedback({ tone: 'error', message: error instanceof Error ? error.message : 'The play context could not be recalculated.' });
     }
   }, [dashboardGameId, envelope, flushServerSync, requestedGameId]);
+
+  const saveTimeout = useCallback((values, options) => {
+    try {
+      const amended = updateFootballTimeout(envelope, editingPlay, values, options);
+      const persisted = requestedGameId ? saveDashboardSeededFootballEnvelope(requestedGameId, amended) || amended : amended;
+      setLocalUndoStack(current => [...current, envelope]);
+      setAcceptedScorerState({ gameEnvelope: persisted, projection: null, acceptedEvents: [] });
+      setEditingPlay(null);
+      setFcqiState(createInitialFootballQuickInputState());
+      setFcqiResetKey(current => current + 1);
+      setPlayEditFeedback({ tone: 'success', message: `Timeout #${editingPlay.sequence} was updated${options?.recalculateContext ? ' and its context recalculated' : ''}.` });
+      if (requestedGameId && dashboardGameId) {
+        try {
+          enqueueFootballEnvelopeMirror({ gameId: requestedGameId, dashboardGameId, envelope: persisted });
+          setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: '' });
+          void flushServerSync();
+        } catch (error) { setSyncState({ pending: getPendingFootballSyncCount(requestedGameId), error: `Timeout saved locally; server sync could not be prepared: ${error.message}` }); }
+      }
+    } catch (error) { setPlayEditFeedback({ tone: 'error', message: error.message }); }
+  }, [dashboardGameId, editingPlay, envelope, flushServerSync, requestedGameId]);
 
   const saveBallContextRevision = useCallback((revision) => {
     try {
@@ -1407,7 +1430,7 @@ export default function FootballScorerShell() {
       <FootballPlayEditorModal
         contextReview={editingContextReview}
         fieldLength={envelope.game.rules?.fieldLength}
-        isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay)}
+        isOpen={Boolean(editingPlay) && !isFootballBallContextRevision(editingPlay) && !isFootballTimeout(editingPlay)}
         onClose={closePlayEditor}
         onDelete={deletePlay}
         onRecalculate={recalculatePlay}
@@ -1421,6 +1444,11 @@ export default function FootballScorerShell() {
           V: envelope.game.teams.V.name || envelope.game.teams.V.abbr || 'Visitor',
         }}
       />
+      {isFootballTimeout(editingPlay) && <FootballTimeoutEditorModal
+        key={footballContextEventKey(editingPlay)} event={editingPlay} teams={envelope.game.teams}
+        contextReview={editingContextReview} onClose={closePlayEditor} onSave={saveTimeout}
+        saveError={playEditFeedback?.tone === 'error' ? playEditFeedback.message : ''}
+      />}
       <FootballBallContextRevisionModal
         downs={envelope.game.rules?.downs || 4}
         event={editingPlay}

@@ -5,6 +5,7 @@ import {
 } from '../services/footballDashboardService';
 import { applyFootballEventToEnvelope, calculateYardsGained } from '../utils/footballRulesEngine';
 import { calculateEditedPenaltyYards, normalizeEnforcementSpot } from './footballPlayEditYardage';
+import { isFootballTimeout } from '../utils/footballTimeout';
 import { normalizeFootballSpot } from '../utils/footballSpotNormalization';
 import { applyFootballPlayEditToEnvelope, buildFootballEditedPlaySummary } from './footballPlayEditEnvelope';
 
@@ -91,6 +92,14 @@ export function reviewFootballPlayContexts(envelope) {
       }
     } else if (event.type === 'gameControl') {
       const control = event.result?.gameControl;
+      if (isFootballTimeout(event)) {
+        const expected = canonicalDriveContext(envelope, state);
+        reviews.set(footballContextEventKey(event), {
+          recorded: clone(event.preState), expected, previousSequence: previous?.sequence,
+          fields: expected && event.preState ? differences(event.preState, expected) : [],
+          unavailable: !expected ? 'No preceding ending context is available for this timeout.' : '',
+        });
+      }
       const explicit = ['setBallContext', 'setPossession', 'startDrive'].includes(control?.action);
       const start = state || (explicit ? event.preState : null);
       if (start) {
