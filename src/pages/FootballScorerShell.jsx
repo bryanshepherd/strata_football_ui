@@ -1956,42 +1956,38 @@ const GameLogColumn = ({ canUndo, editFeedback, editingDisabled, envelope, onEdi
               </li>
             ) : (
               <li key={item.event.eventId || item.event.clientEventId || `event-${index}`} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold capitalize">
-                      {item.event.type}
-                      {item.event.subtype ? ` · ${item.event.subtype}` : ''}
-                    </div>
-                    <p className="mt-1 text-sm text-zinc-700">
-                      {formatFootballSafetyReadout(item.event, formatFootballFumbleReadout(item.event, resolveFootballUnknownPlayerText(item.event, item.event.description || item.event.result?.code || 'Accepted event', envelope.rosters?.teams)))}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {onChallengeRescore && isOverturnedFootballChallenge(item.event) && item.event.result.gameControl.rescore?.status !== 'complete' && <button className="rounded border border-amber-500 px-2 py-1 text-xs font-bold" disabled={editingDisabled} onClick={() => onChallengeRescore(item.event)}>Rescore</button>}
-                    {onInsertBefore && item.event.preState && <button aria-label={`Insert before play ${item.event.sequence}`} className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold hover:border-emerald-600 disabled:opacity-40" disabled={editingDisabled} onClick={() => onInsertBefore(item.event)} type="button">Insert Before</button>}
-                    {onEditEvent && isEditableGameLogEvent(item.event) && (
-                      <button
-                        aria-label={isFootballBallContextRevision(item.event)
-                          ? `Edit ball context revision ${item.event.sequence ?? ''}`
-                          : `Edit play ${item.event.sequence ?? ''}`}
-                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
-                        disabled={editingDisabled}
-                        onClick={() => onEditEvent(item.event)}
-                        title={editingDisabled
-                          ? 'Finish or cancel the current replacement first'
-                          : isFootballBallContextRevision(item.event)
-                            ? 'Edit or delete this ball context revision'
-                            : 'Edit this play'}
-                        type="button"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
-                      #{item.event.sequence ?? '-'}
-                    </span>
-                  </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {onChallengeRescore && isOverturnedFootballChallenge(item.event) && item.event.result.gameControl.rescore?.status !== 'complete' && <button className="rounded border border-amber-500 px-2 py-1 text-xs font-bold" disabled={editingDisabled} onClick={() => onChallengeRescore(item.event)}>Rescore</button>}
+                  {onInsertBefore && item.event.preState && <button aria-label={`Insert before play ${item.event.sequence}`} className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold hover:border-emerald-600 disabled:opacity-40" disabled={editingDisabled} onClick={() => onInsertBefore(item.event)} type="button">Insert Before</button>}
+                  {onEditEvent && isEditableGameLogEvent(item.event) && (
+                    <button
+                      aria-label={isFootballBallContextRevision(item.event)
+                        ? `Edit ball context revision ${item.event.sequence ?? ''}`
+                        : `Edit play ${item.event.sequence ?? ''}`}
+                      className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                      disabled={editingDisabled}
+                      onClick={() => onEditEvent(item.event)}
+                      title={editingDisabled
+                        ? 'Finish or cancel the current replacement first'
+                        : isFootballBallContextRevision(item.event)
+                          ? 'Edit or delete this ball context revision'
+                          : 'Edit this play'}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-600">
+                    #{item.event.sequence ?? '-'}
+                  </span>
                 </div>
+                <div className="mt-2 text-sm font-semibold capitalize">
+                  {item.event.type}
+                  {item.event.subtype ? ` · ${item.event.subtype}` : ''}
+                </div>
+                <p className="mt-1 break-words text-sm text-zinc-700">
+                  {formatFootballSafetyReadout(item.event, formatFootballFumbleReadout(item.event, resolveFootballUnknownPlayerText(item.event, item.event.description || item.event.result?.code || 'Accepted event', envelope.rosters?.teams)))}
+                </p>
                 <div className="mt-2 text-xs text-zinc-500">
                   {gameLogContextLabel(envelope, item.event, periodLabel)}
                 </div>
