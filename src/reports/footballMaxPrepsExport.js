@@ -1,3 +1,4 @@
+import { hasAcceptedDpiSpotPenalty } from '../utils/footballPenaltyStatistics';
 import { footballRecoveryRecords } from '../utils/footballOnsideKick';
 import { splitFootballDefensiveYards } from '../utils/footballDefensiveCredit';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
@@ -134,6 +135,8 @@ const hasAcceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some(
   penalty.status === 'accepted'
   && ['previous', 'previousspot'].includes(String(penalty.enforcedFrom || '').toLowerCase())
 ));
+
+const suppressesPlayStats = (event) => hasAcceptedDpiSpotPenalty(event) || hasAcceptedPreviousSpotPenalty(event);
 
 const normalizedRole = (participant) => String(participant?.role || '').toLowerCase();
 
@@ -365,7 +368,7 @@ const seedProjectedPlayerStats = (store, players) => {
 };
 
 const creditDefense = (store, event, envelope) => {
-  if (hasAcceptedPreviousSpotPenalty(event)) return;
+  if (suppressesPlayStats(event)) return;
   event = repairFootballPassDefense(envelope, event);
   const defenders = uniqueParticipants(event?.participants?.defenders || []);
   const tackleParticipants = defenders.filter((participant) => (
@@ -502,7 +505,7 @@ const creditDefense = (store, event, envelope) => {
 };
 
 const creditSpecialTeams = (store, envelope, event) => {
-  if (hasAcceptedPreviousSpotPenalty(event)) return;
+  if (suppressesPlayStats(event)) return;
   if (event?.type === 'punt' && ['faircatch'].includes(String(event?.result?.code || event?.subtype || '').toLowerCase())) {
     const returner = event?.participants?.returner;
     const row = store.get(returner?.playerId, returner?.team, returner);
@@ -529,7 +532,7 @@ const creditSpecialTeams = (store, envelope, event) => {
 };
 
 const creditKickingAndConversions = (store, event) => {
-  if (hasAcceptedPreviousSpotPenalty(event)) return;
+  if (suppressesPlayStats(event)) return;
   const resultCode = String(event?.result?.code || event?.subtype || '').toLowerCase();
   const made = ['made', 'good'].includes(resultCode);
 
@@ -586,7 +589,7 @@ const creditKickingAndConversions = (store, event) => {
 };
 
 const creditReturnTouchdown = (store, event) => {
-  if (hasAcceptedPreviousSpotPenalty(event) || event?.result?.scoring?.type !== 'touchdown') return;
+  if (suppressesPlayStats(event) || event?.result?.scoring?.type !== 'touchdown') return;
   const type = scoringReturnType(event);
   const field = {
     fumble: 'FumbleReturnedTDNum',

@@ -1,4 +1,5 @@
-import { projectFootballStatsForEvents } from '../services/footballDashboardService';
+import { hasAcceptedDpiSpotPenalty, repairDpiSpotDrivePlayCounts } from '../utils/footballPenaltyStatistics';
+import { projectFootballStatsForEvents, repairFootballStatsFromCompleteEventLog } from '../services/footballDashboardService';
 import { footballSpotFoulStatisticalYards } from '../utils/footballStatisticalYardage';
 
 // Older mirrors can retain totals computed from the final enforcement spot.
@@ -9,6 +10,9 @@ export const withFootballReportYardage = (envelope) => {
     .filter(event => !event.status || event.status === 'accepted')
     .sort((a, b) => Number(a.sequence) - Number(b.sequence));
   if (!events.length || events.some((event, index) => Number(event.sequence) !== index + 1)) return envelope;
+  if (events.some(hasAcceptedDpiSpotPenalty)) {
+    envelope = repairDpiSpotDrivePlayCounts({ ...envelope, stats: repairFootballStatsFromCompleteEventLog(envelope) });
+  }
   const affected = events.filter(event => footballSpotFoulStatisticalYards(event, envelope?.game?.rules?.fieldLength || 100) !== null);
   if (!affected.length) return envelope;
   const projected = projectFootballStatsForEvents(envelope);

@@ -1,3 +1,4 @@
+import { hasAcceptedDpiSpotPenalty } from '../utils/footballPenaltyStatistics';
 import { footballStatisticalRushYards, footballStatisticalPassYards } from '../utils/footballStatisticalYardage';
 import { footballFumbleRecords } from '../utils/footballOnsideKick';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
@@ -22,6 +23,8 @@ const hasAcceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some(
   penalty.status === 'accepted'
   && ['previous', 'previousspot'].includes(String(penalty.enforcedFrom || '').toLowerCase())
 ));
+
+const suppressesPlayStats = (event) => hasAcceptedDpiSpotPenalty(event) || hasAcceptedPreviousSpotPenalty(event);
 
 const playerIdentityLookup = (envelope) => {
   const lookup = new Map();
@@ -72,7 +75,7 @@ const buildTeamChargedEntries = (envelope, events, team) => {
     if (
       event?.possession !== team
       || event?.result?.teamCharged !== true
-      || hasAcceptedPreviousSpotPenalty(event)
+      || suppressesPlayStats(event)
     ) return;
     const outcome = event?.result?.pass?.outcome || event?.subtype;
     const sack = event?.type === 'pass' && outcome === 'sack';
@@ -308,7 +311,7 @@ const fumbleTotals = (players) => ({
 const buildTeamFumbleEntry = (events, team) => {
   const entry = { ...teamEntry(team, 'fumbles'), fumbles: 0, fumblesLost: 0 };
   events.forEach((event) => footballFumbleRecords(event).forEach((fumble) => {
-    if ((fumble.fumblerTeam || event.possession) !== team || hasAcceptedPreviousSpotPenalty(event)) return;
+    if ((fumble.fumblerTeam || event.possession) !== team || suppressesPlayStats(event)) return;
     const chargedToTeam = fumble.fumblerPlayerId === 'TM'
       || event.result.teamCharged === true
       || (event.type === 'rush' && event.subtype === 'aborted');

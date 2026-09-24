@@ -1,3 +1,4 @@
+import { hasAcceptedDpiSpotPenalty, countsAsFootballDrivePlay, repairDpiSpotDrivePlayCounts } from '../utils/footballPenaltyStatistics';
 import { footballFumbleRecords } from '../utils/footballOnsideKick';
 import { prepareFootballChallengeEvent } from '../utils/footballChallengeRescore';
 import { withFootballPenaltyIndicator, withFootballReviewIndicator } from '../utils/footballLiveIndicators';
@@ -1073,7 +1074,7 @@ export function normalizeFootballScoringSetupEnvelope(envelope, { rebuildEmptySt
   const statsEnvelope = repairedStats === repairedMuffClockEnvelope?.stats
     ? repairedMuffClockEnvelope
     : { ...repairedMuffClockEnvelope, stats: repairedStats };
-  const normalizedEnvelope = withFootballReviewIndicator(repairFirstHalfTouchdownClockSeries(statsEnvelope));
+  const normalizedEnvelope = withFootballReviewIndicator(repairDpiSpotDrivePlayCounts(repairFirstHalfTouchdownClockSeries(statsEnvelope)));
   const latestEvent = [...(normalizedEnvelope?.events || [])]
     .reverse()
     .find((event) => !event.status || event.status === 'accepted');
@@ -1307,6 +1308,7 @@ const playEarnedFirstDown = (event, projection, eventHistory) => {
   if (
     !['rush', 'pass'].includes(event?.type)
     || hasAcceptedPreviousSpotPenalty(event)
+    || hasAcceptedDpiSpotPenalty(event)
     || hasReplayDownPenalty(event)
   ) return false;
   if (event?.result?.firstDown === true) return true;
@@ -1332,6 +1334,7 @@ const offenseLostPossession = (event, offense) => {
   if (validTeamCode(officialState?.possession)) {
     return officialState.possession !== offense;
   }
+  if (hasAcceptedDpiSpotPenalty(event)) return false;
   if (hasAcceptedPreviousSpotPenalty(event) && (hasReplayDownPenalty(event) || hasAcceptedAutomaticFirstDownPenalty(event))) {
     return false;
   }
@@ -1449,7 +1452,7 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
   const result = event?.result || {};
   const primary = event?.participants?.primary;
   const secondary = event?.participants?.receiver || event?.participants?.secondary || event?.participants?.target;
-  const suppressPlayStats = hasAcceptedPreviousSpotPenalty(event);
+  const suppressPlayStats = hasAcceptedPreviousSpotPenalty(event) || hasAcceptedDpiSpotPenalty(event);
   const teamCharged = result.teamCharged === true;
 
   if (validTeamCode(offense) && event.type === 'rush' && !suppressPlayStats) {
@@ -1674,7 +1677,8 @@ const projectFootballStats = (stats = {}, event, projection, eventHistory = []) 
     : null;
   const firstDownCredits = officialOutcome
     ? Array.isArray(officialOutcome.firstDownAwards)
-      ? new Set(officialOutcome.firstDownAwards.filter((award) => award?.team === offense && typeof award.id === 'string').map((award) => award.id)).size
+      ? new Set(officialOutcome.firstDownAwards.filter((award) => award?.team === offense && typeof award.id === 'string'
+        && !(hasAcceptedDpiSpotPenalty(event) && (award.source === 'play' || award.id === 'play'))).map((award) => award.id)).size
       : Number(officialOutcome.firstDownAwarded === true && officialOutcome.firstDownAwardedTo === offense)
     : Number(baseFirstDownCredit) + Number(additionalAutomaticFirstDownCredit);
   if (
@@ -1777,7 +1781,7 @@ export function projectFootballStatsForEvents(envelope, selectedEvents = envelop
   return projectedStats;
 }
 
-function repairFootballStatsFromCompleteEventLog(envelope, rebuildEmptyStats = false) {
+export function repairFootballStatsFromCompleteEventLog(envelope, rebuildEmptyStats = false) {
   const acceptedEvents = [...(envelope?.events || [])]
     .filter((event) => (!event.status || event.status === 'accepted') && Number.isFinite(Number(event.sequence)))
     .sort((left, right) => Number(left.sequence) - Number(right.sequence));
@@ -2067,8 +2071,7 @@ const updateDrives = (drives = {}, projection, event) => {
   if (!transition) return drives;
   const current = drives.current || null;
   const completed = Array.isArray(drives.completed) ? drives.completed : [];
-  const countsAsDrivePlay = ['rush', 'pass', 'punt', 'fieldGoal'].includes(event?.type)
-    && !hasAcceptedPreviousSpotPenalty(event);
+  const countsAsDrivePlay = countsAsFootballDrivePlay(event);
   const positionedYards = positionalDriveYards(current, projection, event);
   const playedCurrent = current
     ? {

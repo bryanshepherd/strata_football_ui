@@ -1,3 +1,4 @@
+import { hasAcceptedDpiSpotPenalty } from '../utils/footballPenaltyStatistics';
 import { footballSafetyScoring, withFootballSafetyScoring } from '../utils/footballSafety';
 import {
   buildFootballDriveSummary,
@@ -88,6 +89,7 @@ const orderedEvents = (envelope) => (Array.isArray(envelope?.events) ? envelope.
   .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
 
 const isScoringEvent = (event) => {
+  if (hasAcceptedDpiSpotPenalty(event)) return false;
   if (isFootballTryReplayEvent(event)) return false;
   const scoring = event?.result?.scoring;
   return scoring && ['V', 'H'].includes(scoring.team) && Number(scoring.points) > 0;
@@ -182,7 +184,7 @@ export const buildFootballScoringSummary = (envelope) => {
   const summarizedScoring = events.flatMap((terminalEvent) => {
     if (!isFootballDriveSummaryTerminalEvent(terminalEvent)) return [];
     const summary = buildFootballScoringPlaySummary(envelope, terminalEvent);
-    if (!summary) return [];
+    if (!summary || hasAcceptedDpiSpotPenalty(summary.scoringEvent)) return [];
     const scoringEvent = summary.scoringEvent;
     const scoringTeam = scoringEvent.result.scoring.team;
     const period = Number(scoringEvent.period || 0);

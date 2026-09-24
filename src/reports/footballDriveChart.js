@@ -1,3 +1,5 @@
+import { hasAcceptedDpiSpotPenalty } from '../utils/footballPenaltyStatistics';
+import { withFootballReportYardage } from './footballReportYardage';
 import { footballStatisticalFoulSpot } from '../utils/footballStatisticalYardage';
 import { formatFootballReportDate } from './footballScoringSummary';
 import { formatFootballClockDisplay } from '../utils/footballClock';
@@ -168,7 +170,7 @@ const possessionLost = (event, team) => Boolean(
 );
 
 const conversionAttempt = (envelope, event) => {
-  if (!['rush', 'pass'].includes(event.type)) return null;
+  if (!['rush', 'pass'].includes(event.type) || hasAcceptedDpiSpotPenalty(event)) return null;
   const down = finiteNumber(event?.preState?.down);
   if (![3, 4].includes(down)) return null;
   const team = event.possession || event?.preState?.possession;
@@ -231,6 +233,7 @@ const buildBreakdown = (envelope, drives, attempts, team) => {
 };
 
 export const buildFootballDriveChartReport = (envelope) => {
+  envelope = withFootballReportYardage(envelope);
   if (!envelope?.game?.teams?.V || !envelope?.game?.teams?.H) {
     throw new Error('A football game envelope is required for the drive chart report.');
   }

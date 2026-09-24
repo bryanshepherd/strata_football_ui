@@ -1,3 +1,4 @@
+import { hasAcceptedDpiSpotPenalty } from '../utils/footballPenaltyStatistics';
 import { withFootballSafetyScoring } from '../utils/footballSafety';
 import { projectFootballStatsForEvents } from '../services/footballDashboardService';
 import { footballStatisticalRushYards, footballStatisticalPassYards, footballRushReportCorrection, footballPassReportCorrection, footballStatisticalYardsAfterCatch } from '../utils/footballStatisticalYardage';
@@ -87,6 +88,8 @@ const hasAcceptedPreviousSpotPenalty = (event) => (event?.penalties || []).some(
   && ['previous', 'previousspot'].includes(String(penalty.enforcedFrom || '').toLowerCase())
 ));
 
+const suppressesPlayStats = (event) => hasAcceptedDpiSpotPenalty(event) || hasAcceptedPreviousSpotPenalty(event);
+
 const fieldLength = (envelope) => Math.max(1, finiteNumber(envelope?.game?.rules?.fieldLength, 100));
 
 const relativeSpot = (spot, team, length) => {
@@ -153,7 +156,7 @@ const returnFromEvents = (events, team, type) => {
 };
 
 const scoringByTeam = (events, team) => events.reduce((total, event) => (
-  event?.result?.scoring?.team === team
+  !hasAcceptedDpiSpotPenalty(event) && event?.result?.scoring?.team === team
     ? total + Math.max(0, finiteNumber(event.result.scoring.points))
     : total
 ), 0);
@@ -162,12 +165,12 @@ const teamProjection = (envelope, events, projected, team, periods) => {
   const source = projected?.teams?.[team] || {};
   const pass = source.pass || {};
   const correction = events.reduce((total, event) => {
-    if (event.type !== 'pass' || event.possession !== team || hasAcceptedPreviousSpotPenalty(event)) return total;
+    if (event.type !== 'pass' || event.possession !== team || suppressesPlayStats(event)) return total;
     return total + footballPassReportCorrection(event, fieldLength(envelope));
   }, 0);
   const passingYards = finiteNumber(pass.yds) + correction;
   const rushCorrection = events.reduce((total, event) => (
-    event.type === 'rush' && event.possession === team && !hasAcceptedPreviousSpotPenalty(event)
+    event.type === 'rush' && event.possession === team && !suppressesPlayStats(event)
       ? total + footballRushReportCorrection(event, fieldLength(envelope))
       : total
   ), 0);
@@ -331,7 +334,8 @@ export const buildFootballPlayerStats = (envelope, events, projected) => {
   });
 
   events.forEach((event) => {
-    const suppressed = hasAcceptedPreviousSpotPenalty(event);
+    if (hasAcceptedDpiSpotPenalty(event)) return;
+    const suppressed = suppressesPlayStats(event);
     const primary = event?.participants?.primary;
     const outcome = event?.result?.pass?.outcome || event.subtype;
     const sack = event.type === 'pass' && outcome === 'sack';
