@@ -311,6 +311,24 @@ describe('footballPlaySummaryGrammar', () => {
     );
   });
 
+  it('labels matching foul and final spots in attached and standalone penalties without changing enforcement', () => {
+    for (const family of ['pass', 'penalty'] as const) {
+      const intent = baseIntent({
+        family, subtype: family === 'pass' ? 'incomplete' : null,
+        primary: participant('passer', 'H', 'H-12', '12', 'Mason Reed'),
+        result: { code: 'incomplete', pass: { completed: false } },
+        penalties: [{ penaltyId: 'spot-dpi', team: 'V', code: 'DPI', name: 'Defensive Pass Interference',
+          status: 'accepted', accepted: true, enforcedFrom: 'SPOT', spotOfFoul: 'V15', finalSpot: 'V15',
+          yards: 11, automaticFirstDown: true, downConsequence: 'AUTO_FIRST' }],
+      });
+      const before = JSON.stringify(intent);
+      const result = generateFootballPlaySummary(intent);
+      expect(result.summaryText).toContain('spot foul at the V15 (11 yards), automatic first down');
+      expect(result.summaryText).not.toContain('from the V15 to the V15');
+      expect(JSON.stringify(intent)).toBe(before);
+    }
+  });
+
   it('formats attached spot-of-foul penalties with explicit foul spot enforcement', () => {
     expectSummary(
       baseIntent({

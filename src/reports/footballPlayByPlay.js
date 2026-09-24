@@ -3,6 +3,8 @@ import { repairFootballPlayReadoutsInEnvelope } from '../play-editor/footballPla
 import { formatFootballSafetyReadout, withFootballSafetyScoring } from '../utils/footballSafety';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
+import { formatFootballPassCatchReadout } from '../utils/footballPassCatchReadout';
+import { formatFootballSpotFoulReadout } from '../utils/footballSpotFoulReadout';
 import { resolveFootballUnknownPlayerText } from '../utils/footballUnknownPlayerReadout';
 import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
 import { isFootballTryReplayEvent } from '../scoring/footballDriveSummary';
@@ -189,6 +191,8 @@ export const formatFootballPlayText = (event, teams, rosterTeams = {}) => {
   let text = String(event?.description || humanize(event?.subtype || event?.type) || 'Play').trim();
   text = resolveFootballUnknownPlayerText(event, text, rosterTeams);
   text = formatFootballSafetyReadout(event, formatFootballFumbleReadout(event, text));
+  text = formatFootballPassCatchReadout(event, text);
+  text = formatFootballSpotFoulReadout(event, text, teams);
   text = labelDeadBallPenalties(text, event?.penalties);
   const timeout = event?.type === 'gameControl' && String(event?.subtype || '').toLowerCase() === 'timeout';
   if (!timeout) {

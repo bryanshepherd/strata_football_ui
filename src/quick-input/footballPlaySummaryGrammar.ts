@@ -11,6 +11,7 @@ import { isCanonicalSpot } from './footballIntentSchema';
 import { formatFootballClockDisplay } from '../utils/footballClock';
 import { formatFootballFumbleReadout } from '../utils/footballFumbleReadout';
 import { isFootballKickoffReplay } from '../utils/footballKickoffReplay';
+import { isFootballSpotFoulAtFinalSpot } from '../utils/footballSpotFoulReadout';
 import { formatFootballChallengeReadout } from '../utils/footballChallengeReadout';
 import { footballPenaltyDisplayName, footballPenaltyRulesetFromRules } from './penaltyTable';
 
@@ -635,6 +636,8 @@ function attachedPenaltyText(context: SummaryContext, penalty: DraftPenalty): st
     const yardsText = penaltyDisplayYards(context, penalty);
     if (isFootballKickoffReplay({ type: context.intent.play.family, penalties: context.intent.penalties, result: context.intent.result })) {
       parts.push(penaltyEnforcementText(context, penalty));
+    } else if (isFootballSpotFoulAtFinalSpot(penalty)) {
+      parts.push(`spot foul at ${formatSpot(penalty.finalSpot)} (${yardsText})`);
     } else if (penalty.enforcedFrom === 'SPOT' && penalty.spotOfFoul && penalty.finalSpot) {
       parts.push(`enforced ${yardsText} from ${formatSpot(penalty.spotOfFoul)} to ${formatSpot(penalty.finalSpot)}`);
     } else if (penalty.finalSpot) {
@@ -686,6 +689,9 @@ function penaltyDisplayYards(context: SummaryContext, penalty: DraftPenalty): st
 
 function penaltyEnforcementText(context: SummaryContext, penalty: DraftPenalty): string {
   const yardsText = penaltyDisplayYards(context, penalty);
+  if (isFootballSpotFoulAtFinalSpot(penalty)) {
+    return `spot foul at ${formatSpot(penalty.finalSpot)} (${yardsText})`;
+  }
   const originSpot = penalty.enforcedFrom === 'SPOT'
     ? penalty.spotOfFoul
     : penalty.enforcedFrom === 'PREVIOUS'
