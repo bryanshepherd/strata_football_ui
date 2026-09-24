@@ -142,9 +142,11 @@ export default function FootballPlayEditorModal({
     window.setTimeout(() => firstInputRef.current?.focus(), 0);
   }, [baselinePlay, isOpen]);
 
-  const changedPaths = useMemo(() => collectChangedPaths(baselinePlay, draft), [baselinePlay, draft]);
-  const editDecision = useMemo(() => classifyPlayEdit(baselinePlay, draft), [baselinePlay, draft]);
+  // Derived corrections must be savable even before the operator edits a field.
+  const changedPaths = useMemo(() => collectChangedPaths(play, draft), [play, draft]);
+  const editDecision = useMemo(() => classifyPlayEdit(play, draft), [play, draft]);
   const hasChanges = changedPaths.length > 0;
+  const hasManualChanges = JSON.stringify(baselinePlay) !== JSON.stringify(draft);
   const receivingWarning = footballReceivingYardageWarning(draft, fieldLength);
 
   const update = (path, value) => setDraft((current) => (
@@ -327,7 +329,7 @@ export default function FootballPlayEditorModal({
             <button className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-black text-zinc-700 hover:bg-zinc-100" onClick={requestClose} type="button">Cancel</button>
             <button
               className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-black text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!hasChanges}
+              disabled={!hasManualChanges}
               onClick={() => setDraft(clone(baselinePlay))}
               type="button"
             >

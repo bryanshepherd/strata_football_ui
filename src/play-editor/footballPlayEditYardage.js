@@ -25,11 +25,14 @@ export const penaltyEnforcementBasisSpot = (play, penalty, penaltyIndex = 0) => 
     return penalty?.spotOfFoul ?? null;
   }
 
-  if (['succeeding', 'succeedingspot'].includes(enforcedFrom)) {
+  const sequentialDeadBall = normalizeEnforcementSpot(penalty?.timing) === 'deadball'
+    && ['end', 'endofplay'].includes(enforcedFrom);
+  if (['succeeding', 'succeedingspot'].includes(enforcedFrom) || sequentialDeadBall) {
     const previousFinalSpot = play?.penalties
       ?.slice(0, penaltyIndex)
       .reverse()
-      .find((candidate) => candidate?.status === 'accepted' && candidate?.finalSpot)
+      .find((candidate) => candidate?.status === 'accepted' && candidate?.finalSpot
+        && !candidate.carryOverToKickoff && !candidate.carryOverToKO)
       ?.finalSpot;
     return previousFinalSpot ?? terminalPlaySpot(play);
   }

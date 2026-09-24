@@ -87,4 +87,43 @@ describe('footballPlayEditYardage', () => {
     expect(recalculated.penalties[0].yards).toBe(15);
     expect(source.penalties[0].yards).toBe(0);
   });
+
+  it('measures play 167 dead-ball enforcement after the face mask, preserving spots and awards', () => {
+    const source = {
+      possession: 'H', preState: { possession: 'H', yardLine: 'H08' },
+      result: { endYardLine: 'H11', officialOutcome: { verified: { yardLine: 'H41', firstDownAwards: ['face-mask', 'unsportsmanlike'] } } },
+      penalties: [
+        { status: 'accepted', timing: 'liveBall', enforcedFrom: 'endOfPlay', finalSpot: 'H26', yards: 15, automaticFirstDown: true },
+        { status: 'accepted', timing: 'deadBall', enforcedFrom: 'endOfPlay', finalSpot: 'H41', yards: 30, automaticFirstDown: true },
+      ],
+    };
+    const corrected = recalculatePlayEditorPenaltyYards(source);
+    expect(corrected.penalties.map(p => p.yards)).toEqual([15, 15]);
+    expect(corrected.penalties.map(p => p.finalSpot)).toEqual(['H26', 'H41']);
+    expect(corrected.result).toEqual(source.result);
+    expect(corrected.preState).toEqual(source.preState);
+    expect(source.penalties[1].yards).toBe(30);
+    expect(recalculatePlayEditorPenaltyYards(corrected)).toEqual(corrected);
+  });
+
+  it('chains multiple dead-ball fouls and skips penalties not enforced on this play', () => {
+    const source = { ...play, result: { endYardLine: 'H11' }, penalties: [
+      { status: 'accepted', timing: 'liveBall', enforcedFrom: 'endOfPlay', finalSpot: 'H26' },
+      { status: 'declined', finalSpot: 'H01' },
+      { status: 'offsetting', finalSpot: 'H02' },
+      { status: 'accepted', carryOverToKickoff: true, finalSpot: 'H03' },
+      { status: 'accepted', carryOverToKO: true, finalSpot: 'H04' },
+      { status: 'accepted', timing: 'deadBall', enforcedFrom: 'endOfPlay', finalSpot: 'H41' },
+      { status: 'accepted', timing: 'deadBall', enforcedFrom: 'endOfPlay', finalSpot: 'V44' },
+    ] };
+    expect(recalculatePlayEditorPenaltyYards(source).penalties.map(p => p.yards)).toEqual([15, 0, 0, null, null, 15, 15]);
+  });
+
+  it('keeps a first dead-ball foul and later live-ball foul based on the play end', () => {
+    const source = { ...play, penalties: [{ status: 'accepted', finalSpot: 'H32' }] };
+    expect(calculateEditedPenaltyYards(source, { status: 'accepted', timing: 'deadBall', enforcedFrom: 'endOfPlay', finalSpot: 'H27' }, 0)).toBe(15);
+    expect(calculateEditedPenaltyYards(source, { status: 'accepted', timing: 'liveBall', enforcedFrom: 'endOfPlay', finalSpot: 'H27' }, 1)).toBe(15);
+    expect(calculateEditedPenaltyYards(source, { status: 'accepted', timing: 'deadBall', enforcedFrom: 'previousSpot', finalSpot: 'H40' }, 1)).toBe(6);
+    expect(calculateEditedPenaltyYards(source, { status: 'accepted', timing: 'deadBall', enforcedFrom: 'spotOfFoul', spotOfFoul: 'H30', finalSpot: 'H20' }, 1)).toBe(10);
+  });
 });

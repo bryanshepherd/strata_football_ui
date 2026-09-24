@@ -10,6 +10,28 @@ import {
 const teamNames = { H: 'West Virginia State', V: 'Fairmont State' };
 
 describe('FootballPlayEditorModal', () => {
+  it('lets the operator save corrected sequential penalty yards without changing another field', () => {
+    const play = structuredClone(footballPlayEditorSandboxPlays[0]);
+    Object.assign(play, { possession: 'H', preState: { ...play.preState, possession: 'H', yardLine: 'H08' },
+      result: { code: 'tackle', yards: 3, endYardLine: 'H11' },
+      penalties: [
+        { penaltyId: 'face-mask', name: 'Face Mask', code: 'FMB', team: 'V', status: 'accepted', timing: 'liveBall', enforcedFrom: 'endOfPlay', finalSpot: 'H26', yards: 15, automaticFirstDown: true },
+        { penaltyId: 'unsportsmanlike', name: 'Unsportsmanlike Conduct', code: 'UC', team: 'V', status: 'accepted', timing: 'deadBall', enforcedFrom: 'endOfPlay', finalSpot: 'H41', yards: 30, automaticFirstDown: true },
+      ],
+    });
+    const onSave = vi.fn();
+    renderEditor({ play, onSave });
+    expect(screen.getAllByLabelText('Calculated penalty yards').map(el => el.textContent)).toEqual(['15', '15']);
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSave.mock.calls[0][0].penalties.map(p => p.yards)).toEqual([15, 15]);
+    expect(onSave.mock.calls[0][0].result).toEqual(play.result);
+    expect(onSave.mock.calls[0][1].changedPaths).toEqual(['penalties']);
+    expect(play.penalties[1].yards).toBe(30);
+  });
+
   it('saves a team recovery from the fumble editor without assigning it to a player', () => {
     const play = structuredClone(footballPlayEditorSandboxPlays[0]);
     const rusher = { playerId: 'RUSHER', team: 'H', jersey: '22', displayName: 'Jordan Smith' };
